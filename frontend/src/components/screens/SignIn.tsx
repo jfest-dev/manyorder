@@ -4,6 +4,7 @@ import { Lock } from 'lucide-react';
 import { AuthLayout, SecurityFooter } from '../auth/AuthLayout';
 import { GoogleSignInButton } from '../auth/GoogleSignInButton';
 import { FieldInput } from '../Field';
+import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
 import { useAuth } from '../../context/AuthContext';
 
@@ -13,7 +14,6 @@ export function SignIn() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,24 +47,13 @@ export function SignIn() {
           required
         />
 
-        <div>
-          <FieldInput
-            label="Password"
-            type={showPassword ? 'text' : 'password'}
-            placeholder="Enter your password"
-            value={password}
-            onChange={setPassword}
-            required
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            className="text-xs"
-            style={{ background: 'none', border: 'none', padding: 0, marginTop: '6px', color: 'var(--text-secondary)', cursor: 'pointer' }}
-          >
-            {showPassword ? 'Hide password' : 'Show password'}
-          </button>
-        </div>
+        <PasswordField
+          label="Password"
+          placeholder="Enter your password"
+          value={password}
+          onChange={setPassword}
+          required
+        />
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
