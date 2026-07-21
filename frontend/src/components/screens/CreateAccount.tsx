@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthLayout, SecurityFooter } from '../auth/AuthLayout';
 import { GoogleSignInButton } from '../auth/GoogleSignInButton';
 import { FieldInput } from '../Field';
+import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
 import { useAuth } from '../../context/AuthContext';
 
@@ -48,8 +49,8 @@ export function CreateAccount() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <FieldInput label="Full Name" placeholder="Jane Tan" value={fullName} onChange={setFullName} required />
         <FieldInput label="Email Address" type="email" placeholder="you@example.com" value={email} onChange={setEmail} required />
-        <FieldInput label="Password" type="password" placeholder="At least 6 characters" value={password} onChange={setPassword} required />
-        <FieldInput label="Confirm Password" type="password" placeholder="Repeat your password" value={confirm} onChange={setConfirm} required />
+        <PasswordField label="Password" placeholder="At least 6 characters" value={password} onChange={setPassword} required />
+        <PasswordField label="Confirm Password" placeholder="Repeat your password" value={confirm} onChange={setConfirm} required />
 
         {error && <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>}
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Lock, Store as StoreIcon } from 'lucide-react';
 import { FieldInput } from '../Field';
+import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
 import { SecurityFooter } from '../auth/AuthLayout';
 import { useAuth } from '../../context/AuthContext';
@@ -111,7 +112,7 @@ export function SignInToStore() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <FieldInput label="Email Address" type="email" placeholder="you@example.com" value={email} onChange={setEmail} required />
-            <FieldInput label="Password" type="password" placeholder="Enter your password" value={password} onChange={setPassword} required />
+            <PasswordField label="Password" placeholder="Enter your password" value={password} onChange={setPassword} required />
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
