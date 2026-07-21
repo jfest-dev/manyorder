@@ -43,6 +43,7 @@ export function Settings({ storeId, onSaved }: SettingsProps) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<UpdateStorePayload>({});
   const [slugTouchedFrom, setSlugTouchedFrom] = useState('');
+  const [savedCurrency, setSavedCurrency] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -67,6 +68,7 @@ export function Settings({ storeId, onSaved }: SettingsProps) {
         notifyUrgentWhatsapp: s.notifyUrgentWhatsapp,
       });
       setSlugTouchedFrom(s.slug);
+      setSavedCurrency(s.currency);
     } catch (e: any) {
       alert(e?.message || 'Could not load store settings');
     } finally {
@@ -86,6 +88,12 @@ export function Settings({ storeId, onSaved }: SettingsProps) {
     if (!form.storeName?.trim()) {
       alert('Store name cannot be empty');
       return;
+    }
+    if (form.currency && form.currency !== savedCurrency) {
+      const proceed = confirm(
+        'Changing currency does not convert your existing product prices — you\'ll need to update them manually. Continue?',
+      );
+      if (!proceed) return;
     }
     setSaving(true);
     try {
