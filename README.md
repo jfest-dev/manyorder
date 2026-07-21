@@ -8,14 +8,31 @@ one link, and manage orders, products, and customers from a single dashboard.
 ## Monorepo layout
 
 | Path        | What it is                                   |
-|-------------|----------------------------------------------|
+|-------------|-----------------------------------------------|
 | `backend/`  | Spring Boot REST API (`com.manyorder.api`)   |
 | `frontend/` | React dashboard + storefront SPA             |
-| `docs/`     | Build notes per batch                        |
+| `docs/`     | Build notes per development phase            |
 
 ## Quick start
 
-### 1. Backend
+### 1. Database (PostgreSQL)
+
+The backend needs a running Postgres instance before it will start. The
+easiest way locally is Docker:
+
+```bash
+docker run --name manyorder-postgres \
+  -e POSTGRES_USER=manyorder \
+  -e POSTGRES_PASSWORD=your-password \
+  -e POSTGRES_DB=manyorder \
+  -p 5433:5432 \
+  -d postgres:16
+```
+
+(Already have a Postgres container from a previous run? Just make sure it's
+running: `docker ps`, and if not, `docker start <container-name>`.)
+
+### 2. Backend
 
 ```bash
 cd backend
@@ -33,14 +50,14 @@ customers, and orders:
 | Staff (bound to store) | staff@manyorder.com | password123 |
 | Platform admin | admin@manyorder.com | password123 |
 
-### 2. Tests
+### 3. Tests
 
 ```bash
 cd backend
-./mvnw test                # integration tests run on in-memory H2
+./mvnw clean test          # integration tests run on in-memory H2, not your Postgres
 ```
 
-### 3. Frontend
+### 4. Frontend
 
 ```bash
 cd frontend
@@ -60,13 +77,20 @@ npm run dev                # http://localhost:3000
 - `PLATFORM_ADMIN` cannot be self-registered. Promote manually:
   `UPDATE users SET role = 'PLATFORM_ADMIN' WHERE email = '...';`
 
-## Roadmap (build batches)
+## Progress
 
-- [x] **Batch 0–1** — monorepo skeleton, RBAC (MERCHANT / STAFF / PLATFORM_ADMIN),
-  multi-store (max 3), staff store-code signup, Google sign-in (env-gated),
-  JWT hardening + IDOR fixes, seeder, integration tests
-- [ ] **Batch 2** — Create-store wizard alignment, public storefront + checkout,
-  product schema (category / stock / SKU / image via Cloudinary)
-- [ ] **Batch 3** — Dashboard analytics, Orders suite (8-status flow), Products suite
-- [ ] **Batch 4** — Customers, Marketing (discount codes), Stores & Settings,
-  platform admin panel, Resend email notifications (env-gated)
+- [x] **Foundation** — accounts, roles (MERCHANT / STAFF / PLATFORM_ADMIN),
+  multi-store (max 3), JWT + IDOR hardening, Google sign-in (env-gated),
+  seed data, integration test suite
+- [x] **Orders** — live list with search & 8-status filters, expandable detail
+  view, one-click status advancement following the order state machine,
+  payment status toggle, manual order entry with line items, CSV export
+- [x] **Store settings** — store details, address, currency, theme, and
+  notification preferences, all persisted
+- [ ] Owner-initiated staff invites (replacing self-service store-code signup)
+- [ ] Public storefront + guest checkout page
+- [ ] Full product catalog — categories, stock tracking, SKU, photo uploads (Cloudinary)
+- [ ] Customers management + broadcast
+- [ ] Marketing — discount codes
+- [ ] Platform admin panel
+- [ ] Email notifications (Resend)
