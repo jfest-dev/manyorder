@@ -3,6 +3,7 @@ import { Plus, Upload, X, Check } from 'lucide-react';
 import { FieldInput } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
+import { formatMoney, currencySymbol } from '../../lib/currency';
 
 interface Product {
   id: string;
@@ -111,16 +112,10 @@ export function AddProducts({
     }
   };
 
-  const getCurrencySymbol = () => (currency === 'sgd' ? 'S$' : 'Rp');
-
   const formatPrice = (price: string) => {
     const numPrice = parseFloat(price);
     if (Number.isNaN(numPrice)) return '';
-
-    if (currency === 'sgd') {
-      return `${getCurrencySymbol()}${numPrice.toFixed(2)}`;
-    }
-    return `${getCurrencySymbol()}${Math.round(numPrice * 10000).toLocaleString('id-ID')}`;
+    return formatMoney(numPrice, currency);
   };
 
   const previewProducts = useMemo(
@@ -342,7 +337,7 @@ export function AddProducts({
                     <FieldInput
                       label="Price"
                       placeholder="5.50"
-                      prefix="$"
+                      prefix={currencySymbol(currency)}
                       type="number"
                       value={product.price}
                       onChange={(value) => updateProduct(product.id, 'price', value)}

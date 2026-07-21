@@ -3,6 +3,7 @@ import { FieldInput, FieldSelect } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { Upload, LogIn } from 'lucide-react';
+import { formatMoney } from '../../lib/currency';
 
 interface CreateStoreProps {
   // Keep your UI fields, but App.tsx can still ignore the extra fields safely
@@ -82,13 +83,6 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
       phone: `${countryCode}${phoneNumber}`,
       storeLink,
     });
-  };
-
-  const getCurrencySymbol = () => (currency === 'sgd' ? 'S$' : 'Rp');
-
-  const getFormattedPrice = (price: number) => {
-    if (currency === 'sgd') return `${getCurrencySymbol()}${price.toFixed(2)}`;
-    return `${getCurrencySymbol()}${(price * 10000).toLocaleString('id-ID')}`;
   };
 
   const mockProducts = [
@@ -409,7 +403,7 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
                         <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827', marginBottom: '2px' }}>{product.name}</div>
                         <div style={{ fontSize: '10px', color: '#6B7280' }}>{product.desc}</div>
                       </div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{getFormattedPrice(product.basePrice)}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{formatMoney(product.basePrice, currency)}</div>
                     </div>
                   ))}
 
