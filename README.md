@@ -17,11 +17,11 @@ one link, and manage orders, products, and customers from a single dashboard.
 
 ### 1. Database (PostgreSQL)
 
-The backend needs a running Postgres instance before it will start. The
-easiest way locally is Docker:
+The backend needs a running Postgres instance before it will start. If you're
+setting this up fresh, any recent Postgres version works, for example:
 
 ```bash
-docker run --name manyorder-postgres \
+docker run --name postgres-manyorder \
   -e POSTGRES_USER=manyorder \
   -e POSTGRES_PASSWORD=your-password \
   -e POSTGRES_DB=manyorder \
@@ -29,8 +29,11 @@ docker run --name manyorder-postgres \
   -d postgres:16
 ```
 
-(Already have a Postgres container from a previous run? Just make sure it's
-running: `docker ps`, and if not, `docker start <container-name>`.)
+Whatever `POSTGRES_DB` name you choose here must match the database name in
+`SPRING_DATASOURCE_URL` in your `.env` below.
+
+(Already have a Postgres container running? Just confirm it's up with
+`docker ps`, and if not, `docker start <your-container-name>`.)
 
 ### 2. Backend
 
