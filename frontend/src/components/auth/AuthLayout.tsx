@@ -26,7 +26,6 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
             background: 'var(--bg-card)',
             borderRadius: 'var(--radius-card)',
             border: '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-subtle)',
             padding: '40px 32px',
           }}
         >

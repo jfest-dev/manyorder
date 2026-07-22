@@ -186,7 +186,6 @@ export function Categories() {
               padding: '24px',
               width: '90%',
               maxWidth: '400px',
-              boxShadow: 'var(--shadow-card)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -272,7 +271,6 @@ export function Categories() {
               padding: '24px',
               width: '90%',
               maxWidth: '400px',
-              boxShadow: 'var(--shadow-card)',
             }}
             onClick={(e) => e.stopPropagation()}
           >

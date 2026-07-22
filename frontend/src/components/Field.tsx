@@ -50,7 +50,6 @@ export function FieldInput({
     : isFocused
       ? '1px solid var(--primary-solid)'
       : '1px solid var(--border-strong)';
-  const focusShadow = isFocused ? '0 0 0 3px rgba(15, 23, 42, 0.1)' : 'none';
 
   return (
     <div style={style}>
@@ -101,7 +100,6 @@ export function FieldInput({
               background: 'var(--bg-card)',
               padding: '8px 12px',
               outline: 'none',
-              boxShadow: focusShadow,
               transition: 'all 0.15s ease',
               resize: 'none',
               overflowY: 'auto',
@@ -132,7 +130,6 @@ export function FieldInput({
               paddingLeft: prefix ? '32px' : '12px',
               paddingRight: suffix ? '36px' : '12px',
               outline: 'none',
-              boxShadow: focusShadow,
               transition: 'all 0.15s ease',
             }}
           />

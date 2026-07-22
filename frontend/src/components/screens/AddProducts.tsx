@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Upload, X, Check } from 'lucide-react';
+import { Plus, Upload, X, Check, Store } from 'lucide-react';
 import { FieldInput } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { formatMoney, currencySymbol, priceLimits } from '../../lib/currency';
+import { storeInitials } from '../../lib/initials';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -22,6 +23,7 @@ type FieldErrors = { name?: string; price?: string; quantity?: string };
 
 interface AddProductsProps {
   storeName?: string;
+  storeLink?: string;
   storeColor?: string;
   currency?: string;
   showHeader?: boolean; // ✅ new
@@ -31,6 +33,7 @@ interface AddProductsProps {
 
 export function AddProducts({
   storeName = 'My Store',
+  storeLink = '',
   storeColor = '#000000',
   currency = 'sgd',
   showHeader = true,
@@ -545,11 +548,13 @@ export function AddProducts({
                     border: '2px solid rgba(255, 255, 255, 0.3)',
                   }}
                 >
-                  {storeName.substring(0, 2).toUpperCase() || 'KB'}
+                  {storeInitials(storeName) || <Store size={20} color="white" />}
                 </div>
 
-                <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '2px' }}>{storeName}</h2>
-                <p style={{ fontSize: '11px', opacity: 0.9 }}>manyorder.app/{storeName.toLowerCase().replace(/\s+/g, '-')}</p>
+                <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '2px' }}>{storeName || 'Your Store Name'}</h2>
+                <p style={{ fontSize: '11px', opacity: 0.9 }}>
+                  manyorder.app/{storeLink || 'your-store-name'}
+                </p>
               </div>
 
               <div style={{ flex: 1, background: 'white', padding: '12px', overflowY: 'auto' }}>

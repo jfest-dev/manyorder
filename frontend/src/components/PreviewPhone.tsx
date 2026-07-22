@@ -129,7 +129,6 @@ export function PreviewPhone({
                   padding: '12px',
                   display: 'flex',
                   gap: '12px',
-                  boxShadow: 'var(--shadow-subtle)',
                 }}
               >
                 {product.image && (

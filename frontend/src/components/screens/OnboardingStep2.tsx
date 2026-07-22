@@ -4,13 +4,21 @@ import { Button } from '../Button';
 export function OnboardingStep2({
   children,
   onSkip,
+  onBack,
 }: {
   children: ReactNode;
   onSkip: () => void;
+  onBack: () => void;
 }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-app)', padding: '24px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ marginBottom: 12 }}>
+          <Button variant="ghost" onClick={onBack}>
+            ← Back
+          </Button>
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
