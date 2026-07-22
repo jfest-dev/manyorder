@@ -14,6 +14,11 @@ interface FieldInputProps {
   // ✅ add these
   required?: boolean;
   maxLength?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  multiline?: boolean;
+  rows?: number;
   style?: React.CSSProperties;
 }
 
@@ -31,9 +36,21 @@ export function FieldInput({
   // ✅ receive here
   required,
   maxLength,
+  min,
+  max,
+  step,
+  multiline,
+  rows = 2,
   style,
 }: FieldInputProps) {
   const [isFocused, setIsFocused] = useState(false);
+
+  const fieldBorder = error
+    ? '1px solid var(--error-color)'
+    : isFocused
+      ? '1px solid var(--primary-solid)'
+      : '1px solid var(--border-strong)';
+  const focusShadow = isFocused ? '0 0 0 3px rgba(15, 23, 42, 0.1)' : 'none';
 
   return (
     <div style={style}>
@@ -67,33 +84,59 @@ export function FieldInput({
           </div>
         )}
 
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          // ✅ apply here
-          required={required}
-          maxLength={maxLength}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          className="text-small w-full"
-          style={{
-            height: '40px',
-            borderRadius: 'var(--radius-field)',
-            border: error
-              ? '1px solid var(--error-color)'
-              : isFocused
-                ? '1px solid var(--primary-solid)'
-                : '1px solid var(--border-strong)',
-            background: 'var(--bg-card)',
-            paddingLeft: prefix ? '32px' : '12px',
-            paddingRight: suffix ? '36px' : '12px',
-            outline: 'none',
-            boxShadow: isFocused ? '0 0 0 3px rgba(15, 23, 42, 0.1)' : 'none',
-            transition: 'all 0.15s ease',
-          }}
-        />
+        {multiline ? (
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            required={required}
+            maxLength={maxLength}
+            rows={rows}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            className="text-small w-full"
+            style={{
+              borderRadius: 'var(--radius-field)',
+              border: fieldBorder,
+              background: 'var(--bg-card)',
+              padding: '8px 12px',
+              outline: 'none',
+              boxShadow: focusShadow,
+              transition: 'all 0.15s ease',
+              resize: 'none',
+              overflowY: 'auto',
+              lineHeight: 1.4,
+              fontFamily: 'inherit',
+            }}
+          />
+        ) : (
+          <input
+            type={type}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            // ✅ apply here
+            required={required}
+            maxLength={maxLength}
+            min={min}
+            max={max}
+            step={step}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            className="text-small w-full"
+            style={{
+              height: '40px',
+              borderRadius: 'var(--radius-field)',
+              border: fieldBorder,
+              background: 'var(--bg-card)',
+              paddingLeft: prefix ? '32px' : '12px',
+              paddingRight: suffix ? '36px' : '12px',
+              outline: 'none',
+              boxShadow: focusShadow,
+              transition: 'all 0.15s ease',
+            }}
+          />
+        )}
 
         {suffix && (
           <div

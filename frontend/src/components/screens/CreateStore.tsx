@@ -413,7 +413,6 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
                 </div>
 
                 <div style={{ background: 'white', padding: '12px', borderTop: '1px solid #E5E7EB' }}>
-                  <div style={{ fontSize: '10px', textAlign: 'center', color: '#6B7280', marginBottom: '6px' }}>Chat via WhatsApp</div>
                   <button
                     style={{
                       width: '100%',

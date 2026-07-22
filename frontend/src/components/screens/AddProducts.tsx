@@ -3,7 +3,10 @@ import { Plus, Upload, X, Check } from 'lucide-react';
 import { FieldInput } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
-import { formatMoney, currencySymbol } from '../../lib/currency';
+import { formatMoney, currencySymbol, priceLimits } from '../../lib/currency';
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 interface Product {
   id: string;
@@ -14,6 +17,8 @@ interface Product {
   quantity: string;
   image?: string;
 }
+
+type FieldErrors = { name?: string; price?: string; quantity?: string };
 
 interface AddProductsProps {
   storeName?: string;
@@ -41,6 +46,9 @@ export function AddProducts({
   // Lock a form once "Add Product" is clicked
   const [savedFormIds, setSavedFormIds] = useState<Record<string, boolean>>({});
 
+  // Inline validation errors, keyed by product id.
+  const [errors, setErrors] = useState<Record<string, FieldErrors>>({});
+
   const [categories, setCategories] = useState([
     { value: 'coffee', label: 'Coffee' },
     { value: 'tea', label: 'Tea' },
@@ -52,6 +60,8 @@ export function AddProducts({
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('all');
+
+  const limits = priceLimits(currency);
 
   const addProduct = () => {
     const newId = Date.now().toString();
@@ -71,15 +81,67 @@ export function AddProducts({
         delete next[id];
         return next;
       });
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   };
 
-  const updateProduct = (id: string, field: keyof Product, value: string) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
+  // Single source of truth for product validity — used both when adding and
+  // when editing an already-saved form. Returns a per-field error map; an empty
+  // object means the product is valid.
+  const validateProduct = (product: Product): FieldErrors => {
+    const errs: FieldErrors = {};
 
-    // ✅ if this form is already saved, editing should update preview immediately
-    if (savedFormIds[id]) {
-      setSavedProducts((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
+    if (!product.name.trim()) errs.name = 'Product name is required.';
+
+    const priceStr = product.price.trim();
+    const price = parseFloat(priceStr);
+    if (priceStr === '' || Number.isNaN(price)) {
+      errs.price = 'Price is required.';
+    } else if (price < limits.min) {
+      errs.price = 'Price must be greater than 0.';
+    } else if (price > limits.max) {
+      errs.price = `Price can't exceed ${formatMoney(limits.max, currency)}.`;
+    }
+
+    if (product.quantity.trim() !== '') {
+      const qty = Number(product.quantity);
+      if (!Number.isInteger(qty) || qty < 0) {
+        errs.quantity = 'Stock must be a whole number of 0 or more.';
+      }
+    }
+
+    return errs;
+  };
+
+  const hasErrors = (errs?: FieldErrors) => !!errs && Object.keys(errs).length > 0;
+
+  const updateProduct = (id: string, field: keyof Product, value: string) => {
+    const nextProducts = products.map((p) => (p.id === id ? { ...p, [field]: value } : p));
+    setProducts(nextProducts);
+
+    const updated = nextProducts.find((p) => p.id === id);
+    if (!updated) return;
+
+    const isSaved = !!savedFormIds[id];
+    const wasShowingErrors = hasErrors(errors[id]);
+    const errs = validateProduct(updated);
+
+    // Surface errors live only once the product is saved or has already failed a
+    // save attempt — a fresh, untouched form shouldn't flash errors while typing.
+    if (isSaved || wasShowingErrors) {
+      setErrors((prev) => ({ ...prev, [id]: errs }));
+    }
+
+    // A saved product always stays visible in the preview. Only push valid edits
+    // through; invalid edits leave the last valid version showing.
+    if (isSaved && !hasErrors(errs)) {
+      setSavedProducts((prev) =>
+        prev.map((p) => (p.id === id ? { ...updated, name: updated.name.trim() } : p))
+      );
     }
   };
 
@@ -87,20 +149,43 @@ export function AddProducts({
     // ✅ if already saved -> do nothing (prevents double click duplicates)
     if (savedFormIds[product.id]) return;
 
-    if (!product.name || !product.price) {
-      alert('Please fill in product name and price');
-      return;
-    }
+    const errs = validateProduct(product);
+    setErrors((prev) => ({ ...prev, [product.id]: errs }));
+    if (hasErrors(errs)) return;
+
+    const clean = { ...product, name: product.name.trim() };
 
     // add or update by id (safe)
     setSavedProducts((prev) => {
       const exists = prev.some((p) => p.id === product.id);
-      if (exists) return prev.map((p) => (p.id === product.id ? { ...product } : p));
-      return [...prev, { ...product }];
+      if (exists) return prev.map((p) => (p.id === product.id ? { ...clean } : p));
+      return [...prev, { ...clean }];
     });
 
     // lock this form so button becomes "Added" and disabled
     setSavedFormIds((prev) => ({ ...prev, [product.id]: true }));
+  };
+
+  const handleImageSelect = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      alert('Please upload a JPG, PNG, or WebP image.');
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      alert('Image must be under 5 MB.');
+      e.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => updateProduct(id, 'image', reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleAddCategory = () => {
@@ -165,53 +250,76 @@ export function AddProducts({
                       Product Image (Optional)
                     </label>
 
-                    <label style={{ cursor: 'pointer' }}>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onloadend = () => updateProduct(product.id, 'image', reader.result as string);
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                        style={{ display: 'none' }}
-                      />
+                    <div style={{ position: 'relative' }}>
+                      <label style={{ cursor: 'pointer' }}>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={(e) => handleImageSelect(product.id, e)}
+                          style={{ display: 'none' }}
+                        />
 
-                      <div
-                        style={{
-                          height: '120px',
-                          borderRadius: 'var(--radius-field)',
-                          border: '2px dashed var(--border-strong)',
-                          background: product.image ? 'transparent' : 'var(--bg-card-subtle)',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                          cursor: 'pointer',
-                          overflow: 'hidden',
-                          position: 'relative',
-                        }}
-                      >
-                        {product.image ? (
-                          <img
-                            src={product.image}
-                            alt="Product preview"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        ) : (
-                          <>
-                            <Upload size={24} style={{ color: 'var(--text-muted)' }} />
-                            <span className="text-small" style={{ color: 'var(--text-muted)' }}>
-                              Click to upload image
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </label>
+                        <div
+                          style={{
+                            height: '120px',
+                            borderRadius: 'var(--radius-field)',
+                            border: '2px dashed var(--border-strong)',
+                            background: product.image ? 'transparent' : 'var(--bg-card-subtle)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '8px',
+                            cursor: 'pointer',
+                            overflow: 'hidden',
+                            position: 'relative',
+                          }}
+                        >
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt="Product preview"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <>
+                              <Upload size={24} style={{ color: 'var(--text-muted)' }} />
+                              <span className="text-small" style={{ color: 'var(--text-muted)' }}>
+                                Click to upload image
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </label>
+
+                      {product.image && (
+                        <button
+                          type="button"
+                          aria-label="Remove image"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateProduct(product.id, 'image', '');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '8px',
+                            right: '8px',
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            background: 'rgba(0, 0, 0, 0.55)',
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <FieldInput
@@ -219,7 +327,8 @@ export function AddProducts({
                     placeholder="Iced White"
                     value={product.name}
                     onChange={(value) => updateProduct(product.id, 'name', value)}
-                    maxLength={50}
+                    maxLength={60}
+                    error={errors[product.id]?.name}
                   />
 
                   <FieldInput
@@ -228,7 +337,8 @@ export function AddProducts({
                     value={product.description}
                     onChange={(value) => updateProduct(product.id, 'description', value)}
                     helperText="Brief description or variant info"
-                    maxLength={120}
+                    maxLength={100}
+                    multiline
                   />
 
                   {/* Category with Quick Add */}
@@ -339,17 +449,24 @@ export function AddProducts({
                       placeholder="5.50"
                       prefix={currencySymbol(currency)}
                       type="number"
+                      min={limits.min}
+                      max={limits.max}
+                      step={limits.step}
                       value={product.price}
                       onChange={(value) => updateProduct(product.id, 'price', value)}
+                      error={errors[product.id]?.price}
                     />
 
                     <FieldInput
                       label="Stock Quantity"
                       placeholder="100"
                       type="number"
+                      min={0}
+                      step={1}
                       value={product.quantity}
                       onChange={(value) => updateProduct(product.id, 'quantity', value)}
                       helperText="Available inventory"
+                      error={errors[product.id]?.quantity}
                     />
                   </div>
 
@@ -361,7 +478,11 @@ export function AddProducts({
                       fullWidth
                       disabled={!!savedFormIds[product.id]}
                     >
-                      {savedFormIds[product.id] ? 'Added' : 'Add Product'}
+                      {savedFormIds[product.id]
+                        ? hasErrors(errors[product.id])
+                          ? 'Fix errors to update'
+                          : 'Added'
+                        : 'Add Product'}
                     </Button>
 
                     {products.length > 1 && (
@@ -381,9 +502,11 @@ export function AddProducts({
               </div>
             </Button>
 
-            <Button fullWidth onClick={() => onComplete?.(savedProducts)}>
-              Continue → Create account ({savedProducts.length} products)
-            </Button>
+            {onComplete && (
+              <Button fullWidth onClick={() => onComplete(savedProducts)}>
+                Finish setup → Go to dashboard ({savedProducts.length} products)
+              </Button>
+            )}
           </div>
         </div>
 
@@ -530,10 +653,30 @@ export function AddProducts({
                                 )}
 
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827', marginBottom: '2px' }}>
+                                  <div
+                                    style={{
+                                      fontSize: '13px',
+                                      fontWeight: 500,
+                                      color: '#111827',
+                                      marginBottom: '2px',
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                    }}
+                                  >
                                     {product.name}
                                   </div>
-                                  <div style={{ fontSize: '10px', color: '#6B7280' }}>{product.desc}</div>
+                                  <div
+                                    style={{
+                                      fontSize: '10px',
+                                      color: '#6B7280',
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                    }}
+                                  >
+                                    {product.desc}
+                                  </div>
                                 </div>
 
                                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', flexShrink: 0 }}>
@@ -549,9 +692,6 @@ export function AddProducts({
               </div>
 
               <div style={{ background: 'white', padding: '12px', borderTop: '1px solid #E5E7EB' }}>
-                <div style={{ fontSize: '10px', textAlign: 'center', color: '#6B7280', marginBottom: '6px' }}>
-                  Chat via WhatsApp
-                </div>
                 <button
                   style={{
                     width: '100%',
