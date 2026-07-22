@@ -176,7 +176,6 @@ export function Sidebar({
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-subtle)',
                   borderRadius: 'var(--radius-medium)',
-                  boxShadow: 'var(--shadow-card)',
                   zIndex: 100,
                   overflow: 'hidden',
                 }}

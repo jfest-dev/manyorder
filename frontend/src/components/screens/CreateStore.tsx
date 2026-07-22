@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { FieldInput, FieldSelect } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
-import { Upload, LogIn } from 'lucide-react';
+import { Upload, LogIn, Store } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
+import { storeInitials } from '../../lib/initials';
 
 interface CreateStoreProps {
   // Keep your UI fields, but App.tsx can still ignore the extra fields safely
@@ -17,11 +18,27 @@ interface CreateStoreProps {
     currency?: string;
     phone?: string;
     storeLink?: string;
+    storeLinkTouched?: boolean;
   }) => void;
 
   // ✅ so CreateStore "Sign In to Store" can go to the same screen as AllStores
   onNavigate?: (screen: string) => void;
+
+  // Prefill the form when returning to this step (e.g. onboarding "Back"),
+  // so nothing the merchant already typed is lost.
+  initialData?: {
+    name?: string;
+    category?: string;
+    color?: string;
+    logo?: string;
+    currency?: string;
+    phone?: string;
+    storeLink?: string;
+    storeLinkTouched?: boolean;
+  };
 }
+
+const COUNTRY_CODES = ['+65', '+62'];
 
 const slugify = (input: string) => {
   return input
@@ -60,16 +77,23 @@ const countryCodes = [
   { value: '+62', label: '+62 (Indonesia)' },
 ];
 
-export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
-  const [storeName, setStoreName] = useState('');
-  const [category, setCategory] = useState('food');
-  const [currency, setCurrency] = useState('sgd');
-  const [selectedColor, setSelectedColor] = useState('#000000');
-  const [logo, setLogo] = useState<string | null>(null);
-  const [countryCode, setCountryCode] = useState('+65');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [storeLink, setStoreLink] = useState('');
-  const [storeLinkTouched, setStoreLinkTouched] = useState(false);
+export function CreateStore({ onComplete, onNavigate, initialData }: CreateStoreProps) {
+  // Split a saved combined phone (e.g. "+65 9123") back into code + number.
+  const initialCode = COUNTRY_CODES.find((c) => initialData?.phone?.startsWith(c)) || '+65';
+  const initialPhone = initialData?.phone ? initialData.phone.slice(initialCode.length) : '';
+
+  const [storeName, setStoreName] = useState(initialData?.name || '');
+  const [category, setCategory] = useState(initialData?.category || 'food');
+  const [currency, setCurrency] = useState(initialData?.currency || 'sgd');
+  const [selectedColor, setSelectedColor] = useState(initialData?.color || '#000000');
+  const [logo, setLogo] = useState<string | null>(initialData?.logo || null);
+  const [countryCode, setCountryCode] = useState(initialCode);
+  const [phoneNumber, setPhoneNumber] = useState(initialPhone);
+  const [storeLink, setStoreLink] = useState(initialData?.storeLink || '');
+  // Only a direct edit to the link field stops auto-follow. We persist this
+  // flag into the draft so it survives a Back round-trip — an auto-derived
+  // link must NOT be mistaken for a user-customized one.
+  const [storeLinkTouched, setStoreLinkTouched] = useState(!!initialData?.storeLinkTouched);
 
   const handleCreateStore = () => {
     onComplete({
@@ -82,6 +106,7 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
       currency,
       phone: `${countryCode}${phoneNumber}`,
       storeLink,
+      storeLinkTouched,
     });
   };
 
@@ -107,7 +132,7 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
               }
 
               // fallback (if you didn’t pass onNavigate)
-              const link = prompt('Enter your store link (e.g., kirikiri-brew):');
+              const link = prompt('Enter your store link (e.g., your-store-name):');
               if (link) alert(`Redirecting to sign in for ${link}...`);
             }}
           >
@@ -154,8 +179,10 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
                   >
                     {logo ? (
                       <img src={logo} alt="Store Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : storeInitials(storeName) ? (
+                      storeInitials(storeName)
                     ) : (
-                      storeName.substring(0, 2).toUpperCase() || 'KB'
+                      <Store size={26} color="white" />
                     )}
                   </div>
 
@@ -201,7 +228,18 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
                 label="Business Name"
                 placeholder="e.g., Noodle House Delights"
                 value={storeName}
-                onChange={(value) => setStoreName(value)}
+                onChange={(value) => {
+                  setStoreName(value);
+                  if (value.trim() === '') {
+                    // Clearing the name blanks the link and re-arms auto-follow,
+                    // so auto and manual modes end in the same clean state.
+                    setStoreLink('');
+                    setStoreLinkTouched(false);
+                  } else if (!storeLinkTouched) {
+                    // Auto-track the store link from the name until the user edits it directly.
+                    setStoreLink(slugify(value));
+                  }
+                }}
               />
 
               <FieldSelect
@@ -224,7 +262,7 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
                     style={{
                       height: '40px',
                       padding: '0 32px 0 12px',
-                      border: '1px solid var(--border-subtle)',
+                      border: '1px solid var(--border-strong)',
                       borderRadius: 'var(--radius-field)',
                       background: 'var(--bg-card)',
                       fontSize: '13px',
@@ -252,7 +290,7 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
                     style={{
                       height: '40px',
                       padding: '0 12px',
-                      border: '1px solid var(--border-subtle)',
+                      border: '1px solid var(--border-strong)',
                       borderRadius: 'var(--radius-field)',
                       background: 'var(--bg-card)',
                       fontSize: '13px',
@@ -284,15 +322,21 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
                   </span>
                   <input
                     type="text"
-                    placeholder="kirikiri-brew"
+                    placeholder="your-store-name"
                     value={storeLink}
-                    onChange={(e) => setStoreLink(e.target.value)}
+                    onChange={(e) => {
+                      const next = slugify(e.target.value);
+                      setStoreLink(next);
+                      // Emptying the field re-arms auto-follow; any non-empty
+                      // edit marks the link as user-owned.
+                      setStoreLinkTouched(next !== '');
+                    }}
                     style={{
                       width: '100%',
                       height: '40px',
                       paddingLeft: '140px',
                       paddingRight: '12px',
-                      border: '1px solid var(--border-subtle)',
+                      border: '1px solid var(--border-strong)',
                       borderRadius: 'var(--radius-field)',
                       background: 'var(--bg-card)',
                       fontSize: '13px',
@@ -331,7 +375,6 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
                         border: selectedColor === theme.color ? '3px solid var(--primary-solid)' : '2px solid var(--border-subtle)',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease',
-                        boxShadow: selectedColor === theme.color ? '0 0 0 4px rgba(15, 23, 42, 0.08)' : 'none',
                       }}
                       title={theme.name}
                     />
@@ -376,13 +419,15 @@ export function CreateStore({ onComplete, onNavigate }: CreateStoreProps) {
                   >
                     {logo ? (
                       <img src={logo} alt="Store Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : storeInitials(storeName) ? (
+                      storeInitials(storeName)
                     ) : (
-                      storeName.substring(0, 2).toUpperCase() || 'KB'
+                      <Store size={20} color="white" />
                     )}
                   </div>
 
                   <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '2px' }}>{storeName || 'Your Store Name'}</h2>
-                  <p style={{ fontSize: '11px', opacity: 0.9 }}>manyorder.app/{storeLink || 'your-store-link'}</p>
+                  <p style={{ fontSize: '11px', opacity: 0.9 }}>manyorder.app/{storeLink || 'your-store-name'}</p>
                 </div>
 
                 <div style={{ flex: 1, background: 'white', padding: '12px', overflowY: 'auto' }}>

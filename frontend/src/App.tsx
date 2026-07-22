@@ -63,6 +63,7 @@ type DraftStore = {
   currency?: string;
   phone?: string;
   storeLink?: string;
+  storeLinkTouched?: boolean;
 };
 
 type Draft = {
@@ -294,15 +295,20 @@ function MerchantApp() {
       case 'onboarding-1':
         return (
           <OnboardingStep1 canExit={false} onExit={() => setActiveScreen('dashboard')}>
-            <CreateStore onComplete={handleOnboardingStoreDraft} onNavigate={navigateScreen as any} />
+            <CreateStore
+              onComplete={handleOnboardingStoreDraft}
+              onNavigate={navigateScreen as any}
+              initialData={getDraft()?.store}
+            />
           </OnboardingStep1>
         );
 
       case 'onboarding-2':
         return (
-          <OnboardingStep2 onSkip={finalizeOnboarding}>
+          <OnboardingStep2 onSkip={finalizeOnboarding} onBack={() => setActiveScreen('onboarding-1')}>
             <AddProducts
-              storeName={getDraft()?.store?.name || 'Your Store'}
+              storeName={getDraft()?.store?.name || ''}
+              storeLink={getDraft()?.store?.storeLink || ''}
               storeColor={getDraft()?.store?.color || '#000000'}
               currency={getDraft()?.store?.currency || 'sgd'}
               showHeader={false}

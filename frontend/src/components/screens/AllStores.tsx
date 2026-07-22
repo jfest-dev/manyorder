@@ -80,13 +80,11 @@ export function AllStores({ stores, activeStoreId, onStoreChange, onNavigate, st
             onMouseEnter={(e) => {
               if (store.id !== activeStoreId) {
                 e.currentTarget.style.borderColor = 'var(--border-strong)';
-                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.05)';
               }
             }}
             onMouseLeave={(e) => {
               if (store.id !== activeStoreId) {
                 e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                e.currentTarget.style.boxShadow = 'none';
               }
             }}
           >

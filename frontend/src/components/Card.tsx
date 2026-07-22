@@ -14,7 +14,6 @@ export function Card({ children, title, className = '', style }: CardProps) {
         border: '1px solid var(--border-subtle)',
         background: 'var(--bg-card)',
         padding: '16px',
-        boxShadow: 'var(--shadow-subtle)',
         ...style,
       }}
     >
