@@ -22,7 +22,14 @@ public class CreateMerchantOrderRequest {
     private String paymentReference;
     private String notes;
 
-    /** When set, the order is treated as DELIVERY instead of PICKUP. */
+    /**
+     * Explicit order type for manual entry. When provided it is authoritative.
+     * When null (guest / storefront path), the type is inferred from whether a
+     * delivery address is present (backward compatible).
+     */
+    private OrderType orderType;
+
+    /** Address for DELIVERY orders. May be blank even for DELIVERY (fill in later via Edit). */
     private String deliveryAddress;
 
     public static class ItemRequest {
@@ -56,6 +63,8 @@ public class CreateMerchantOrderRequest {
     public void setPaymentReference(String paymentReference) { this.paymentReference = paymentReference; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public OrderType getOrderType() { return orderType; }
+    public void setOrderType(OrderType orderType) { this.orderType = orderType; }
     public String getDeliveryAddress() { return deliveryAddress; }
     public void setDeliveryAddress(String deliveryAddress) { this.deliveryAddress = deliveryAddress; }
 }

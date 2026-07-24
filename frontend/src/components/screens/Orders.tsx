@@ -9,6 +9,8 @@ interface OrdersProps {
   store: Store;
   onNavigate: (screen: string) => void;
   initialStatus?: OrderStatus | 'ALL';
+  canEdit?: boolean;
+  onEditOrder?: (orderId: number) => void;
 }
 
 const STATUS_TABS: (OrderStatus | 'ALL')[] = [
@@ -62,7 +64,7 @@ function Badge({ text, bg, fg }: { text: string; bg: string; fg: string }) {
   );
 }
 
-export function Orders({ store, onNavigate, initialStatus = 'ALL' }: OrdersProps) {
+export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = false, onEditOrder }: OrdersProps) {
   const storeId = Number(store.id);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -290,6 +292,13 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL' }: OrdersProps
 
                     {/* Actions */}
                     <div style={{ background: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-medium)', padding: '16px' }}>
+                      {canEdit && onEditOrder && (
+                        <div style={{ marginBottom: '16px' }}>
+                          <Button variant="secondary" onClick={() => onEditOrder(o.id)}>
+                            Edit Order Details
+                          </Button>
+                        </div>
+                      )}
                       <p className="text-xs" style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>UPDATE STATUS</p>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
                         {NEXT_STATUS[o.status].length === 0 && (

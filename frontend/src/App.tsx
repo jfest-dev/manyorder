@@ -5,6 +5,7 @@ import { AppShell } from './components/AppShell';
 import { Dashboard } from './components/screens/Dashboard';
 import { Orders } from './components/screens/Orders';
 import { AddOrder } from './components/screens/AddOrder';
+import { EditOrder } from './components/screens/EditOrder';
 import { AllStores } from './components/screens/AllStores';
 import { CreateStore } from './components/screens/CreateStore';
 import { ProductsList } from './components/screens/ProductsList';
@@ -32,6 +33,7 @@ type Screen =
   | 'orders-pending'
   | 'orders-completed'
   | 'orders-add'
+  | 'orders-edit'
   | 'stores-all'
   | 'stores-create'
   | 'products-all'
@@ -83,6 +85,7 @@ const STAFF_BLOCKED_SCREENS: Screen[] = [
   'products-add',
   'products-edit',
   'orders-add',
+  'orders-edit',
 ];
 
 function getDraft(): Draft | null {
@@ -151,6 +154,7 @@ function MerchantApp() {
   const [stores, setStores] = useState<Store[]>([]);
   const [storeLimit, setStoreLimit] = useState(3);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refreshStores = async () => {
@@ -333,6 +337,11 @@ function MerchantApp() {
               : activeScreen === 'orders-completed' ? 'COMPLETED'
               : 'ALL'
             }
+            canEdit={!isStaff}
+            onEditOrder={(orderId) => {
+              setEditingOrderId(orderId);
+              setActiveScreen('orders-edit');
+            }}
           />
         ) : (
           <Dashboard />
@@ -340,6 +349,12 @@ function MerchantApp() {
       case 'orders-add':
         return activeStore ? (
           <AddOrder store={activeStore} onNavigate={navigateScreen as any} />
+        ) : (
+          <Dashboard />
+        );
+      case 'orders-edit':
+        return activeStore && editingOrderId != null ? (
+          <EditOrder store={activeStore} orderId={editingOrderId} onNavigate={navigateScreen as any} />
         ) : (
           <Dashboard />
         );

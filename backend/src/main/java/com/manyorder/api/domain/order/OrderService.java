@@ -68,7 +68,17 @@ public class OrderService {
         if (request.getPaymentMethod() != null) order.setPaymentMethod(request.getPaymentMethod());
         if (request.getPaymentReference() != null) order.setPaymentReference(request.getPaymentReference());
         if (request.getNotes() != null) order.setNotes(request.getNotes());
-        if (request.getDeliveryAddress() != null && !request.getDeliveryAddress().isBlank()) {
+
+        boolean hasAddress = request.getDeliveryAddress() != null && !request.getDeliveryAddress().isBlank();
+        if (request.getOrderType() != null) {
+            // Explicit choice from manual entry is authoritative. Address is optional
+            // even for DELIVERY (merchant can add it later via Edit).
+            order.setOrderType(request.getOrderType());
+            if (request.getOrderType() == OrderType.DELIVERY && hasAddress) {
+                order.setDeliveryAddress(request.getDeliveryAddress());
+            }
+        } else if (hasAddress) {
+            // Backward compatible inference for guest / storefront path.
             order.setDeliveryAddress(request.getDeliveryAddress());
             order.setOrderType(OrderType.DELIVERY);
         }
@@ -85,6 +95,57 @@ public class OrderService {
             }
         }
         order.setTotalAmount(total);
+        return toResponse(orderRepository.save(order));
+    }
+
+    /**
+     * Edit contact/logistics on any status; line items are replaced only when
+     * {@code request.items} is present, and only while PENDING or CONFIRMED.
+     * Payment and order status are untouched — they have their own flows.
+     */
+    @Transactional
+    public OrderResponse updateMerchantOrder(Merchant merchant, Long orderId, UpdateMerchantOrderRequest request) {
+        Order order = getOrder(merchant, orderId);
+
+        // Contact & logistics — editable at any status.
+        order.setContactName(request.getCustomerName().trim());
+        order.setContactPhone(request.getPhoneNumber() != null ? request.getPhoneNumber().trim() : "");
+        order.setContactEmail(request.getEmail() != null && !request.getEmail().isBlank()
+                ? request.getEmail().trim() : null);
+        order.setNotes(request.getNotes() != null && !request.getNotes().isBlank()
+                ? request.getNotes().trim() : null);
+
+        OrderType type = request.getOrderType() != null ? request.getOrderType() : order.getOrderType();
+        order.setOrderType(type);
+        if (type == OrderType.DELIVERY) {
+            boolean hasAddress = request.getDeliveryAddress() != null && !request.getDeliveryAddress().isBlank();
+            order.setDeliveryAddress(hasAddress ? request.getDeliveryAddress().trim() : null);
+        } else {
+            // PICKUP never carries an address.
+            order.setDeliveryAddress(null);
+        }
+
+        // Line items — replaced only when explicitly provided, and only while editable.
+        if (request.getItems() != null) {
+            OrderStatus status = order.getStatus();
+            if (status != OrderStatus.PENDING && status != OrderStatus.CONFIRMED) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Line items can only be edited while the order is Pending or Confirmed");
+            }
+            orderItemRepository.deleteAll(orderItemRepository.findByOrder(order));
+            orderItemRepository.flush();
+
+            BigDecimal total = BigDecimal.ZERO;
+            for (CreateMerchantOrderRequest.ItemRequest itemReq : request.getItems()) {
+                Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                "Product not found in this store: " + itemReq.getProductId()));
+                orderItemRepository.save(new OrderItem(order, product, itemReq.getQuantity(), product.getPrice()));
+                total = total.add(product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())));
+            }
+            order.setTotalAmount(total);
+        }
+
         return toResponse(orderRepository.save(order));
     }
 
