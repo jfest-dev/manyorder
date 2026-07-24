@@ -73,6 +73,8 @@ export type OrderStatus =
   | 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY'
   | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'COMPLETED' | 'CANCELLED';
 
+export type OrderType = 'PICKUP' | 'DELIVERY';
+
 export type PaymentStatus = 'UNPAID' | 'PAID' | 'REFUNDED';
 
 export interface OrderItemResponse {
@@ -92,7 +94,7 @@ export interface OrderResponse {
   paymentStatus: PaymentStatus;
   paymentMethod: string | null;
   paymentReference: string | null;
-  orderType: 'PICKUP' | 'DELIVERY';
+  orderType: OrderType;
   contactName: string | null;
   contactPhone: string | null;
   contactEmail: string | null;
@@ -211,6 +213,7 @@ export const ordersApi = {
     customerName: string;
     email?: string;
     phoneNumber?: string;
+    orderType?: OrderType;
     deliveryAddress?: string;
     items?: { productId: number; quantity: number }[];
     paymentStatus?: PaymentStatus;
@@ -218,6 +221,16 @@ export const ordersApi = {
     paymentReference?: string;
     notes?: string;
   }) => request<OrderResponse>(`/merchant/stores/${storeId}/orders`, { method: 'POST', body: payload }),
+
+  update: (storeId: number, orderId: number, payload: {
+    customerName: string;
+    email?: string;
+    phoneNumber?: string;
+    orderType?: OrderType;
+    deliveryAddress?: string;
+    notes?: string;
+    items?: { productId: number; quantity: number }[];
+  }) => request<OrderResponse>(`/merchant/stores/${storeId}/orders/${orderId}`, { method: 'PATCH', body: payload }),
 
   updateStatus: (storeId: number, orderId: number, status: OrderStatus) =>
     request<OrderResponse>(`/merchant/stores/${storeId}/orders/${orderId}/status`, {

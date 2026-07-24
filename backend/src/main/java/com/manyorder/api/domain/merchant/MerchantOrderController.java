@@ -18,6 +18,7 @@ import com.manyorder.api.domain.order.CreateMerchantOrderRequest;
 import com.manyorder.api.domain.order.OrderResponse;
 import com.manyorder.api.domain.order.OrderService;
 import com.manyorder.api.domain.order.OrderStatus;
+import com.manyorder.api.domain.order.UpdateMerchantOrderRequest;
 import com.manyorder.api.domain.order.UpdateOrderStatusRequest;
 import com.manyorder.api.domain.order.UpdatePaymentStatusRequest;
 import com.manyorder.api.domain.user.User;
@@ -78,6 +79,16 @@ public class MerchantOrderController {
         User user = currentUserService.require(authentication);
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
         return orderService.createMerchantOrder(merchant, request);
+    }
+
+    @PatchMapping("/{orderId}")
+    public OrderResponse updateOrder(@PathVariable Long storeId,
+                                     @PathVariable Long orderId,
+                                     @Valid @RequestBody UpdateMerchantOrderRequest request,
+                                     Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+        return orderService.updateMerchantOrder(merchant, orderId, request);
     }
 
     @PatchMapping("/{orderId}/status")
