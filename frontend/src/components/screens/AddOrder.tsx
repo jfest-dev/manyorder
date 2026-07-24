@@ -263,6 +263,14 @@ export function AddOrder({ store, onNavigate }: AddOrderProps) {
           </div>
         </div>
       </div>
+
+      <style>{`
+        @media (max-width: 1024px) {
+          div[style*="grid-template-columns: 1.6fr 1fr"] {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
