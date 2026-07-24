@@ -218,7 +218,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL' }: OrdersProps
       {/* Table */}
       <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
         <div
-          className="text-xs"
+          className="text-xs orders-head"
           style={{
             display: 'grid', gridTemplateColumns: '90px 1.4fr 110px 130px 70px 150px 1fr 40px',
             gap: '12px', padding: '14px 20px', background: 'var(--bg-card-subtle)',
@@ -243,24 +243,25 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL' }: OrdersProps
               <div key={o.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
                 <div
                   onClick={() => setExpandedId(expanded ? null : o.id)}
+                  className="orders-row"
                   style={{
                     display: 'grid', gridTemplateColumns: '90px 1.4fr 110px 130px 70px 150px 1fr 40px',
                     gap: '12px', padding: '16px 20px', alignItems: 'center', cursor: 'pointer',
                     opacity: busy ? 0.6 : 1,
                   }}
                 >
-                  <span className="text-small" style={{ fontWeight: 600 }}>#{o.id}</span>
-                  <span className="text-small">{o.contactName || o.customerName || '—'}</span>
-                  <span className="text-small" style={{ fontWeight: 600 }}>{formatMoney(o.totalAmount, store.currency)}</span>
-                  <span><Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} /></span>
-                  <span className="text-small">{o.items.reduce((n, i) => n + i.quantity, 0)}</span>
-                  <span><Badge text={STATUS_LABEL[o.status]} {...STATUS_STYLE[o.status]} /></span>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{fmtDate(o.createdAt)}</span>
-                  <span style={{ color: 'var(--text-muted)' }}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+                  <span className="order-id text-small" style={{ fontWeight: 600 }}>#{o.id}</span>
+                  <span className="text-small"><span className="m-label">Customer</span>{o.contactName || o.customerName || '—'}</span>
+                  <span className="text-small" style={{ fontWeight: 600 }}><span className="m-label">Total</span>{formatMoney(o.totalAmount, store.currency)}</span>
+                  <span><span className="m-label">Payment</span><Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} /></span>
+                  <span className="text-small"><span className="m-label">Items</span>{o.items.reduce((n, i) => n + i.quantity, 0)}</span>
+                  <span><span className="m-label">Status</span><Badge text={STATUS_LABEL[o.status]} {...STATUS_STYLE[o.status]} /></span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}><span className="m-label">Date</span>{fmtDate(o.createdAt)}</span>
+                  <span className="order-chevron" style={{ color: 'var(--text-muted)' }}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
                 </div>
 
                 {expanded && (
-                  <div style={{ padding: '0 20px 20px', display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px' }}>
+                  <div className="orders-detail" style={{ padding: '0 20px 20px', display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px' }}>
                     {/* Items + contact */}
                     <div style={{ background: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-medium)', padding: '16px' }}>
                       <p className="text-xs" style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>ITEMS</p>
@@ -336,6 +337,35 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL' }: OrdersProps
       <p className="text-small" style={{ color: 'var(--text-secondary)', marginTop: '16px' }}>
         Total {filtered.length} order{filtered.length === 1 ? '' : 's'}
       </p>
+
+      <style>{`
+        .m-label { display: none; }
+        @media (max-width: 1024px) {
+          .orders-head { display: none !important; }
+          .orders-row {
+            display: flex !important;
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 6px !important;
+            position: relative;
+            padding-right: 44px !important;
+          }
+          .orders-row > span { display: flex; align-items: center; gap: 8px; }
+          .orders-row .order-id { font-weight: 700; font-size: 14px; }
+          .orders-row .m-label {
+            display: inline-block;
+            min-width: 84px;
+            color: var(--text-secondary);
+            font-weight: 600;
+          }
+          .orders-row .order-chevron {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+          }
+          .orders-detail { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }
