@@ -156,17 +156,29 @@ function MerchantApp() {
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [storeUnavailable, setStoreUnavailable] = useState(false);
 
   const refreshStores = async () => {
     if (!user) return;
     setLoading(true);
+    setStoreUnavailable(false);
     try {
       let mapped: Store[] = [];
       if (isStaff) {
         if (user.staffStoreId != null) {
-          const store = await storesApi.get(user.staffStoreId);
-          mapped = [toStore(store)];
-          setStoreLimit(1);
+          try {
+            const store = await storesApi.get(user.staffStoreId);
+            mapped = [toStore(store)];
+            setStoreLimit(1);
+          } catch (e) {
+            // Store archived (or access revoked): lock the staff account out
+            // gracefully instead of erroring on a store that no longer exists.
+            if (e instanceof ApiError && (e.status === 404 || e.status === 403)) {
+              setStoreUnavailable(true);
+            } else {
+              throw e;
+            }
+          }
         }
       } else {
         const response = await storesApi.list();
@@ -271,6 +283,13 @@ function MerchantApp() {
     setStores((prev) => prev.map((s) => (s.id === updated.id ? { ...s, ...updated } : s)));
   };
 
+  // After archiving: leave Settings, then reload. refreshStores re-selects a
+  // remaining store, or drops to onboarding if that was the owner's last one.
+  const handleStoreArchived = () => {
+    setActiveScreen('dashboard');
+    void refreshStores();
+  };
+
   const navigateScreen = (screen: string) => {
     if (isStaff && STAFF_BLOCKED_SCREENS.includes(screen as Screen)) {
       alert('Staff accounts can view orders and products only.');
@@ -288,6 +307,18 @@ function MerchantApp() {
       return (
         <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading your stores…</p>
+        </div>
+      );
+    }
+
+    if (isStaff && storeUnavailable) {
+      return (
+        <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '8px', padding: '24px' }}>
+          <h2>This store is no longer available</h2>
+          <p className="text-small" style={{ color: 'var(--text-secondary)', maxWidth: '420px' }}>
+            The store you're assigned to has been closed by its owner. Please contact them if you
+            think this is a mistake.
+          </p>
         </div>
       );
     }
@@ -404,7 +435,11 @@ function MerchantApp() {
 
       case 'settings':
         return activeStore ? (
-          <Settings storeId={Number(activeStore.id)} onSaved={refreshStores} />
+          <Settings
+            storeId={Number(activeStore.id)}
+            onSaved={refreshStores}
+            onArchived={handleStoreArchived}
+          />
         ) : (
           <Dashboard />
         );

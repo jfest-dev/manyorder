@@ -200,6 +200,13 @@ export const storesApi = {
     request<StoreResponse>('/merchant/stores', { method: 'POST', body: payload }),
   update: (storeId: number, payload: UpdateStorePayload) =>
     request<StoreResponse>(`/merchant/stores/${storeId}`, { method: 'PATCH', body: payload }),
+  /**
+   * Soft-delete: archives the store (owner-only). The owner re-enters their
+   * password, which is verified server-side in the same request. Data is
+   * preserved; a wrong password (403) archives nothing.
+   */
+  archive: (storeId: number, password: string) =>
+    request<void>(`/merchant/stores/${storeId}/archive`, { method: 'POST', body: { password } }),
 };
 
 export const ordersApi = {

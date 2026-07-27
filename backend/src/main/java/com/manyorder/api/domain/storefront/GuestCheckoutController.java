@@ -57,6 +57,10 @@ public class GuestCheckoutController {
 
         Merchant merchant = merchantRepository.findById(request.getMerchantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+        // Archived stores are closed to new orders.
+        if (merchant.isArchived()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found");
+        }
 
         // Repeat guests are matched by phone/email within THIS store only —
         // customer identity never crosses store boundaries.
