@@ -30,7 +30,7 @@ public class StorefrontController {
     /** Public store lookup by slug — powers the storefront and Sign In to Store branding. */
     @GetMapping("/stores/{slug}")
     public PublicStoreResponse getStoreBySlug(@PathVariable String slug) {
-        Merchant merchant = merchantRepository.findBySlug(slug.toLowerCase())
+        Merchant merchant = merchantRepository.findBySlugAndArchivedAtIsNull(slug.toLowerCase())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
         return new PublicStoreResponse(merchant);
     }

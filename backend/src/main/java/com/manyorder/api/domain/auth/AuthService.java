@@ -69,7 +69,7 @@ public class AuthService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Store code is required for staff accounts");
             }
-            staffStore = merchantRepository.findBySlug(slug)
+            staffStore = merchantRepository.findBySlugAndArchivedAtIsNull(slug)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Store code not found. Ask the store owner for the store link."));
         }

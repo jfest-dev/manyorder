@@ -2,8 +2,11 @@ package com.manyorder.api.domain.merchant;
 
 import java.util.List;
 
+import java.time.LocalDateTime;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,20 +31,26 @@ public class MerchantStoreController {
     private final MerchantRepository merchantRepository;
     private final CurrentUserService currentUserService;
     private final StoreAccessService storeAccessService;
+    private final PasswordEncoder passwordEncoder;
+    private final StoreLimitService storeLimitService;
 
     public MerchantStoreController(MerchantRepository merchantRepository,
                                    CurrentUserService currentUserService,
-                                   StoreAccessService storeAccessService) {
+                                   StoreAccessService storeAccessService,
+                                   PasswordEncoder passwordEncoder,
+                                   StoreLimitService storeLimitService) {
         this.merchantRepository = merchantRepository;
         this.currentUserService = currentUserService;
         this.storeAccessService = storeAccessService;
+        this.passwordEncoder = passwordEncoder;
+        this.storeLimitService = storeLimitService;
     }
 
     /** Store management is owner-only; a STAFF account gets its store from the login response. */
     @GetMapping
     public StoreListResponse myStores(Authentication authentication) {
         User user = requireMerchant(authentication);
-        List<StoreResponse> stores = merchantRepository.findByOwnerOrderByCreatedAtAsc(user)
+        List<StoreResponse> stores = merchantRepository.findByOwnerAndArchivedAtIsNullOrderByCreatedAtAsc(user)
                 .stream()
                 .map(StoreResponse::new)
                 .toList();
@@ -54,11 +63,10 @@ public class MerchantStoreController {
                                      Authentication authentication) {
         User user = requireMerchant(authentication);
 
-        long owned = merchantRepository.countByOwner(user);
-        if (owned >= Merchant.MAX_STORES_PER_OWNER) {
+        if (storeLimitService.isAtActiveStoreLimit(user)) {
+            int max = storeLimitService.maxActiveStores(user);
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Store limit reached (" + Merchant.MAX_STORES_PER_OWNER + " of "
-                            + Merchant.MAX_STORES_PER_OWNER + ")");
+                    "Store limit reached (" + max + " of " + max + ")");
         }
 
         String slug = resolveSlug(request.getSlug(), request.getStoreName());
@@ -111,6 +119,30 @@ public class MerchantStoreController {
 
         merchantRepository.save(merchant);
         return new StoreResponse(merchant);
+    }
+
+    /**
+     * Soft-delete (archive) a store. Owner-only, and the owner must re-enter
+     * their account password — verified here so a wrong password archives
+     * nothing. Archiving is atomic with verification: we resolve the owned
+     * store first (404 if missing/foreign/already-archived), then check the
+     * password (403 on mismatch), then set the archive marker. The row and all
+     * its orders/products/customers are preserved; the slug stays reserved.
+     */
+    @PostMapping("/{storeId}/archive")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void archiveStore(@PathVariable Long storeId,
+                             @Valid @RequestBody ArchiveStoreRequest request,
+                             Authentication authentication) {
+        User user = requireMerchant(authentication);
+        Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Incorrect password");
+        }
+
+        merchant.setArchivedAt(LocalDateTime.now());
+        merchantRepository.save(merchant);
     }
 
     /** Owner or assigned staff may read a store's details. */

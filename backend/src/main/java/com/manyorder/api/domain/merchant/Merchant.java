@@ -75,6 +75,13 @@ public class Merchant {
 
     private LocalDateTime createdAt;
 
+    /**
+     * Soft-delete marker. Null = active; non-null = archived (hidden everywhere,
+     * frees a store slot, but the row and all its data are preserved). The slug
+     * stays reserved by the archived row so it can't be reassigned.
+     */
+    private LocalDateTime archivedAt;
+
     protected Merchant() {}
 
     public Merchant(User owner, String name, String slug, String email, String phoneNumber) {
@@ -121,4 +128,7 @@ public class Merchant {
     public boolean isNotifyUrgentWhatsapp() { return notifyUrgentWhatsapp; }
     public void setNotifyUrgentWhatsapp(boolean v) { this.notifyUrgentWhatsapp = v; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getArchivedAt() { return archivedAt; }
+    public void setArchivedAt(LocalDateTime archivedAt) { this.archivedAt = archivedAt; }
+    public boolean isArchived() { return archivedAt != null; }
 }

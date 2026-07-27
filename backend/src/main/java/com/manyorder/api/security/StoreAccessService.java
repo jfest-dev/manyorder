@@ -31,7 +31,7 @@ public class StoreAccessService {
         }
         Merchant merchant = merchantRepository.findById(storeId)
                 .orElseThrow(this::notFound);
-        if (!merchant.getOwner().getId().equals(user.getId())) {
+        if (!merchant.getOwner().getId().equals(user.getId()) || merchant.isArchived()) {
             throw notFound();
         }
         return merchant;
@@ -47,7 +47,11 @@ public class StoreAccessService {
             if (staffStore == null || !staffStore.getId().equals(storeId)) {
                 throw notFound();
             }
-            return merchantRepository.findById(storeId).orElseThrow(this::notFound);
+            Merchant merchant = merchantRepository.findById(storeId).orElseThrow(this::notFound);
+            if (merchant.isArchived()) {
+                throw notFound();
+            }
+            return merchant;
         }
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not a store member");
     }

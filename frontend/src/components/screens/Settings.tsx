@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { Upload, AlertTriangle } from 'lucide-react';
 import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
+import { PasswordField } from '../PasswordField';
 import { storesApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
 
 interface SettingsProps {
   storeId: number;
   onSaved: () => void;
+  /** Called after the store is archived, so the app can refresh + switch away. */
+  onArchived: () => void;
 }
 
 const THEME_COLORS = ['#000000', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F97316'];
@@ -38,12 +41,18 @@ function Toggle({ title, description, checked, onChange }: {
   );
 }
 
-export function Settings({ storeId, onSaved }: SettingsProps) {
+export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<UpdateStorePayload>({});
   const [slugTouchedFrom, setSlugTouchedFrom] = useState('');
   const [savedCurrency, setSavedCurrency] = useState('');
+  const [savedName, setSavedName] = useState('');
+  const [showArchive, setShowArchive] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [archivePassword, setArchivePassword] = useState('');
+  const [archiveError, setArchiveError] = useState('');
+  const [archiving, setArchiving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -69,6 +78,7 @@ export function Settings({ storeId, onSaved }: SettingsProps) {
       });
       setSlugTouchedFrom(s.slug);
       setSavedCurrency(s.currency);
+      setSavedName(s.name);
     } catch (e: any) {
       alert(e?.message || 'Could not load store settings');
     } finally {
@@ -111,6 +121,36 @@ export function Settings({ storeId, onSaved }: SettingsProps) {
       alert(e instanceof ApiError ? e.message : 'Could not save settings');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const nameMatches = confirmText.trim() === savedName;
+  const canArchive = nameMatches && archivePassword.length > 0;
+
+  const closeArchive = () => {
+    if (archiving) return;
+    setShowArchive(false);
+    setConfirmText('');
+    setArchivePassword('');
+    setArchiveError('');
+  };
+
+  const archive = async () => {
+    if (!canArchive) return;
+    setArchiving(true);
+    setArchiveError('');
+    try {
+      await storesApi.archive(storeId, archivePassword);
+      onArchived();
+    } catch (e: any) {
+      // Wrong password (403) and any other failure surface inline; the modal
+      // stays open and nothing is deleted.
+      let msg = 'Could not delete store';
+      if (e instanceof ApiError) {
+        msg = e.status === 403 ? 'Incorrect password.' : e.message;
+      }
+      setArchiveError(msg);
+      setArchiving(false);
     }
   };
 
@@ -288,13 +328,85 @@ export function Settings({ storeId, onSaved }: SettingsProps) {
           </p>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
           <Button variant="secondary" onClick={load} disabled={saving}>Cancel</Button>
           <Button variant="primary" onClick={save} disabled={saving}>
             {saving ? 'Saving…' : 'Save Changes'}
           </Button>
         </div>
+
+        {/* Danger zone */}
+        <div style={{ ...sectionCard, border: '1px solid var(--error-color)', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <AlertTriangle size={18} style={{ color: 'var(--error-color)' }} />
+            <h3 style={{ color: 'var(--error-color)' }}>Danger Zone</h3>
+          </div>
+          <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+            This permanently deletes the store, including all its orders, products, and customers.
+            This action cannot be undone.
+          </p>
+          <Button variant="secondary" onClick={() => setShowArchive(true)}>
+            <span style={{ color: 'var(--error-color)', fontWeight: 600 }}>Delete this store</span>
+          </Button>
+        </div>
       </div>
+
+      {showArchive && (
+        <div
+          onClick={closeArchive}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-card)', borderRadius: 'var(--radius-card)',
+              border: '1px solid var(--border-subtle)', padding: '24px',
+              width: '100%', maxWidth: '440px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <AlertTriangle size={20} style={{ color: 'var(--error-color)' }} />
+              <h3>Delete “{savedName}”?</h3>
+            </div>
+            <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              This will permanently delete the store and everything in it. This action cannot be
+              undone. To confirm, type the store name <strong>{savedName}</strong> and re-enter your
+              password below.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <FieldInput
+                label="Store name"
+                value={confirmText}
+                onChange={setConfirmText}
+                placeholder={savedName}
+              />
+              <PasswordField
+                label="Confirm your password"
+                value={archivePassword}
+                onChange={(v) => {
+                  setArchivePassword(v);
+                  if (archiveError) setArchiveError('');
+                }}
+                placeholder="Your account password"
+                error={archiveError || undefined}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
+              <Button variant="secondary" onClick={closeArchive} disabled={archiving}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={archive}
+                disabled={archiving || !canArchive}
+              >
+                {archiving ? 'Deleting…' : 'Delete store'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
