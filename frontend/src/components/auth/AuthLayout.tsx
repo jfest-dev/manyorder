@@ -1,4 +1,4 @@
-import { Store } from 'lucide-react';
+import logoImage from '../../assets/manyorder-logo.png';
 
 interface AuthLayoutProps {
   title: string;
@@ -30,20 +30,16 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '28px' }}>
-            <div
+            <img
+              src={logoImage}
+              alt="ManyOrder"
               style={{
                 width: '64px',
                 height: '64px',
                 borderRadius: '16px',
-                background: 'var(--primary-solid)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
                 marginBottom: '16px',
               }}
-            >
-              <Store size={28} color="white" />
-            </div>
+            />
             <h1 style={{ textAlign: 'center', marginBottom: '6px' }}>{title}</h1>
             {subtitle && (
               <div className="text-small" style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
