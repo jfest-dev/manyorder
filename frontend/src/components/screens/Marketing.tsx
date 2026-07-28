@@ -3,6 +3,7 @@ import { Plus, Percent, Tag, X, Edit2, Trash2, Users, Package } from 'lucide-rea
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
+import { styledSelect } from '../../lib/selectStyle';
 
 interface Promotion {
   id: string;
@@ -255,16 +256,7 @@ export function Marketing() {
               <select
                 value={newPromo.type}
                 onChange={(e) => setNewPromo({ ...newPromo, type: e.target.value as 'percentage' | 'fixed' })}
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  padding: '0 12px',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: 'var(--bg-card)',
-                  fontSize: '13px',
-                  outline: 'none',
-                }}
+                style={styledSelect}
               >
                 <option value="percentage">Percentage (%)</option>
                 <option value="fixed">Fixed Amount</option>
@@ -466,16 +458,7 @@ export function Marketing() {
               <select
                 value={editPromoData.type}
                 onChange={(e) => setEditPromoData({ ...editPromoData, type: e.target.value as 'percentage' | 'fixed' })}
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  padding: '0 12px',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: 'var(--bg-card)',
-                  fontSize: '13px',
-                  outline: 'none',
-                }}
+                style={styledSelect}
               >
                 <option value="percentage">Percentage (%)</option>
                 <option value="fixed">Fixed Amount</option>

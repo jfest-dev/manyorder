@@ -1,3 +1,5 @@
+import { styledSelect } from '../lib/selectStyle';
+
 interface SimpleSelectProps {
   label?: string;
   value: string;
@@ -20,15 +22,7 @@ export function SimpleSelect({ label, value, onChange, options, helperText, comp
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="text-small"
-        style={{
-          width: '100%',
-          padding: compact ? '6px 10px' : '10px 14px',
-          borderRadius: 'var(--radius-field)',
-          border: '1px solid var(--border-strong)',
-          background: 'var(--bg-card)',
-          color: 'var(--text-primary)',
-          cursor: 'pointer',
-        }}
+        style={{ ...styledSelect, height: compact ? '32px' : '40px' }}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>

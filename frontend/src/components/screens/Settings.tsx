@@ -3,7 +3,7 @@ import { Upload, AlertTriangle } from 'lucide-react';
 import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
 import { PasswordField } from '../PasswordField';
-import { storesApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
+import { accountApi, storesApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
 
 interface SettingsProps {
   storeId: number;
@@ -13,6 +13,9 @@ interface SettingsProps {
 }
 
 const THEME_COLORS = ['#000000', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F97316'];
+
+/** No success token in the design system; matches the weight of --error-color. */
+const SUCCESS_GREEN = '#16a34a';
 
 const sectionCard: React.CSSProperties = {
   background: 'var(--bg-card)',
@@ -41,13 +44,58 @@ function Toggle({ title, description, checked, onChange }: {
   );
 }
 
+/** Per-card save button with an inline "Saved" confirmation (no popups). */
+function SaveRow({ label, active, saved, error, disabled, onSave }: {
+  label: string; active: boolean; saved: boolean; error: string; disabled?: boolean; onSave: () => void;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '20px' }}>
+      <Button variant="primary" onClick={onSave} disabled={active || disabled}>
+        {active ? 'Saving…' : label}
+      </Button>
+      {saved && (
+        <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Saved</span>
+      )}
+      {error && (
+        <span className="text-small" style={{ color: 'var(--error-color)' }}>{error}</span>
+      )}
+    </div>
+  );
+}
+
+// Fields each card owns — used for per-card dirty tracking.
+const STORE_KEYS: (keyof UpdateStorePayload)[] =
+  ['storeName', 'slug', 'storeEmail', 'storePhone', 'businessType', 'currency', 'themeColor', 'storeDescription'];
+const PAYMENT_KEYS: (keyof UpdateStorePayload)[] = ['paymentInstruction'];
+const ADDRESS_KEYS: (keyof UpdateStorePayload)[] = ['streetAddress', 'city', 'postalCode'];
+const NOTIFICATION_KEYS: (keyof UpdateStorePayload)[] = ['notifyNewOrderEmail', 'notifyLowStockEmail'];
+
 export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<UpdateStorePayload>({});
+  // Last-saved baseline; a card's Save button enables only when its fields diverge from this.
+  const [savedForm, setSavedForm] = useState<UpdateStorePayload>({});
   const [slugTouchedFrom, setSlugTouchedFrom] = useState('');
   const [savedCurrency, setSavedCurrency] = useState('');
   const [savedName, setSavedName] = useState('');
+
+  // Per-card save status — one card saving/confirming at a time.
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+  const [errorKey, setErrorKey] = useState<{ key: string; msg: string } | null>(null);
+
+  // Change Password (Account card).
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwSaved, setPwSaved] = useState(false);
+  const [pwError, setPwError] = useState('');
+
+  // Logo upload isn't built yet; clicking shows a muted inline note (no popup).
+  const [logoNote, setLogoNote] = useState(false);
+
+  // Danger Zone (delete store).
   const [showArchive, setShowArchive] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const [archivePassword, setArchivePassword] = useState('');
@@ -58,7 +106,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
     setLoading(true);
     try {
       const s: StoreResponse = await storesApi.get(storeId);
-      setForm({
+      const next: UpdateStorePayload = {
         storeName: s.name,
         slug: s.slug,
         storeEmail: s.email ?? '',
@@ -73,14 +121,14 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
         postalCode: s.postalCode ?? '',
         notifyNewOrderEmail: s.notifyNewOrderEmail,
         notifyLowStockEmail: s.notifyLowStockEmail,
-        notifyNewOrderWhatsapp: s.notifyNewOrderWhatsapp,
-        notifyUrgentWhatsapp: s.notifyUrgentWhatsapp,
-      });
+      };
+      setForm(next);
+      setSavedForm(next);
       setSlugTouchedFrom(s.slug);
       setSavedCurrency(s.currency);
       setSavedName(s.name);
     } catch (e: any) {
-      alert(e?.message || 'Could not load store settings');
+      setErrorKey({ key: 'store', msg: e?.message || 'Could not load store settings' });
     } finally {
       setLoading(false);
     }
@@ -94,9 +142,29 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const set = <K extends keyof UpdateStorePayload>(key: K, value: UpdateStorePayload[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const save = async () => {
+  /** Save one card's slice via a partial PATCH, then flash an inline "Saved". */
+  const saveCard = async (key: string, payload: UpdateStorePayload, after?: () => void) => {
+    setSavingKey(key);
+    setErrorKey(null);
+    setSavedKey((k) => (k === key ? null : k));
+    try {
+      await storesApi.update(storeId, payload);
+      onSaved();
+      after?.();
+      // Advance the baseline so this card's button returns to disabled.
+      setSavedForm((prev) => ({ ...prev, ...payload }));
+      setSavedKey(key);
+      window.setTimeout(() => setSavedKey((k) => (k === key ? null : k)), 3000);
+    } catch (e: any) {
+      setErrorKey({ key, msg: e instanceof ApiError ? e.message : 'Could not save changes' });
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const saveStore = async () => {
     if (!form.storeName?.trim()) {
-      alert('Store name cannot be empty');
+      setErrorKey({ key: 'store', msg: 'Store name cannot be empty' });
       return;
     }
     if (form.currency && form.currency !== savedCurrency) {
@@ -105,24 +173,73 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
       );
       if (!proceed) return;
     }
-    setSaving(true);
+    const normalizedSlug = form.slug?.trim().toLowerCase();
+    await saveCard('store', {
+      storeName: form.storeName,
+      slug: normalizedSlug,
+      storeEmail: form.storeEmail,
+      storePhone: form.storePhone,
+      businessType: form.businessType,
+      currency: form.currency,
+      themeColor: form.themeColor,
+      storeDescription: form.storeDescription,
+    }, () => {
+      setSavedName(form.storeName?.trim() || '');
+      setSavedCurrency(form.currency || '');
+      setSlugTouchedFrom(normalizedSlug || '');
+      if (normalizedSlug) setForm((p) => ({ ...p, slug: normalizedSlug }));
+    });
+  };
+
+  const savePayment = () => saveCard('payment', { paymentInstruction: form.paymentInstruction });
+
+  const saveAddress = () => saveCard('address', {
+    streetAddress: form.streetAddress,
+    city: form.city,
+    postalCode: form.postalCode,
+  });
+
+  const saveNotifications = () => saveCard('notifications', {
+    notifyNewOrderEmail: form.notifyNewOrderEmail ?? true,
+    notifyLowStockEmail: form.notifyLowStockEmail ?? true,
+  });
+
+  const canChangePassword =
+    currentPassword.length > 0 && newPassword.length > 0 && confirmPassword.length > 0;
+
+  const changePassword = async () => {
+    setPwError('');
+    setPwSaved(false);
+    if (newPassword.length < 6) {
+      setPwError('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('New passwords do not match.');
+      return;
+    }
+    setPwSaving(true);
     try {
-      await storesApi.update(storeId, {
-        ...form,
-        slug: form.slug?.trim().toLowerCase(),
-      });
-      alert('Settings saved');
-      if (form.slug && form.slug !== slugTouchedFrom) {
-        alert('Heads up: you changed the store link — staff use it as the store code, and shared links to the old address stop working.');
-      }
-      onSaved();
-      load();
+      await accountApi.changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPwSaved(true);
+      window.setTimeout(() => setPwSaved(false), 4000);
     } catch (e: any) {
-      alert(e instanceof ApiError ? e.message : 'Could not save settings');
+      let msg = 'Could not update password';
+      if (e instanceof ApiError) msg = e.status === 403 ? 'Incorrect password.' : e.message;
+      setPwError(msg);
     } finally {
-      setSaving(false);
+      setPwSaving(false);
     }
   };
+
+  // A card is dirty when any field it owns differs from the last-saved baseline
+  // (null/undefined normalized to '' so untouched empty fields never read dirty).
+  const norm = (v: unknown) => (v === undefined || v === null ? '' : v);
+  const isDirty = (keys: (keyof UpdateStorePayload)[]) =>
+    keys.some((k) => norm(form[k]) !== norm(savedForm[k]));
 
   const nameMatches = confirmText.trim() === savedName;
   const canArchive = nameMatches && archivePassword.length > 0;
@@ -157,6 +274,8 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const initials = (form.storeName || 'S')
     .split(' ').filter(Boolean).map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 
+  const slugChanged = (form.slug || '').trim().toLowerCase() !== slugTouchedFrom;
+
   if (loading) {
     return <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading settings…</p>;
   }
@@ -187,13 +306,15 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               {initials}
             </div>
             <div>
-              <Button variant="secondary" onClick={() => alert('Logo upload arrives with the photo-upload update (Cloudinary).')}>
+              <Button variant="secondary" onClick={() => setLogoNote(true)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Upload size={15} /> Upload logo
                 </div>
               </Button>
               <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
-                Optional, square images work best.
+                {logoNote
+                  ? 'Logo upload arrives with the photo-upload update (Cloudinary).'
+                  : 'Optional, square images work best.'}
               </p>
             </div>
           </div>
@@ -229,7 +350,11 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               label="Store Link"
               value={form.slug || ''}
               onChange={(v) => set('slug', v)}
-              helperText={`manyorder.app/${form.slug || 'your-store'} — the link you share; staff also use it as the store code`}
+              helperText={
+                slugChanged
+                  ? `manyorder.app/${form.slug || 'your-store'} — changing your store link breaks links you've already shared`
+                  : `manyorder.app/${form.slug || 'your-store'} — the link you share with customers`
+              }
             />
             <FieldSelect
               label="Currency"
@@ -261,19 +386,38 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               <p className="text-small" style={{ fontWeight: 500, marginBottom: '6px' }}>Store Description</p>
               <textarea style={textareaStyle} value={form.storeDescription || ''} onChange={(e) => set('storeDescription', e.target.value)} />
             </div>
-            <div>
-              <p className="text-small" style={{ fontWeight: 500, marginBottom: '6px' }}>Payment Instruction</p>
-              <textarea
-                style={textareaStyle}
-                placeholder="e.g. PayNow to +65 8123 4567 and upload the receipt, or pay cash on pickup."
-                value={form.paymentInstruction || ''}
-                onChange={(e) => set('paymentInstruction', e.target.value)}
-              />
-              <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px' }}>
-                Shown to customers at checkout.
-              </p>
-            </div>
           </div>
+
+          <SaveRow
+            label="Save"
+            active={savingKey === 'store'}
+            saved={savedKey === 'store'}
+            error={errorKey?.key === 'store' ? errorKey.msg : ''}
+            disabled={!isDirty(STORE_KEYS)}
+            onSave={saveStore}
+          />
+        </div>
+
+        {/* Payment instruction */}
+        <div style={sectionCard}>
+          <h3 style={{ marginBottom: '4px' }}>Payment Instruction</h3>
+          <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+            Shown to customers at checkout.
+          </p>
+          <textarea
+            style={textareaStyle}
+            placeholder="e.g. PayNow to +65 8123 4567 and upload the receipt, or pay cash on pickup."
+            value={form.paymentInstruction || ''}
+            onChange={(e) => set('paymentInstruction', e.target.value)}
+          />
+          <SaveRow
+            label="Save"
+            active={savingKey === 'payment'}
+            saved={savedKey === 'payment'}
+            error={errorKey?.key === 'payment' ? errorKey.msg : ''}
+            disabled={!isDirty(PAYMENT_KEYS)}
+            onSave={savePayment}
+          />
         </div>
 
         {/* Address */}
@@ -286,13 +430,21 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               <FieldInput label="Postal Code" placeholder="123456" value={form.postalCode || ''} onChange={(v) => set('postalCode', v)} />
             </div>
           </div>
+          <SaveRow
+            label="Save"
+            active={savingKey === 'address'}
+            saved={savedKey === 'address'}
+            error={errorKey?.key === 'address' ? errorKey.msg : ''}
+            disabled={!isDirty(ADDRESS_KEYS)}
+            onSave={saveAddress}
+          />
         </div>
 
         {/* Notifications */}
         <div style={sectionCard}>
           <h3 style={{ marginBottom: '4px' }}>Notifications</h3>
           <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
-            Get notified via email and WhatsApp when important events happen in your store
+            Get notified via email when important events happen in your store
           </p>
 
           <p className="text-small" style={{ fontWeight: 600, marginBottom: '4px' }}>Email Notifications</p>
@@ -309,30 +461,60 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
             onChange={(v) => set('notifyLowStockEmail', v)}
           />
 
-          <p className="text-small" style={{ fontWeight: 600, margin: '16px 0 4px' }}>WhatsApp Notifications</p>
-          <Toggle
-            title="New orders"
-            description="Send me a WhatsApp message when a customer places an order"
-            checked={form.notifyNewOrderWhatsapp ?? true}
-            onChange={(v) => set('notifyNewOrderWhatsapp', v)}
-          />
-          <Toggle
-            title="Urgent alerts"
-            description="Send me critical alerts (payment issues, out of stock items)"
-            checked={form.notifyUrgentWhatsapp ?? true}
-            onChange={(v) => set('notifyUrgentWhatsapp', v)}
-          />
-
           <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '12px' }}>
-            Preferences are saved now; the email/WhatsApp senders arrive in a later update.
+            Preferences are saved now; email delivery arrives in a later update.
           </p>
+
+          <SaveRow
+            label="Save"
+            active={savingKey === 'notifications'}
+            saved={savedKey === 'notifications'}
+            error={errorKey?.key === 'notifications' ? errorKey.msg : ''}
+            disabled={!isDirty(NOTIFICATION_KEYS)}
+            onSave={saveNotifications}
+          />
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-          <Button variant="secondary" onClick={load} disabled={saving}>Cancel</Button>
-          <Button variant="primary" onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </Button>
+        {/* Account — account-level actions that apply to you, not a specific store */}
+        <div style={sectionCard}>
+          <h3 style={{ marginBottom: '4px' }}>Account</h3>
+          <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
+            These settings apply to your account, not to any single store.
+          </p>
+
+          <p className="text-small" style={{ fontWeight: 600, marginBottom: '12px' }}>Change Password</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '420px' }}>
+            <PasswordField
+              label="Current Password"
+              value={currentPassword}
+              onChange={(v) => { setCurrentPassword(v); if (pwError) setPwError(''); }}
+              placeholder="Your current password"
+            />
+            <PasswordField
+              label="New Password"
+              value={newPassword}
+              onChange={(v) => { setNewPassword(v); if (pwError) setPwError(''); }}
+              placeholder="At least 6 characters"
+              helperText="Must be at least 6 characters."
+            />
+            <PasswordField
+              label="Confirm New Password"
+              value={confirmPassword}
+              onChange={(v) => { setConfirmPassword(v); if (pwError) setPwError(''); }}
+              placeholder="Re-enter your new password"
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '20px' }}>
+            <Button variant="primary" onClick={changePassword} disabled={pwSaving || !canChangePassword}>
+              {pwSaving ? 'Updating…' : 'Update password'}
+            </Button>
+            {pwSaved && (
+              <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Password updated</span>
+            )}
+            {pwError && (
+              <span className="text-small" style={{ color: 'var(--error-color)' }}>{pwError}</span>
+            )}
+          </div>
         </div>
 
         {/* Danger zone */}
