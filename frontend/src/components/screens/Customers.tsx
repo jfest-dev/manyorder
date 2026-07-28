@@ -3,6 +3,7 @@ import { Card } from '../Card';
 import { Button } from '../Button';
 import { useState } from 'react';
 import { FieldInput } from '../Field';
+import { styledSelect } from '../../lib/selectStyle';
 
 interface Customer {
   id: string;
@@ -214,20 +215,7 @@ export function Customers() {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                style={{
-                  height: '36px',
-                  padding: '0 32px 0 12px',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: 'var(--bg-card)',
-                  fontSize: '13px',
-                  outline: 'none',
-                  cursor: 'pointer',
-                  appearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 12px center',
-                }}
+                style={{ ...styledSelect, width: 'auto', height: '36px' }}
               >
                 <option value="all">All Statuses</option>
                 <option value="active">Active</option>
@@ -242,20 +230,7 @@ export function Customers() {
               <select
                 value={filterOrders}
                 onChange={(e) => setFilterOrders(e.target.value)}
-                style={{
-                  height: '36px',
-                  padding: '0 32px 0 12px',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: 'var(--bg-card)',
-                  fontSize: '13px',
-                  outline: 'none',
-                  cursor: 'pointer',
-                  appearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 12px center',
-                }}
+                style={{ ...styledSelect, width: 'auto', height: '36px' }}
               >
                 <option value="all">All Orders</option>
                 <option value="10+">10+ orders</option>

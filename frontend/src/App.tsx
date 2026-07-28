@@ -158,9 +158,12 @@ function MerchantApp() {
   const [loading, setLoading] = useState(true);
   const [storeUnavailable, setStoreUnavailable] = useState(false);
 
-  const refreshStores = async () => {
+  const refreshStores = async (silent = false) => {
     if (!user) return;
-    setLoading(true);
+    // A silent refresh (e.g. after saving a Settings card) keeps the current
+    // screen mounted so inline confirmations survive; it just re-syncs the
+    // store list. A normal refresh shows the full-screen loading state.
+    if (!silent) setLoading(true);
     setStoreUnavailable(false);
     try {
       let mapped: Store[] = [];
@@ -211,7 +214,7 @@ function MerchantApp() {
       console.error('LOAD STORES ERROR:', e);
       alert(e?.message || 'Could not load your stores.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -437,7 +440,7 @@ function MerchantApp() {
         return activeStore ? (
           <Settings
             storeId={Number(activeStore.id)}
-            onSaved={refreshStores}
+            onSaved={() => refreshStores(true)}
             onArchived={handleStoreArchived}
           />
         ) : (

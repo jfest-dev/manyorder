@@ -62,6 +62,7 @@ public class User {
     public String getFullName() { return fullName; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
+    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public UserRole getRole() { return role; }
     public Merchant getStaffStore() { return staffStore; }
     public void setStaffStore(Merchant staffStore) { this.staffStore = staffStore; }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { styledSelect } from '../lib/selectStyle';
 
 interface FieldInputProps {
   label?: string;
@@ -207,21 +208,7 @@ export function FieldSelect({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
-        style={{
-          width: '100%',
-          height: '40px',
-          padding: '0 32px 0 12px',
-          border: '1px solid var(--border-strong)',
-          borderRadius: 'var(--radius-field)',
-          background: 'var(--bg-card)',
-          fontSize: '13px',
-          outline: 'none',
-          cursor: 'pointer',
-          appearance: 'none',
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-          backgroundRepeat: 'no-repeat',
-          backgroundPosition: 'right 12px center',
-        }}
+        style={styledSelect}
       >
         <option value="">{placeholder}</option>
         {options.map((opt) => (

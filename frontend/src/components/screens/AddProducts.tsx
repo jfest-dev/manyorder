@@ -5,6 +5,7 @@ import { Button } from '../Button';
 import { Card } from '../Card';
 import { formatMoney, currencySymbol, priceLimits } from '../../lib/currency';
 import { storeInitials } from '../../lib/initials';
+import { styledSelect } from '../../lib/selectStyle';
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -354,21 +355,7 @@ export function AddProducts({
                       <select
                         value={product.category}
                         onChange={(e) => updateProduct(product.id, 'category', e.target.value)}
-                        style={{
-                          flex: 1,
-                          height: '40px',
-                          padding: '0 32px 0 12px',
-                          border: '1px solid var(--border-subtle)',
-                          borderRadius: 'var(--radius-field)',
-                          background: 'var(--bg-card)',
-                          fontSize: '13px',
-                          outline: 'none',
-                          cursor: 'pointer',
-                          appearance: 'none',
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'right 12px center',
-                        }}
+                        style={{ ...styledSelect, width: 'auto', flex: 1 }}
                       >
                         <option value="">Select category</option>
                         {categories.map((cat) => (

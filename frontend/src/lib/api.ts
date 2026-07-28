@@ -193,6 +193,20 @@ export const authApi = {
   config: () => request<{ googleClientId: string }>('/auth/config', { auth: false }),
 };
 
+export const accountApi = {
+  /**
+   * Change the signed-in user's password. The server re-verifies the current
+   * password (403 "Incorrect password" on mismatch) and enforces the same
+   * minimum length as registration. Returns 204; the current session stays
+   * valid (stateless JWT — no server-side revocation).
+   */
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>('/account/change-password', {
+      method: 'POST',
+      body: { currentPassword, newPassword },
+    }),
+};
+
 export const storesApi = {
   list: () => request<StoreListResponse>('/merchant/stores'),
   get: (storeId: number) => request<StoreResponse>(`/merchant/stores/${storeId}`),
