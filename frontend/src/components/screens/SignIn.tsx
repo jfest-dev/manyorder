@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
-import { AuthLayout, SecurityFooter } from '../auth/AuthLayout';
+import { AuthLayout } from '../auth/AuthLayout';
 import { GoogleSignInButton } from '../auth/GoogleSignInButton';
 import { FieldInput } from '../Field';
 import { PasswordField } from '../PasswordField';
@@ -45,7 +45,6 @@ export function SignIn() {
     <AuthLayout
       title="Sign in to ManyOrder"
       subtitle="Create your online order page in minutes"
-      footer={<SecurityFooter />}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <FieldInput
@@ -73,7 +72,7 @@ export function SignIn() {
           <button
             type="button"
             className="text-small"
-            onClick={() => alert('Password reset is not included in this demo build.')}
+            onClick={() => navigate('/forgot-password')}
             style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer' }}
           >
             Forgot password?

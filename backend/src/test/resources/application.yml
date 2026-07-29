@@ -16,3 +16,9 @@ app:
     client-id: ""
   cors:
     allowed-origins: http://localhost:5173
+  resend:
+    api-key: ""
+  mail:
+    from: onboarding@resend.dev
+  frontend:
+    base-url: http://localhost:3000

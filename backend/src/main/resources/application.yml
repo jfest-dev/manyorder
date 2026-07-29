@@ -21,6 +21,14 @@ app:
     client-id: ${GOOGLE_CLIENT_ID:}
   cors:
     allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  resend:
+    # Leave unset to disable outbound email (the reset flow no-ops the send).
+    api-key: ${RESEND_API_KEY:}
+  mail:
+    from: ${MAIL_FROM:onboarding@resend.dev}
+  frontend:
+    # Base URL the emailed reset link points back to.
+    base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
 
 springdoc:
   swagger-ui:

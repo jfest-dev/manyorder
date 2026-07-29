@@ -21,6 +21,8 @@ import { OnboardingStep2 } from './components/screens/OnboardingStep2';
 import { SignIn } from './components/screens/SignIn';
 import { CreateAccount } from './components/screens/CreateAccount';
 import { SignInToStore } from './components/screens/SignInToStore';
+import { ForgotPassword } from './components/screens/ForgotPassword';
+import { ResetPassword } from './components/screens/ResetPassword';
 
 import { useAuth } from './context/AuthContext';
 import { ApiError, storesApi, StoreResponse } from './lib/api';
@@ -490,6 +492,8 @@ export default function App() {
         }
       />
       <Route path="/store-signin" element={<SignInToStore />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route
         path="/app"
         element={

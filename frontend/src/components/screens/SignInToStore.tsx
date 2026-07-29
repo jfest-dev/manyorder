@@ -4,7 +4,6 @@ import { Lock, Store as StoreIcon } from 'lucide-react';
 import { FieldInput } from '../Field';
 import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
-import { SecurityFooter } from '../auth/AuthLayout';
 import { useAuth } from '../../context/AuthContext';
 import { publicApi } from '../../lib/api';
 
@@ -154,10 +153,6 @@ export function SignInToStore() {
               Back to All Stores
             </Button>
           </div>
-        </div>
-
-        <div style={{ marginTop: '16px' }}>
-          <SecurityFooter />
         </div>
       </div>
     </div>
