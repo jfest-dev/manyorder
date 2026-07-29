@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AuthLayout, SecurityFooter } from '../auth/AuthLayout';
+import { AuthLayout } from '../auth/AuthLayout';
 import { GoogleSignInButton } from '../auth/GoogleSignInButton';
 import { FieldInput } from '../Field';
 import { PasswordField } from '../PasswordField';
@@ -54,7 +54,6 @@ export function CreateAccount() {
     <AuthLayout
       title="Create your account"
       subtitle="Set up your account first — your store comes next"
-      footer={<SecurityFooter />}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <FieldInput label="Full Name" placeholder="Jane Tan" value={fullName} onChange={setFullName} required />

@@ -92,9 +92,6 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const [pwSaved, setPwSaved] = useState(false);
   const [pwError, setPwError] = useState('');
 
-  // Logo upload isn't built yet; clicking shows a muted inline note (no popup).
-  const [logoNote, setLogoNote] = useState(false);
-
   // Danger Zone (delete store).
   const [showArchive, setShowArchive] = useState(false);
   const [confirmText, setConfirmText] = useState('');
@@ -306,15 +303,13 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               {initials}
             </div>
             <div>
-              <Button variant="secondary" onClick={() => setLogoNote(true)}>
+              <Button variant="secondary" onClick={() => {}}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Upload size={15} /> Upload logo
                 </div>
               </Button>
               <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
-                {logoNote
-                  ? 'Logo upload arrives with the photo-upload update (Cloudinary).'
-                  : 'Optional, square images work best.'}
+                Optional, square images work best.
               </p>
             </div>
           </div>

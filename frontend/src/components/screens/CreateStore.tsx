@@ -87,7 +87,6 @@ export function CreateStore({ onComplete, onNavigate, initialData }: CreateStore
   const [category, setCategory] = useState(initialData?.category || 'food');
   const [currency, setCurrency] = useState(initialData?.currency || 'sgd');
   const [selectedColor, setSelectedColor] = useState(initialData?.color || '#000000');
-  const [logo, setLogo] = useState<string | null>(initialData?.logo || null);
   const [countryCode, setCountryCode] = useState(initialCode);
   const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [storeLink, setStoreLink] = useState(initialData?.storeLink || '');
@@ -101,7 +100,6 @@ export function CreateStore({ onComplete, onNavigate, initialData }: CreateStore
       name: storeName,
       category,
       color: selectedColor,
-      logo: logo || undefined,
 
       // extra fields (won’t break App.tsx)
       currency,
@@ -161,7 +159,8 @@ export function CreateStore({ onComplete, onNavigate, initialData }: CreateStore
                   Store logo
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  {/* Logo Preview */}
+                  {/* Avatar preview — initials/colour only; the button beside it
+                      is a no-op placeholder until the real logo feature is built. */}
                   <div
                     style={{
                       width: '64px',
@@ -178,47 +177,18 @@ export function CreateStore({ onComplete, onNavigate, initialData }: CreateStore
                       overflow: 'hidden',
                     }}
                   >
-                    {logo ? (
-                      <img src={logo} alt="Store Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : storeInitials(storeName) ? (
+                    {storeInitials(storeName) ? (
                       storeInitials(storeName)
                     ) : (
                       <Store size={26} color="white" />
                     )}
                   </div>
 
-                  {/* Upload Button */}
-                  <label style={{ cursor: 'pointer' }}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => setLogo(reader.result as string);
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      style={{ display: 'none' }}
-                    />
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 16px',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-field)',
-                        background: 'var(--bg-card)',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Upload size={16} />
-                      Upload logo
-                    </div>
-                  </label>
+                  <Button variant="secondary" onClick={() => {}}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      <Upload size={15} /> Upload logo
+                    </span>
+                  </Button>
                 </div>
                 <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
                   Optional, square images work best.
@@ -393,7 +363,7 @@ export function CreateStore({ onComplete, onNavigate, initialData }: CreateStore
                       width: '48px',
                       height: '48px',
                       borderRadius: '50%',
-                      background: logo ? 'transparent' : 'rgba(255, 255, 255, 0.2)',
+                      background: 'rgba(255, 255, 255, 0.2)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -404,9 +374,7 @@ export function CreateStore({ onComplete, onNavigate, initialData }: CreateStore
                       border: '2px solid rgba(255, 255, 255, 0.3)',
                     }}
                   >
-                    {logo ? (
-                      <img src={logo} alt="Store Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : storeInitials(storeName) ? (
+                    {storeInitials(storeName) ? (
                       storeInitials(storeName)
                     ) : (
                       <Store size={20} color="white" />

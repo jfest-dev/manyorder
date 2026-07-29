@@ -191,6 +191,29 @@ export const authApi = {
     request<LoginResponse>('/auth/google', { method: 'POST', body: { idToken }, auth: false }),
 
   config: () => request<{ googleClientId: string }>('/auth/config', { auth: false }),
+
+  /**
+   * Request a password-reset link. Always resolves with the same generic
+   * message regardless of whether the email exists — the server never reveals
+   * account existence.
+   */
+  forgotPassword: (email: string) =>
+    request<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: { email },
+      auth: false,
+    }),
+
+  /**
+   * Complete a reset with the emailed token. Returns 204 on success; a 400
+   * means the token is invalid, expired, or already used.
+   */
+  resetPassword: (token: string, newPassword: string) =>
+    request<void>('/auth/reset-password', {
+      method: 'POST',
+      body: { token, newPassword },
+      auth: false,
+    }),
 };
 
 export const accountApi = {
