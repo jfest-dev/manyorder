@@ -10,6 +10,11 @@ import { publicApi } from '../../lib/api';
 
 const PREFER_STORE_KEY = 'manyorder_prefer_store';
 
+// Simple, permissive email shape check — enough to catch obviously invalid
+// input client-side so we show one friendly message instead of the backend's
+// validation text (and never fire both at once).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 interface StoreBranding {
   name: string;
   slug: string;
@@ -47,9 +52,14 @@ export function SignInToStore() {
 
   const submit = async () => {
     setError(null);
+    const trimmedEmail = email.trim();
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setError('Enter a valid email address.');
+      return;
+    }
     setBusy(true);
     try {
-      await login(email.trim(), password, remember);
+      await login(trimmedEmail, password, remember);
       if (slug) sessionStorage.setItem(PREFER_STORE_KEY, slug);
       navigate('/app');
     } catch (e: any) {

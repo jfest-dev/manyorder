@@ -7,6 +7,11 @@ import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
 import { useAuth } from '../../context/AuthContext';
 
+// Simple, permissive email shape check — enough to catch obviously invalid
+// input client-side so we show one friendly message instead of the backend's
+// validation text (and never fire both at once).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function CreateAccount() {
   const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -20,6 +25,11 @@ export function CreateAccount() {
 
   const submit = async () => {
     setError(null);
+    const trimmedEmail = email.trim();
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setError('Enter a valid email address.');
+      return;
+    }
     if (password !== confirm) {
       setError('Passwords do not match');
       return;
@@ -28,7 +38,7 @@ export function CreateAccount() {
     try {
       await register({
         fullName: fullName.trim(),
-        email: email.trim(),
+        email: trimmedEmail,
         password,
         role: 'MERCHANT',
       });

@@ -8,6 +8,11 @@ import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
 import { useAuth } from '../../context/AuthContext';
 
+// Simple, permissive email shape check — enough to catch obviously invalid
+// input client-side so we show one friendly message instead of the backend's
+// validation text (and never fire both at once).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function SignIn() {
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -20,9 +25,14 @@ export function SignIn() {
 
   const submit = async () => {
     setError(null);
+    const trimmedEmail = email.trim();
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setError('Enter a valid email address.');
+      return;
+    }
     setBusy(true);
     try {
-      await login(email.trim(), password, remember);
+      await login(trimmedEmail, password, remember);
       navigate('/app');
     } catch (e: any) {
       setError(e?.message || 'Sign in failed');
