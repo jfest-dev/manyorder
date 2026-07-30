@@ -1,5 +1,5 @@
 import { Button } from '../Button';
-import { Plus, ExternalLink, Check, LogIn } from 'lucide-react';
+import { Plus, ExternalLink, Check } from 'lucide-react';
 
 interface Store {
   id: string;
@@ -41,12 +41,6 @@ export function AllStores({ stores, activeStoreId, onStoreChange, onNavigate, st
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <Button variant="secondary" onClick={() => onNavigate('stores-signin')}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <LogIn size={16} />
-              Sign In to Store
-            </div>
-          </Button>
           <Button variant="primary" disabled={atLimit} onClick={() => onNavigate('stores-create')}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Plus size={16} />
