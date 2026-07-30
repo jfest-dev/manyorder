@@ -6,6 +6,7 @@ import { FieldInput } from '../Field';
 import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
 import { useAuth } from '../../context/AuthContext';
+import { validatePassword, PASSWORD_RULE_TEXT } from '../../lib/password';
 
 // Simple, permissive email shape check — enough to catch obviously invalid
 // input client-side so we show one friendly message instead of the backend's
@@ -28,6 +29,11 @@ export function CreateAccount() {
     const trimmedEmail = email.trim();
     if (!EMAIL_RE.test(trimmedEmail)) {
       setError('Enter a valid email address.');
+      return;
+    }
+    const strengthError = validatePassword(password);
+    if (strengthError) {
+      setError(strengthError);
       return;
     }
     if (password !== confirm) {
@@ -58,7 +64,7 @@ export function CreateAccount() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <FieldInput label="Full Name" placeholder="Jane Tan" value={fullName} onChange={setFullName} required />
         <FieldInput label="Email Address" type="email" placeholder="you@example.com" value={email} onChange={setEmail} required />
-        <PasswordField label="Password" placeholder="At least 6 characters" value={password} onChange={setPassword} required />
+        <PasswordField label="Password" placeholder={PASSWORD_RULE_TEXT} value={password} onChange={setPassword} required />
         <PasswordField label="Confirm Password" placeholder="Repeat your password" value={confirm} onChange={setConfirm} required />
 
         {error && <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>}

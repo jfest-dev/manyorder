@@ -1,16 +1,16 @@
 package com.manyorder.api.domain.passwordreset;
 
+import com.manyorder.api.common.validation.ValidPassword;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 public class ResetPasswordRequest {
 
     @NotBlank
     private String token;
 
-    /** Same minimum as registration so reset can't set a weaker password. */
+    /** Same strength rule as registration so reset can't set a weaker password. */
     @NotBlank
-    @Size(min = 6)
+    @ValidPassword
     private String newPassword;
 
     public ResetPasswordRequest() {}

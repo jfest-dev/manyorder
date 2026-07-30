@@ -175,7 +175,18 @@ class PasswordResetIntegrationTest extends IntegrationTestBase {
         registerAndGetToken(email, "MERCHANT", null);
 
         String token = forgotAndCaptureToken(email);
-        reset(token, "123", 400); // fails @Size(min = 6) bean validation
+        reset(token, "123", 400); // fails @ValidPassword bean validation (min 8 + a number)
+
+        loginExpect(email, "password123", 200); // unchanged
+    }
+
+    @Test
+    void passwordWithoutDigit_returns400_andPasswordUnchanged() throws Exception {
+        String email = "pr-nodigit@test.com";
+        registerAndGetToken(email, "MERCHANT", null);
+
+        String token = forgotAndCaptureToken(email);
+        reset(token, "abcdefgh", 400); // long enough, but no number → @ValidPassword rejects it
 
         loginExpect(email, "password123", 200); // unchanged
     }
