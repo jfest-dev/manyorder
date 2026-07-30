@@ -123,17 +123,7 @@ export function CreateStore({ onComplete, onNavigate, initialData }: CreateStore
 
           <Button
             variant="ghost"
-            onClick={() => {
-              // ✅ NEW: use the same navigation as AllStores button
-              if (onNavigate) {
-                onNavigate('stores-signin');
-                return;
-              }
-
-              // fallback (if you didn’t pass onNavigate)
-              const link = prompt('Enter your store link (e.g., your-store-name):');
-              if (link) alert(`Redirecting to sign in for ${link}...`);
-            }}
+            onClick={() => onNavigate?.('stores-signin')}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <LogIn size={14} />

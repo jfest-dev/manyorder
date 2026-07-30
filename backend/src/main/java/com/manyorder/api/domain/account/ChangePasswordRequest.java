@@ -1,12 +1,12 @@
 package com.manyorder.api.domain.account;
 
+import com.manyorder.api.common.validation.ValidPassword;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 
 /**
  * Body for changing the signed-in user's password. The current password is
  * re-verified server-side (403 on mismatch), and the new password must satisfy
- * the same minimum length enforced at registration.
+ * the same strength rule enforced everywhere else a password is set.
  */
 public class ChangePasswordRequest {
 
@@ -14,7 +14,7 @@ public class ChangePasswordRequest {
     private String currentPassword;
 
     @NotBlank
-    @Size(min = 6)
+    @ValidPassword
     private String newPassword;
 
     public ChangePasswordRequest() {}

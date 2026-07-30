@@ -130,7 +130,7 @@ export function SignInToStore() {
               <button
                 type="button"
                 className="text-small"
-                onClick={() => alert('Password reset is not included in this demo build.')}
+                onClick={() => navigate('/forgot-password')}
                 style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text-secondary)', textDecoration: 'underline', cursor: 'pointer' }}
               >
                 Forgot password?

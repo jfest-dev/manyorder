@@ -5,10 +5,11 @@ import { AuthLayout, SecurityFooter } from '../auth/AuthLayout';
 import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
 import { authApi } from '../../lib/api';
+import { validatePassword, PASSWORD_RULE_TEXT } from '../../lib/password';
 
 /**
  * Set a new password from an emailed link (?route /reset-password?token=…).
- * Reads the one-time token from the query string, applies the same min-length
+ * Reads the one-time token from the query string, applies the same strength
  * and match checks as registration, and redirects to sign in on success. An
  * invalid/expired/used token (400) or a missing token shows a recovery path
  * back to /forgot-password.
@@ -26,8 +27,9 @@ export function ResetPassword() {
 
   const submit = async () => {
     setError(null);
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    const strengthError = validatePassword(password);
+    if (strengthError) {
+      setError(strengthError);
       return;
     }
     if (password !== confirm) {
@@ -82,7 +84,7 @@ export function ResetPassword() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <PasswordField
             label="New Password"
-            placeholder="At least 6 characters"
+            placeholder={PASSWORD_RULE_TEXT}
             value={password}
             onChange={setPassword}
             required

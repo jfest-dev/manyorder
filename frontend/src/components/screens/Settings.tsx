@@ -4,6 +4,7 @@ import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
 import { PasswordField } from '../PasswordField';
 import { accountApi, storesApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
+import { validatePassword, PASSWORD_RULE_TEXT } from '../../lib/password';
 
 interface SettingsProps {
   storeId: number;
@@ -207,8 +208,9 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const changePassword = async () => {
     setPwError('');
     setPwSaved(false);
-    if (newPassword.length < 6) {
-      setPwError('New password must be at least 6 characters.');
+    const strengthError = validatePassword(newPassword);
+    if (strengthError) {
+      setPwError(strengthError);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -489,14 +491,13 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               label="New Password"
               value={newPassword}
               onChange={(v) => { setNewPassword(v); if (pwError) setPwError(''); }}
-              placeholder="At least 6 characters"
-              helperText="Must be at least 6 characters."
+              placeholder={PASSWORD_RULE_TEXT}
             />
             <PasswordField
               label="Confirm New Password"
               value={confirmPassword}
               onChange={(v) => { setConfirmPassword(v); if (pwError) setPwError(''); }}
-              placeholder="Re-enter your new password"
+              placeholder="Repeat your password"
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '20px' }}>
