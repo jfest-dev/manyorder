@@ -20,7 +20,6 @@ import { OnboardingStep1 } from './components/screens/OnboardingStep1';
 import { OnboardingStep2 } from './components/screens/OnboardingStep2';
 import { SignIn } from './components/screens/SignIn';
 import { CreateAccount } from './components/screens/CreateAccount';
-import { SignInToStore } from './components/screens/SignInToStore';
 import { ForgotPassword } from './components/screens/ForgotPassword';
 import { ResetPassword } from './components/screens/ResetPassword';
 
@@ -76,7 +75,6 @@ type Draft = {
 };
 
 const DRAFT_KEY = 'manyorder_draft_v1';
-const PREFER_STORE_KEY = 'manyorder_prefer_store';
 
 /** Screens a STAFF account must not reach (Module 1 RBAC). The API enforces this too. */
 const STAFF_BLOCKED_SCREENS: Screen[] = [
@@ -143,10 +141,15 @@ function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
 
 /** The authenticated merchant/staff dashboard (legacy screen-switcher, now JWT + REST). */
 function MerchantApp() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isStaff = user?.role === 'STAFF';
+
+  const handleSignOut = () => {
+    logout();
+    navigate('/signin');
+  };
 
   const [activeScreen, setActiveScreen] = useState<Screen>(() => {
     const screen = new URLSearchParams(location.search).get('screen') as Screen | null;
@@ -193,16 +196,9 @@ function MerchantApp() {
 
       setStores(mapped);
 
-      const preferred = sessionStorage.getItem(PREFER_STORE_KEY);
-      const preferredStore = preferred ? mapped.find((s) => s.slug === preferred) : null;
-      if (preferredStore) {
-        sessionStorage.removeItem(PREFER_STORE_KEY);
-        setActiveStoreId(preferredStore.id);
-      } else {
-        setActiveStoreId((current) =>
-          current && mapped.some((s) => s.id === current) ? current : mapped[0]?.id ?? null,
-        );
-      }
+      setActiveStoreId((current) =>
+        current && mapped.some((s) => s.id === current) ? current : mapped[0]?.id ?? null,
+      );
 
       // Merchant with no stores yet -> onboarding wizard (account first, store second).
       if (!isStaff && mapped.length === 0) {
@@ -300,10 +296,6 @@ function MerchantApp() {
       alert('Staff accounts can view orders and products only.');
       return;
     }
-    if (screen === 'stores-signin') {
-      navigate(`/store-signin${activeStore ? `?store=${activeStore.slug}` : ''}`);
-      return;
-    }
     setActiveScreen(screen as Screen);
   };
 
@@ -338,6 +330,7 @@ function MerchantApp() {
             <CreateStore
               onComplete={handleOnboardingStoreDraft}
               onNavigate={navigateScreen as any}
+              onSignOut={handleSignOut}
               initialData={getDraft()?.store}
             />
           </OnboardingStep1>
@@ -491,7 +484,6 @@ export default function App() {
           </RedirectIfAuthed>
         }
       />
-      <Route path="/store-signin" element={<SignInToStore />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route

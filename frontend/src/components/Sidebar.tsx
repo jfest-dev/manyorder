@@ -253,10 +253,9 @@ export function Sidebar({
                 <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
                   <button
                     onClick={async () => {
-                      if (confirm(`Sign out from ${activeStore.name}?`)) {
+                      if (confirm('Sign out of your account?')) {
                         await supabase.auth.signOut();
                         setShowStoreDropdown(false);
-                        onNavigate('onboarding-1');
                       }
                     }}
                     style={{

@@ -302,11 +302,3 @@ export const productsApi = {
   deactivate: (storeId: number, productId: number) =>
     request<ProductResponse>(`/merchant/stores/${storeId}/products/${productId}/deactivate`, { method: 'PATCH' }),
 };
-
-export const publicApi = {
-  storeBySlug: (slug: string) =>
-    request<{ id: number; name: string; slug: string; storeDescription: string | null; currency: string; themeColor: string | null }>(
-      `/public/stores/${encodeURIComponent(slug)}`,
-      { auth: false },
-    ),
-};

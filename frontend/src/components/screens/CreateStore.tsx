@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { FieldInput, FieldSelect } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
-import { Upload, LogIn, Store } from 'lucide-react';
+import { Upload, LogOut, Store } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { storeInitials } from '../../lib/initials';
 import { styledSelect } from '../../lib/selectStyle';
@@ -22,8 +22,11 @@ interface CreateStoreProps {
     storeLinkTouched?: boolean;
   }) => void;
 
-  // ✅ so CreateStore "Sign In to Store" can go to the same screen as AllStores
   onNavigate?: (screen: string) => void;
+
+  // Onboarding (first store) passes this so the header shows a "Sign out"
+  // button — a brand-new merchant with no store yet always has a way out.
+  onSignOut?: () => void;
 
   // Prefill the form when returning to this step (e.g. onboarding "Back"),
   // so nothing the merchant already typed is lost.
@@ -78,7 +81,7 @@ const countryCodes = [
   { value: '+62', label: '+62 (Indonesia)' },
 ];
 
-export function CreateStore({ onComplete, onNavigate, initialData }: CreateStoreProps) {
+export function CreateStore({ onComplete, onNavigate, onSignOut, initialData }: CreateStoreProps) {
   // Split a saved combined phone (e.g. "+65 9123") back into code + number.
   const initialCode = COUNTRY_CODES.find((c) => initialData?.phone?.startsWith(c)) || '+65';
   const initialPhone = initialData?.phone ? initialData.phone.slice(initialCode.length) : '';
@@ -121,15 +124,14 @@ export function CreateStore({ onComplete, onNavigate, initialData }: CreateStore
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
           <div></div>
 
-          <Button
-            variant="ghost"
-            onClick={() => onNavigate?.('stores-signin')}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <LogIn size={14} />
-              Sign In to Store
-            </div>
-          </Button>
+          {onSignOut && (
+            <Button variant="ghost" onClick={onSignOut}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <LogOut size={14} />
+                Sign out
+              </div>
+            </Button>
+          )}
         </div>
 
         <h1 style={{ marginBottom: '8px' }}>Create your store</h1>
