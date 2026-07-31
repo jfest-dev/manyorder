@@ -21,6 +21,10 @@ public class CreateStoreRequest {
     private String currency;
 
     private String themeColor;
+
+    /** Absolute logo URL from the upload endpoint; blank/null means no logo. */
+    private String logoUrl;
+
     private String storeDescription;
     private String paymentInstruction;
 
@@ -40,6 +44,8 @@ public class CreateStoreRequest {
     public void setCurrency(String currency) { this.currency = currency; }
     public String getThemeColor() { return themeColor; }
     public void setThemeColor(String themeColor) { this.themeColor = themeColor; }
+    public String getLogoUrl() { return logoUrl; }
+    public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public String getStoreDescription() { return storeDescription; }
     public void setStoreDescription(String storeDescription) { this.storeDescription = storeDescription; }
     public String getPaymentInstruction() { return paymentInstruction; }

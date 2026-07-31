@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -33,6 +34,49 @@ class StoreSettingsIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.currency").value("IDR"))
                 .andExpect(jsonPath("$.city").value("Singapore"))
                 .andExpect(jsonPath("$.notifyLowStockEmail").value(false));
+    }
+
+    @Test
+    void logoUrl_persistsOnCreate_updatesAndClears() throws Exception {
+        String token = registerAndGetToken("logo-owner@test.com", "MERCHANT", null);
+
+        // Create carrying a logo URL (as the SPA does after uploading).
+        MvcResult created = mockMvc.perform(post("/merchant/stores")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "storeName", "Logo Store",
+                                "slug", "logo-store",
+                                "logoUrl", "https://cdn.example.com/a.png"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.logoUrl").value("https://cdn.example.com/a.png"))
+                .andReturn();
+        long storeId = json(created).get("id").asLong();
+
+        // Replace it.
+        mockMvc.perform(patch("/merchant/stores/" + storeId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"logoUrl\":\"https://cdn.example.com/b.png\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.logoUrl").value("https://cdn.example.com/b.png"));
+
+        // Empty string clears it (Remove affordance) -> null.
+        mockMvc.perform(patch("/merchant/stores/" + storeId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"logoUrl\":\"\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.logoUrl").value(nullValue()));
+
+        // Omitting the field leaves the (now-null) value unchanged.
+        mockMvc.perform(patch("/merchant/stores/" + storeId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"storeName\":\"Logo Store Renamed\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Logo Store Renamed"))
+                .andExpect(jsonPath("$.logoUrl").value(nullValue()));
     }
 
     @Test

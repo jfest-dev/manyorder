@@ -16,6 +16,10 @@ public class UpdateStoreRequest {
     private String businessType;
     private String currency;
     private String themeColor;
+
+    /** Absolute logo URL from the upload endpoint. Empty string clears the logo; null leaves it unchanged. */
+    private String logoUrl;
+
     private String storeDescription;
     private String paymentInstruction;
     private String streetAddress;
@@ -42,6 +46,8 @@ public class UpdateStoreRequest {
     public void setCurrency(String currency) { this.currency = currency; }
     public String getThemeColor() { return themeColor; }
     public void setThemeColor(String themeColor) { this.themeColor = themeColor; }
+    public String getLogoUrl() { return logoUrl; }
+    public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public String getStoreDescription() { return storeDescription; }
     public void setStoreDescription(String storeDescription) { this.storeDescription = storeDescription; }
     public String getPaymentInstruction() { return paymentInstruction; }
