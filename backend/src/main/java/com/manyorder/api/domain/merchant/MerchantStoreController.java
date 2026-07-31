@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.manyorder.api.domain.upload.CloudinaryImageService;
 import com.manyorder.api.domain.user.User;
 import com.manyorder.api.domain.user.UserRole;
 import com.manyorder.api.security.CurrentUserService;
@@ -33,17 +34,20 @@ public class MerchantStoreController {
     private final StoreAccessService storeAccessService;
     private final PasswordEncoder passwordEncoder;
     private final StoreLimitService storeLimitService;
+    private final CloudinaryImageService imageService;
 
     public MerchantStoreController(MerchantRepository merchantRepository,
                                    CurrentUserService currentUserService,
                                    StoreAccessService storeAccessService,
                                    PasswordEncoder passwordEncoder,
-                                   StoreLimitService storeLimitService) {
+                                   StoreLimitService storeLimitService,
+                                   CloudinaryImageService imageService) {
         this.merchantRepository = merchantRepository;
         this.currentUserService = currentUserService;
         this.storeAccessService = storeAccessService;
         this.passwordEncoder = passwordEncoder;
         this.storeLimitService = storeLimitService;
+        this.imageService = imageService;
     }
 
     /** Store management is owner-only; a STAFF account gets its store from the login response. */
@@ -76,6 +80,7 @@ public class MerchantStoreController {
         merchant.setBusinessType(request.getBusinessType());
         merchant.setCurrency(normalizeCurrency(request.getCurrency()));
         merchant.setThemeColor(request.getThemeColor());
+        merchant.setLogoUrl(request.getLogoUrl());
         merchant.setStoreDescription(request.getStoreDescription());
         merchant.setPaymentInstruction(request.getPaymentInstruction());
 
@@ -107,6 +112,18 @@ public class MerchantStoreController {
         if (request.getBusinessType() != null) merchant.setBusinessType(request.getBusinessType());
         if (request.getCurrency() != null) merchant.setCurrency(normalizeCurrency(request.getCurrency()));
         if (request.getThemeColor() != null) merchant.setThemeColor(request.getThemeColor());
+        // Empty string clears the logo (Remove affordance); null leaves it unchanged.
+        // When the logo is cleared or replaced we remember the old URL so its now-
+        // orphaned file can be deleted from the image host after the save commits.
+        String orphanedLogo = null;
+        if (request.getLogoUrl() != null) {
+            String newLogo = request.getLogoUrl().isBlank() ? null : request.getLogoUrl();
+            String oldLogo = merchant.getLogoUrl();
+            if (!java.util.Objects.equals(newLogo, oldLogo)) {
+                merchant.setLogoUrl(newLogo);
+                orphanedLogo = oldLogo; // null when there was no prior logo
+            }
+        }
         if (request.getStoreDescription() != null) merchant.setStoreDescription(request.getStoreDescription());
         if (request.getPaymentInstruction() != null) merchant.setPaymentInstruction(request.getPaymentInstruction());
         if (request.getStreetAddress() != null) merchant.setStreetAddress(request.getStreetAddress());
@@ -118,6 +135,13 @@ public class MerchantStoreController {
         if (request.getNotifyUrgentWhatsapp() != null) merchant.setNotifyUrgentWhatsapp(request.getNotifyUrgentWhatsapp());
 
         merchantRepository.save(merchant);
+
+        // Delete the replaced/removed logo only after the new state is committed,
+        // so a failed save never strands us without the file we still reference.
+        if (orphanedLogo != null && !orphanedLogo.isBlank()) {
+            imageService.deleteByUrl(orphanedLogo);
+        }
+
         return new StoreResponse(merchant);
     }
 

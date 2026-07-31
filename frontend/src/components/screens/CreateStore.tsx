@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FieldInput, FieldSelect } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
-import { Upload, LogOut, Store } from 'lucide-react';
+import { Upload, LogOut, Store, X } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { storeInitials } from '../../lib/initials';
 import { styledSelect } from '../../lib/selectStyle';
+import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 
 interface CreateStoreProps {
   // Keep your UI fields, but App.tsx can still ignore the extra fields safely
@@ -13,7 +14,10 @@ interface CreateStoreProps {
     name: string;
     category: string;
     color: string;
-    logo?: string;
+    // The chosen logo file, if any. Uploaded to the image host by the caller
+    // only when the store is actually created — never on select — so an
+    // abandoned or replaced pick never leaves an orphan behind.
+    logoFile?: File | null;
 
     // extra fields (optional)
     currency?: string;
@@ -28,13 +32,17 @@ interface CreateStoreProps {
   // button — a brand-new merchant with no store yet always has a way out.
   onSignOut?: () => void;
 
+  // The logo pick held by the caller across onboarding steps, so a Back to
+  // step 1 restores the preview. (A File can't live in the localStorage draft,
+  // so a full refresh still clears it — an accepted trade-off.)
+  initialLogoFile?: File | null;
+
   // Prefill the form when returning to this step (e.g. onboarding "Back"),
   // so nothing the merchant already typed is lost.
   initialData?: {
     name?: string;
     category?: string;
     color?: string;
-    logo?: string;
     currency?: string;
     phone?: string;
     storeLink?: string;
@@ -81,7 +89,7 @@ const countryCodes = [
   { value: '+62', label: '+62 (Indonesia)' },
 ];
 
-export function CreateStore({ onComplete, onNavigate, onSignOut, initialData }: CreateStoreProps) {
+export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile, initialData }: CreateStoreProps) {
   // Split a saved combined phone (e.g. "+65 9123") back into code + number.
   const initialCode = COUNTRY_CODES.find((c) => initialData?.phone?.startsWith(c)) || '+65';
   const initialPhone = initialData?.phone ? initialData.phone.slice(initialCode.length) : '';
@@ -98,11 +106,50 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialData }: 
   // link must NOT be mistaken for a user-customized one.
   const [storeLinkTouched, setStoreLinkTouched] = useState(!!initialData?.storeLinkTouched);
 
+  // Logo: held locally as a File and previewed via an object URL. Nothing is
+  // uploaded here — the caller uploads it only when the store is created, so a
+  // discarded or replaced pick never reaches the image host.
+  const [logoFile, setLogoFile] = useState<File | null>(initialLogoFile ?? null);
+  const [logoPreview, setLogoPreview] = useState<string>('');
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep a live object-URL preview for the current File, revoking the old one.
+  useEffect(() => {
+    if (!logoFile) {
+      setLogoPreview('');
+      return;
+    }
+    const url = URL.createObjectURL(logoFile);
+    setLogoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [logoFile]);
+
+  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file after an error
+    if (!file) return;
+
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setLogoError(invalid);
+      return;
+    }
+    setLogoError(null);
+    setLogoFile(file);
+  };
+
+  const removeLogo = () => {
+    setLogoFile(null);
+    setLogoError(null);
+  };
+
   const handleCreateStore = () => {
     onComplete({
       name: storeName,
       category,
       color: selectedColor,
+      logoFile,
 
       // extra fields (won’t break App.tsx)
       currency,
@@ -151,14 +198,13 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialData }: 
                   Store logo
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  {/* Avatar preview — initials/colour only; the button beside it
-                      is a no-op placeholder until the real logo feature is built. */}
+                  {/* Avatar preview — the picked logo when set, else initials/colour. */}
                   <div
                     style={{
                       width: '64px',
                       height: '64px',
                       borderRadius: '50%',
-                      background: selectedColor,
+                      background: logoPreview ? 'transparent' : selectedColor,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -169,22 +215,44 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialData }: 
                       overflow: 'hidden',
                     }}
                   >
-                    {storeInitials(storeName) ? (
+                    {logoPreview ? (
+                      <img src={logoPreview} alt="Store logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : storeInitials(storeName) ? (
                       storeInitials(storeName)
                     ) : (
                       <Store size={26} color="white" />
                     )}
                   </div>
 
-                  <Button variant="secondary" onClick={() => {}}>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ALLOWED_IMAGE_ACCEPT}
+                    onChange={handleLogoSelect}
+                    style={{ display: 'none' }}
+                  />
+                  <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      <Upload size={15} /> Upload logo
+                      <Upload size={15} /> {logoPreview ? 'Change logo' : 'Upload logo'}
                     </span>
                   </Button>
+                  {logoPreview && (
+                    <Button variant="ghost" onClick={removeLogo}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <X size={14} /> Remove
+                      </span>
+                    </Button>
+                  )}
                 </div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
-                  Optional, square images work best.
-                </p>
+                {logoError ? (
+                  <p className="text-xs" style={{ color: 'var(--error-color)', marginTop: '8px' }}>
+                    {logoError}
+                  </p>
+                ) : (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
+                    {IMAGE_RULE_TEXT} Square images work best.
+                  </p>
+                )}
               </div>
 
               <FieldInput

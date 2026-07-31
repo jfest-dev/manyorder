@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
-import { Upload, AlertTriangle } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Upload, AlertTriangle, X } from 'lucide-react';
 import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
 import { PasswordField } from '../PasswordField';
-import { accountApi, storesApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
+import { accountApi, storesApi, uploadsApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
 import { validatePassword, PASSWORD_RULE_TEXT } from '../../lib/password';
+import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 
 interface SettingsProps {
   storeId: number;
@@ -66,7 +67,7 @@ function SaveRow({ label, active, saved, error, disabled, onSave }: {
 
 // Fields each card owns — used for per-card dirty tracking.
 const STORE_KEYS: (keyof UpdateStorePayload)[] =
-  ['storeName', 'slug', 'storeEmail', 'storePhone', 'businessType', 'currency', 'themeColor', 'storeDescription'];
+  ['storeName', 'slug', 'storeEmail', 'storePhone', 'businessType', 'currency', 'themeColor', 'logoUrl', 'storeDescription'];
 const PAYMENT_KEYS: (keyof UpdateStorePayload)[] = ['paymentInstruction'];
 const ADDRESS_KEYS: (keyof UpdateStorePayload)[] = ['streetAddress', 'city', 'postalCode'];
 const NOTIFICATION_KEYS: (keyof UpdateStorePayload)[] = ['notifyNewOrderEmail', 'notifyLowStockEmail'];
@@ -93,6 +94,15 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const [pwSaved, setPwSaved] = useState(false);
   const [pwError, setPwError] = useState('');
 
+  // Store logo (Store Details card). A newly picked file is held locally and
+  // previewed via an object URL; it's uploaded only when the card is saved, so a
+  // discarded pick never reaches the image host. form.logoUrl holds the SAVED
+  // hosted URL ('' when the saved logo is staged for removal).
+  const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>('');
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
   // Danger Zone (delete store).
   const [showArchive, setShowArchive] = useState(false);
   const [confirmText, setConfirmText] = useState('');
@@ -112,6 +122,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
         businessType: s.businessType ?? 'Food & Beverage',
         currency: s.currency,
         themeColor: s.themeColor ?? '#000000',
+        logoUrl: s.logoUrl ?? '',
         storeDescription: s.storeDescription ?? '',
         paymentInstruction: s.paymentInstruction ?? '',
         streetAddress: s.streetAddress ?? '',
@@ -171,6 +182,24 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
       );
       if (!proceed) return;
     }
+
+    // Deferred logo upload: a newly picked file reaches the image host only now,
+    // as part of the save. If it fails, we stop before the PATCH so nothing is
+    // half-applied. The old hosted logo (if any) is deleted server-side once the
+    // new logoUrl is persisted.
+    let logoUrl = form.logoUrl;
+    if (pendingLogoFile) {
+      setSavingKey('store');
+      setErrorKey(null);
+      try {
+        logoUrl = (await uploadsApi.logo(pendingLogoFile)).url;
+      } catch (err) {
+        setErrorKey({ key: 'store', msg: err instanceof ApiError ? err.message : 'Couldn’t upload the image. Please try again.' });
+        setSavingKey(null);
+        return;
+      }
+    }
+
     const normalizedSlug = form.slug?.trim().toLowerCase();
     await saveCard('store', {
       storeName: form.storeName,
@@ -180,12 +209,16 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
       businessType: form.businessType,
       currency: form.currency,
       themeColor: form.themeColor,
+      logoUrl,
       storeDescription: form.storeDescription,
     }, () => {
       setSavedName(form.storeName?.trim() || '');
       setSavedCurrency(form.currency || '');
       setSlugTouchedFrom(normalizedSlug || '');
       if (normalizedSlug) setForm((p) => ({ ...p, slug: normalizedSlug }));
+      // Adopt the freshly uploaded logo as the saved value and drop the pending file.
+      setForm((p) => ({ ...p, logoUrl }));
+      setPendingLogoFile(null);
     });
   };
 
@@ -201,6 +234,42 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
     notifyNewOrderEmail: form.notifyNewOrderEmail ?? true,
     notifyLowStockEmail: form.notifyLowStockEmail ?? true,
   });
+
+  // Live object-URL preview for a newly picked file (revokes the old one).
+  useEffect(() => {
+    if (!pendingLogoFile) {
+      setLogoPreview('');
+      return;
+    }
+    const url = URL.createObjectURL(pendingLogoFile);
+    setLogoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pendingLogoFile]);
+
+  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file after an error
+    if (!file) return;
+
+    const invalid = validateImageFile(file);
+    if (invalid) {
+      setLogoError(invalid);
+      return;
+    }
+    setLogoError(null);
+    setPendingLogoFile(file); // held locally; uploaded on Save
+  };
+
+  const removeLogo = () => {
+    setLogoError(null);
+    if (pendingLogoFile) {
+      // Discard an unsaved pick — nothing was uploaded, so revert to the saved logo.
+      setPendingLogoFile(null);
+    } else {
+      // Stage removal of the saved logo; Save persists '' and the server deletes the file.
+      set('logoUrl', '');
+    }
+  };
 
   const canChangePassword =
     currentPassword.length > 0 && newPassword.length > 0 && confirmPassword.length > 0;
@@ -297,22 +366,48 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
             <div
               style={{
                 width: '72px', height: '72px', borderRadius: '50%',
-                background: form.themeColor || '#000000', color: 'white',
+                background: (logoPreview || form.logoUrl) ? 'transparent' : (form.themeColor || '#000000'), color: 'white',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 600, fontSize: '20px',
+                fontWeight: 600, fontSize: '20px', overflow: 'hidden',
               }}
             >
-              {initials}
+              {logoPreview || form.logoUrl ? (
+                <img src={logoPreview || form.logoUrl} alt="Store logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                initials
+              )}
             </div>
             <div>
-              <Button variant="secondary" onClick={() => {}}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Upload size={15} /> Upload logo
-                </div>
-              </Button>
-              <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
-                Optional, square images work best.
-              </p>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept={ALLOWED_IMAGE_ACCEPT}
+                onChange={handleLogoSelect}
+                style={{ display: 'none' }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Button variant="secondary" onClick={() => logoInputRef.current?.click()}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Upload size={15} /> {(logoPreview || form.logoUrl) ? 'Change logo' : 'Upload logo'}
+                  </div>
+                </Button>
+                {(logoPreview || form.logoUrl) && (
+                  <Button variant="ghost" onClick={removeLogo}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <X size={14} /> Remove
+                    </div>
+                  </Button>
+                )}
+              </div>
+              {logoError ? (
+                <p className="text-xs" style={{ color: 'var(--error-color)', marginTop: '6px' }}>
+                  {logoError}
+                </p>
+              ) : (
+                <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
+                  {IMAGE_RULE_TEXT} Square images work best.
+                </p>
+              )}
             </div>
           </div>
 
@@ -390,7 +485,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
             active={savingKey === 'store'}
             saved={savedKey === 'store'}
             error={errorKey?.key === 'store' ? errorKey.msg : ''}
-            disabled={!isDirty(STORE_KEYS)}
+            disabled={!isDirty(STORE_KEYS) && !pendingLogoFile}
             onSave={saveStore}
           />
         </div>

@@ -24,7 +24,7 @@ import { ForgotPassword } from './components/screens/ForgotPassword';
 import { ResetPassword } from './components/screens/ResetPassword';
 
 import { useAuth } from './context/AuthContext';
-import { ApiError, storesApi, StoreResponse } from './lib/api';
+import { ApiError, storesApi, uploadsApi, StoreResponse } from './lib/api';
 
 type Screen =
   | 'dashboard'
@@ -62,7 +62,6 @@ type DraftStore = {
   name: string;
   category: string;
   color: string;
-  logo?: string;
   currency?: string;
   phone?: string;
   storeLink?: string;
@@ -120,6 +119,7 @@ function toStore(s: StoreResponse): Store {
     name: s.name,
     slug: s.slug,
     color: s.themeColor || '#000000',
+    logo: s.logoUrl || undefined,
     currency: (s.currency || 'SGD').toLowerCase(),
     businessType: s.businessType,
     contactEmail: s.email,
@@ -162,6 +162,10 @@ function MerchantApp() {
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [storeUnavailable, setStoreUnavailable] = useState(false);
+  // The onboarding logo pick, held here (not in the localStorage draft — a File
+  // can't be serialized) so it survives the step 1 → step 2 transition and is
+  // uploaded only when the store is actually created.
+  const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
 
   const refreshStores = async (silent = false) => {
     if (!user) return;
@@ -226,21 +230,31 @@ function MerchantApp() {
     [stores, activeStoreId],
   );
 
-  const createStoreOnServer = async (draft: DraftStore): Promise<Store> => {
+  const createStoreOnServer = async (draft: DraftStore, logoFile?: File | null): Promise<Store> => {
+    // Deferred logo upload: the file only reaches the image host now, as part of
+    // creating the store, so an abandoned onboarding never leaves an orphan.
+    let logoUrl: string | undefined;
+    if (logoFile) {
+      logoUrl = (await uploadsApi.logo(logoFile)).url;
+    }
     const created = await storesApi.create({
       storeName: draft.name?.trim() || 'My Store',
       slug: draft.storeLink?.trim() ? slugify(draft.storeLink) : undefined,
       businessType: draft.category || undefined,
       currency: (draft.currency || 'sgd').toUpperCase(),
       themeColor: draft.color || '#000000',
+      logoUrl,
       storePhone: draft.phone || undefined,
     });
     return toStore(created);
   };
 
-  // Onboarding step 1 -> stash draft locally, continue to products step.
-  const handleOnboardingStoreDraft = (data: DraftStore) => {
-    setDraft({ store: data, products: [] });
+  // Onboarding step 1 -> stash draft locally + hold the logo pick, continue to
+  // the products step. The File is kept in React state (the draft can't hold it).
+  const handleOnboardingStoreDraft = (data: DraftStore & { logoFile?: File | null }) => {
+    const { logoFile, ...store } = data;
+    setDraft({ store, products: [] });
+    setPendingLogoFile(logoFile ?? null);
     setActiveScreen('onboarding-2');
   };
 
@@ -252,8 +266,9 @@ function MerchantApp() {
       return;
     }
     try {
-      const newStore = await createStoreOnServer(draft.store);
+      const newStore = await createStoreOnServer(draft.store, pendingLogoFile);
       clearDraft(); // drafted products are wired to the Products API in Batch 2
+      setPendingLogoFile(null);
       setStores((prev) => [...prev, newStore]);
       setActiveStoreId(newStore.id);
       setActiveScreen('dashboard');
@@ -264,14 +279,15 @@ function MerchantApp() {
   };
 
   // In-dashboard Create Store (stores 2-3) -> no products step, create directly.
-  const handleDirectStoreCreate = async (data: DraftStore) => {
+  const handleDirectStoreCreate = async (data: DraftStore & { logoFile?: File | null }) => {
     if (stores.length >= storeLimit) {
       alert(`Store limit reached (${stores.length} of ${storeLimit}).`);
       setActiveScreen('stores-all');
       return;
     }
+    const { logoFile, ...store } = data;
     try {
-      const newStore = await createStoreOnServer(data);
+      const newStore = await createStoreOnServer(store, logoFile);
       setStores((prev) => [...prev, newStore]);
       setActiveStoreId(newStore.id);
       setActiveScreen('dashboard');
@@ -331,6 +347,7 @@ function MerchantApp() {
               onComplete={handleOnboardingStoreDraft}
               onNavigate={navigateScreen as any}
               onSignOut={handleSignOut}
+              initialLogoFile={pendingLogoFile}
               initialData={getDraft()?.store}
             />
           </OnboardingStep1>

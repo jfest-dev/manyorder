@@ -124,6 +124,7 @@ export interface StoreResponse {
   businessType: string | null;
   currency: 'SGD' | 'IDR';
   themeColor: string | null;
+  logoUrl: string | null;
   storeDescription: string | null;
   paymentInstruction: string | null;
   streetAddress: string | null;
@@ -150,6 +151,7 @@ export interface CreateStorePayload {
   businessType?: string;
   currency?: string;
   themeColor?: string;
+  logoUrl?: string;
   storeDescription?: string;
   paymentInstruction?: string;
 }
@@ -162,6 +164,8 @@ export interface UpdateStorePayload {
   businessType?: string;
   currency?: string;
   themeColor?: string;
+  /** Absolute logo URL from uploadsApi.logo; empty string clears the logo, undefined leaves it unchanged. */
+  logoUrl?: string;
   storeDescription?: string;
   paymentInstruction?: string;
   streetAddress?: string;
@@ -244,6 +248,42 @@ export const storesApi = {
    */
   archive: (storeId: number, password: string) =>
     request<void>(`/merchant/stores/${storeId}/archive`, { method: 'POST', body: { password } }),
+};
+
+export const uploadsApi = {
+  /**
+   * Upload a store logo and get back its hosted URL. Multipart, so it bypasses
+   * the JSON `request()` helper: the browser sets the multipart boundary itself,
+   * so we must NOT set Content-Type by hand. The server validates type/size/bytes
+   * and returns 400 (bad image), 401/403 (auth), or 503 (uploads unavailable).
+   */
+  logo: async (file: File): Promise<{ url: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const response = await fetch(`${API_BASE}/merchant/uploads/logo`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      let message = `Request failed (${response.status})`;
+      try {
+        const data = await response.json();
+        if (data?.message) message = data.message;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new ApiError(response.status, message);
+    }
+
+    return (await response.json()) as { url: string };
+  },
 };
 
 export const ordersApi = {

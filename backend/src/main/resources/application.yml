@@ -12,6 +12,14 @@ spring:
       ddl-auto: update
     show-sql: false
 
+  servlet:
+    multipart:
+      # Logos are capped at 5 MB by our own validator; this ceiling sits just
+      # above so oversize files are rejected with a clean message, not a stack
+      # trace. max-request-size leaves headroom for the multipart envelope.
+      max-file-size: 6MB
+      max-request-size: 8MB
+
 app:
   jwt:
     secret: ${JWT_SECRET}
@@ -29,6 +37,15 @@ app:
   frontend:
     # Base URL the emailed reset link points back to.
     base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
+  cloudinary:
+    # Server-side image hosting for store logos. Leave any value unset to
+    # disable uploads (the endpoint then returns 503 instead of failing oddly).
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+    # Root prefix for all uploads. Per-asset paths are built under this — see the
+    # folder convention documented on CloudinaryImageService.
+    root-folder: ${CLOUDINARY_ROOT_FOLDER:manyorder}
 
 springdoc:
   swagger-ui:

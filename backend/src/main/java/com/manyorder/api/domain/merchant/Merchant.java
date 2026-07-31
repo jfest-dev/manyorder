@@ -52,6 +52,10 @@ public class Merchant {
     /** Storefront theme color hex, e.g. "#0F172A". */
     private String themeColor;
 
+    /** Absolute URL of the store logo on the image host. Null = no logo (fall back to initials). */
+    @Column(length = 512)
+    private String logoUrl;
+
     @Column(columnDefinition = "TEXT")
     private String storeDescription;
 
@@ -109,6 +113,8 @@ public class Merchant {
     public void setCurrency(String currency) { this.currency = currency; }
     public String getThemeColor() { return themeColor; }
     public void setThemeColor(String themeColor) { this.themeColor = themeColor; }
+    public String getLogoUrl() { return logoUrl; }
+    public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public String getStoreDescription() { return storeDescription; }
     public void setStoreDescription(String storeDescription) { this.storeDescription = storeDescription; }
     public String getPaymentInstruction() { return paymentInstruction; }

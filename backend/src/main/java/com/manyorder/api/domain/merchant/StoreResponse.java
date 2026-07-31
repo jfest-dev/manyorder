@@ -12,6 +12,7 @@ public class StoreResponse {
     private String businessType;
     private String currency;
     private String themeColor;
+    private String logoUrl;
     private String storeDescription;
     private String paymentInstruction;
     private String streetAddress;
@@ -32,6 +33,7 @@ public class StoreResponse {
         this.businessType = m.getBusinessType();
         this.currency = m.getCurrency();
         this.themeColor = m.getThemeColor();
+        this.logoUrl = m.getLogoUrl();
         this.storeDescription = m.getStoreDescription();
         this.paymentInstruction = m.getPaymentInstruction();
         this.streetAddress = m.getStreetAddress();
@@ -52,6 +54,7 @@ public class StoreResponse {
     public String getBusinessType() { return businessType; }
     public String getCurrency() { return currency; }
     public String getThemeColor() { return themeColor; }
+    public String getLogoUrl() { return logoUrl; }
     public String getStoreDescription() { return storeDescription; }
     public String getPaymentInstruction() { return paymentInstruction; }
     public String getStreetAddress() { return streetAddress; }

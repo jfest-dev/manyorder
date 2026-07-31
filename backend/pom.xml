@@ -107,7 +107,15 @@
             <version>0.12.6</version>
             <scope>runtime</scope>
         </dependency>
-		
+
+        <!-- Server-side image hosting for store logos. Credentials come from the
+             CLOUDINARY_* env vars; never named in user-facing copy. -->
+        <dependency>
+            <groupId>com.cloudinary</groupId>
+            <artifactId>cloudinary-http44</artifactId>
+            <version>1.39.0</version>
+        </dependency>
+
     </dependencies>
 
     <build>
