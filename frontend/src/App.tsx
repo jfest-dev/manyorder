@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell';
 import { Dashboard } from './components/screens/Dashboard';
@@ -87,6 +87,35 @@ const STAFF_BLOCKED_SCREENS: Screen[] = [
   'orders-edit',
 ];
 
+/** The `?screen=` value for a screen, or null when it carries none (keeps `/app`
+ *  clean for the default, and onboarding is store-state-driven, not URL-restored). */
+function paramForScreen(screen: Screen): string | null {
+  return screen === 'dashboard' || screen === 'onboarding-1' || screen === 'onboarding-2'
+    ? null
+    : screen;
+}
+
+/**
+ * Map a `?screen=` value (from a refresh, deep-link, or Back/Forward) to the
+ * screen to actually show. The switch-based screens live under one route, so
+ * this restores the current screen from the URL — with a few values deliberately
+ * not restored as-is:
+ *   - onboarding is driven by store state, not the URL;
+ *   - orders-edit needs a selected order id the URL doesn't carry, so with no
+ *     id in state it falls back to its list;
+ *   - a staff account can never land on an owner-only screen via a stale/hand-
+ *     crafted URL.
+ * (products-edit is an unwired stub with no record context, so it restores as-is.)
+ * Anything unknown falls through to the dashboard (renderScreen's default too).
+ */
+function resolveScreen(raw: string | null, isStaff: boolean, editingOrderId: number | null): Screen {
+  if (!raw) return 'dashboard';
+  if (raw === 'onboarding-1' || raw === 'onboarding-2') return 'dashboard';
+  if (isStaff && STAFF_BLOCKED_SCREENS.includes(raw as Screen)) return 'dashboard';
+  if (raw === 'orders-edit' && editingOrderId == null) return 'orders-all';
+  return raw as Screen;
+}
+
 function getDraft(): Draft | null {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
@@ -142,8 +171,8 @@ function RedirectIfAuthed({ children }: { children: React.ReactNode }) {
 /** The authenticated merchant/staff dashboard (legacy screen-switcher, now JWT + REST). */
 function MerchantApp() {
   const { user, logout } = useAuth();
-  const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isStaff = user?.role === 'STAFF';
 
   const handleSignOut = () => {
@@ -151,10 +180,13 @@ function MerchantApp() {
     navigate('/signin');
   };
 
-  const [activeScreen, setActiveScreen] = useState<Screen>(() => {
-    const screen = new URLSearchParams(location.search).get('screen') as Screen | null;
-    return screen && screen !== 'onboarding-1' && screen !== 'onboarding-2' ? screen : 'dashboard';
-  });
+  // The active screen is mirrored into `?screen=` so a refresh/Back restores it
+  // (the two effects below keep URL and state in sync). Restore it here on first
+  // load — editingOrderId is always null at mount, so an orders-edit URL falls
+  // back to its list.
+  const [activeScreen, setActiveScreen] = useState<Screen>(() =>
+    resolveScreen(searchParams.get('screen'), isStaff, null),
+  );
 
   const [stores, setStores] = useState<Store[]>([]);
   const [storeLimit, setStoreLimit] = useState(3);
@@ -166,6 +198,48 @@ function MerchantApp() {
   // can't be serialized) so it survives the step 1 → step 2 transition and is
   // uploaded only when the store is actually created.
   const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
+
+  // --- Screen <-> URL sync (single-route screen-switcher) ---
+  // State is the source of truth for what's rendered; the URL mirrors it so a
+  // refresh restores the screen and Back/Forward walk screen-to-screen.
+  const firstUrlSync = useRef(true);
+
+  // State -> URL. New screens PUSH a history entry (so Back returns to the prior
+  // screen); the initial mount only normalises the URL with REPLACE (e.g. an
+  // orders-edit reload rewritten to orders-all) so we don't seed junk history.
+  useEffect(() => {
+    const desired = paramForScreen(activeScreen);
+    const current = searchParams.get('screen');
+    const replace = firstUrlSync.current;
+    firstUrlSync.current = false;
+    if ((desired ?? null) === (current ?? null)) return; // already in sync
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (desired) next.set('screen', desired);
+        else next.delete('screen');
+        return next;
+      },
+      { replace },
+    );
+    // Only react to activeScreen changes; reading searchParams here must not
+    // re-trigger this effect or a Back would be pushed straight back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeScreen]);
+
+  // URL -> state, for Back/Forward only (the initial URL is already applied by
+  // the initializer above). Skips onboarding, which is store-state-driven.
+  const mountedUrlSync = useRef(false);
+  useEffect(() => {
+    if (!mountedUrlSync.current) {
+      mountedUrlSync.current = true;
+      return;
+    }
+    if (activeScreen === 'onboarding-1' || activeScreen === 'onboarding-2') return;
+    const target = resolveScreen(searchParams.get('screen'), isStaff, editingOrderId);
+    setActiveScreen((current) => (current === target ? current : target));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const refreshStores = async (silent = false) => {
     if (!user) return;
