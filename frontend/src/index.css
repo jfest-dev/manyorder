@@ -464,8 +464,8 @@
   --text-secondary: #64748b;
   --text-muted: #94a3b8;
   --text-on-dark: #fff;
-  --primary-solid: #0f172a;
-  --primary-solid-hover: #000;
+  --primary-solid: #000000;
+  --primary-solid-hover: #1a1a1a;
   --tag-neutral: #e2e8f0;
   --theme-store-color: #000;
   --radius-card: 24px;

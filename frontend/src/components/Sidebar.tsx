@@ -1,5 +1,5 @@
-import { Store, Package, LayoutDashboard, Settings, ShoppingCart, Users, ChevronDown, LogOut, Megaphone, Crown } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Store, Package, LayoutDashboard, Settings, ShoppingCart, Users, ChevronDown, LogOut, Megaphone, Crown, Check } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { NavItem } from './NavItem';
 import logoImage from 'figma:asset/656d97789c4d3f72628639902518b8fbf366d5ba.png';
 import { supabase } from '../lib/supabase';
@@ -29,7 +29,23 @@ export function Sidebar({
   isOpen = true 
 }: SidebarProps) {
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
+  const [triggerHover, setTriggerHover] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
+  const dropdownOpenRef = useRef(showStoreDropdown);
+  dropdownOpenRef.current = showStoreDropdown;
   const activeStore = stores.find(s => s.id === activeStoreId) || stores[0];
+
+  // Close the store switcher when clicking anywhere outside it. Always-on
+  // listener (guarded by the ref) so it can't miss an already-open dropdown.
+  useEffect(() => {
+    const onDocPointerDown = (e: MouseEvent) => {
+      if (dropdownOpenRef.current && switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
+        setShowStoreDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocPointerDown);
+    return () => document.removeEventListener('mousedown', onDocPointerDown);
+  }, []);
 
   const getInitials = (name: string) => {
     return name
@@ -87,26 +103,30 @@ export function Sidebar({
       {isOpen && stores.length > 0 && (
         <>
           {/* //Store Switcher */}
-          <div style={{ padding: '16px', borderBottom: '1px solid var(--border-subtle)', position: 'relative' }}>
+          <div ref={switcherRef} style={{ padding: '12px', borderBottom: '1px solid var(--border-subtle)', position: 'relative' }}>
             <button
               onClick={() => setShowStoreDropdown(!showStoreDropdown)}
+              onMouseEnter={() => setTriggerHover(true)}
+              onMouseLeave={() => setTriggerHover(false)}
               style={{
                 width: '100%',
                 display: 'flex',
-                gap: '12px',
+                gap: '10px',
                 alignItems: 'center',
-                background: 'none',
+                background: triggerHover || showStoreDropdown ? 'var(--bg-card-subtle)' : 'transparent',
                 border: 'none',
+                borderRadius: 'var(--radius-field)',
                 cursor: 'pointer',
-                padding: 0,
+                padding: '8px',
+                transition: 'background 0.15s ease',
               }}
             >
               {/* Store Logo */}
               <div
                 style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '8px',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: 'var(--radius-field)',
                   background: activeStore.logo ? 'transparent' : activeStore.color,
                   display: 'flex',
                   alignItems: 'center',
@@ -116,7 +136,7 @@ export function Sidebar({
                   fontWeight: 600,
                   overflow: 'hidden',
                   flexShrink: 0,
-                  border: '2px solid var(--border-subtle)',
+                  border: '1px solid var(--border-subtle)',
                 }}
               >
                 {activeStore.logo ? (
@@ -169,19 +189,22 @@ export function Sidebar({
               <div
                 style={{
                   position: 'absolute',
-                  top: '72px',
-                  left: '16px',
-                  right: '16px',
-                  width: '224px',
+                  top: '64px',
+                  left: '12px',
+                  right: '12px',
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-medium)',
+                  borderRadius: '12px',
+                  boxShadow: '0 8px 24px rgba(15, 23, 42, 0.10)',
                   zIndex: 100,
                   overflow: 'hidden',
+                  padding: '6px',
                 }}
               >
                 <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                  {stores.map((store) => (
+                  {stores.map((store) => {
+                    const isActive = store.id === activeStoreId;
+                    return (
                     <button
                       key={store.id}
                       onClick={() => {
@@ -191,36 +214,37 @@ export function Sidebar({
                       style={{
                         width: '100%',
                         display: 'flex',
-                        gap: '12px',
+                        gap: '10px',
                         alignItems: 'center',
-                        padding: '12px',
-                        background: store.id === activeStoreId ? 'var(--bg-app)' : 'transparent',
+                        padding: '8px 10px',
+                        borderRadius: 'var(--radius-field)',
+                        background: isActive ? 'var(--bg-card-subtle)' : 'transparent',
                         border: 'none',
                         cursor: 'pointer',
                         transition: 'background 0.15s ease',
                       }}
                       onMouseEnter={(e) => {
-                        if (store.id !== activeStoreId) {
-                          e.currentTarget.style.background = 'var(--bg-app)';
+                        if (!isActive) {
+                          e.currentTarget.style.background = 'var(--bg-card-subtle)';
                         }
                       }}
                       onMouseLeave={(e) => {
-                        if (store.id !== activeStoreId) {
+                        if (!isActive) {
                           e.currentTarget.style.background = 'transparent';
                         }
                       }}
                     >
                       <div
                         style={{
-                          width: '32px',
-                          height: '32px',
+                          width: '28px',
+                          height: '28px',
                           borderRadius: '50%',
                           background: store.logo ? 'transparent' : store.color,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           color: 'white',
-                          fontSize: '12px',
+                          fontSize: '11px',
                           fontWeight: 600,
                           overflow: 'hidden',
                           flexShrink: 0,
@@ -240,17 +264,30 @@ export function Sidebar({
                           getInitials(store.name)
                         )}
                       </div>
-                      <div style={{ textAlign: 'left' }}>
-                        <div className="text-small" style={{ fontWeight: store.id === activeStoreId ? 600 : 500 }}>
+                      <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+                        <div
+                          className="text-small"
+                          style={{
+                            fontWeight: isActive ? 600 : 500,
+                            color: 'var(--text-primary)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
                           {store.name}
                         </div>
                       </div>
+                      {isActive && (
+                        <Check size={16} color="var(--primary-solid)" style={{ flexShrink: 0 }} />
+                      )}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
                 
                 {/* Sign Out Button */}
-                <div style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '6px', paddingTop: '6px' }}>
                   <button
                     onClick={async () => {
                       if (confirm('Sign out of your account?')) {
@@ -261,9 +298,10 @@ export function Sidebar({
                     style={{
                       width: '100%',
                       display: 'flex',
-                      gap: '8px',
+                      gap: '10px',
                       alignItems: 'center',
-                      padding: '10px 12px',
+                      padding: '8px 10px',
+                      borderRadius: 'var(--radius-field)',
                       background: 'transparent',
                       border: 'none',
                       cursor: 'pointer',
@@ -272,7 +310,7 @@ export function Sidebar({
                       transition: 'background 0.15s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--bg-app)';
+                      e.currentTarget.style.background = 'var(--bg-card-subtle)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = 'transparent';
@@ -287,7 +325,7 @@ export function Sidebar({
           </div>
 
           {/* Navigation */}
-          <nav style={{ flex: 1, padding: '12px 8px' }}>
+          <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <NavItem
               icon={LayoutDashboard}
               label="Dashboard"
