@@ -238,7 +238,9 @@ function MerchantApp() {
       logoUrl = (await uploadsApi.logo(logoFile)).url;
     }
     const created = await storesApi.create({
-      storeName: draft.name?.trim() || 'My Store',
+      // No silent default: Create Store now requires a non-empty business name
+      // client-side, and the backend enforces @NotBlank as the final guard.
+      storeName: draft.name?.trim() || '',
       slug: draft.storeLink?.trim() ? slugify(draft.storeLink) : undefined,
       businessType: draft.category || undefined,
       currency: (draft.currency || 'sgd').toUpperCase(),
