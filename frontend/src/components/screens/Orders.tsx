@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronUp, Download, Plus, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, Download, Plus, Search } from 'lucide-react';
 import { Button } from '../Button';
 import { ordersApi, OrderResponse, OrderStatus, PaymentStatus } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
@@ -72,6 +72,26 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
   const [query, setQuery] = useState('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
+
+  // Collapse the expanded order row when clicking anywhere outside it. Same
+  // always-on, ref-guarded listener the sidebar uses, so it can't miss a row
+  // that's already open. expandedRowRef tracks the currently-open row's element.
+  const expandedIdRef = useRef(expandedId);
+  expandedIdRef.current = expandedId;
+  const expandedRowRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const onDocPointerDown = (e: MouseEvent) => {
+      if (
+        expandedIdRef.current !== null &&
+        expandedRowRef.current &&
+        !expandedRowRef.current.contains(e.target as Node)
+      ) {
+        setExpandedId(null);
+      }
+    };
+    document.addEventListener('mousedown', onDocPointerDown);
+    return () => document.removeEventListener('mousedown', onDocPointerDown);
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -242,7 +262,11 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
             const expanded = expandedId === o.id;
             const busy = busyOrderId === o.id;
             return (
-              <div key={o.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <div
+                key={o.id}
+                ref={expanded ? expandedRowRef : undefined}
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
                 <div
                   onClick={() => setExpandedId(expanded ? null : o.id)}
                   className="orders-row"
@@ -259,7 +283,15 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                   <span className="text-small"><span className="m-label">Items</span>{o.items.reduce((n, i) => n + i.quantity, 0)}</span>
                   <span><span className="m-label">Status</span><Badge text={STATUS_LABEL[o.status]} {...STATUS_STYLE[o.status]} /></span>
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}><span className="m-label">Date</span>{fmtDate(o.createdAt)}</span>
-                  <span className="order-chevron" style={{ color: 'var(--text-muted)' }}>{expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</span>
+                  <span className="order-chevron" style={{ color: 'var(--text-muted)', display: 'inline-flex' }}>
+                    <ChevronDown
+                      size={16}
+                      style={{
+                        transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease',
+                      }}
+                    />
+                  </span>
                 </div>
 
                 {expanded && (
