@@ -4,6 +4,7 @@ import { Plus, ExternalLink, Check } from 'lucide-react';
 interface Store {
   id: string;
   name: string;
+  slug: string;
   color: string;
   logo?: string;
 }
@@ -138,7 +139,7 @@ export function AllStores({ stores, activeStoreId, onStoreChange, onNavigate, st
                 )}
               </div>
               <p className="text-small" style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                manyorder.app/{store.name.toLowerCase().replace(/\s+/g, '-')}
+                manyorder.app/{store.slug}
               </p>
             </div>
 
@@ -147,7 +148,7 @@ export function AllStores({ stores, activeStoreId, onStoreChange, onNavigate, st
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  window.open(`https://manyorder.app/${store.name.toLowerCase().replace(/\s+/g, '-')}`, '_blank');
+                  window.open(`https://manyorder.app/${store.slug}`, '_blank');
                 }}
                 style={{
                   padding: '8px 16px',

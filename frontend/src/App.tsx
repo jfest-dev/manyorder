@@ -507,6 +507,7 @@ function MerchantApp() {
         return activeStore ? (
           <EditProduct
             storeName={activeStore.name}
+            storeSlug={activeStore.slug}
             storeColor={activeStore.color}
             currency={activeStore.currency}
             onNavigate={navigateScreen as any}
