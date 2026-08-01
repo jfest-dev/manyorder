@@ -7,6 +7,7 @@ import logoImage from '../assets/manyorder-logo.png';
 interface Store {
   id: string;
   name: string;
+  slug: string;
   color: string;
   logo?: string;
 }
@@ -19,13 +20,6 @@ interface AppShellProps {
   activeStoreId: string;
   onStoreChange: (storeId: string) => void;
 }
-
-const slugify = (name: string) =>
-  name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '');
 
 export function AppShell({
   children,
@@ -69,16 +63,14 @@ export function AppShell({
   const openStorePreview = () => {
     const s = stores.find((x) => x.id === activeStoreId);
     if (!s) return;
-    const slug = slugify(s.name);
-    window.open(`https://manyorder.app/${slug}`, '_blank');
+    window.open(`https://manyorder.app/${s.slug}`, '_blank');
   };
 
   const copyStoreLink = () => {
     const s = stores.find((x) => x.id === activeStoreId);
     if (!s) return;
 
-    const slug = slugify(s.name);
-    const url = `https://manyorder.app/${slug}`;
+    const url = `https://manyorder.app/${s.slug}`;
 
     // try modern clipboard API first
     if (navigator.clipboard?.writeText) {

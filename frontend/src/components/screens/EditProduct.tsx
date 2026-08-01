@@ -9,17 +9,19 @@ import { styledSelect } from '../../lib/selectStyle';
 interface EditProductProps {
   productId?: string;
   storeName?: string;
+  storeSlug?: string;
   storeColor?: string;
   currency?: string;
   onNavigate?: (screen: string) => void;
 }
 
-export function EditProduct({ 
-  productId = '1', 
-  storeName = 'My Store', 
-  storeColor = '#000000', 
+export function EditProduct({
+  productId = '1',
+  storeName = 'My Store',
+  storeSlug = 'my-store',
+  storeColor = '#000000',
   currency = 'sgd',
-  onNavigate 
+  onNavigate
 }: EditProductProps) {
   // Pre-fill with existing product data (in real app, fetch from database)
   const [name, setName] = useState('Wireless Headphones');
@@ -437,7 +439,7 @@ export function EditProduct({
                   {storeName}
                 </h2>
                 <p style={{ fontSize: '11px', opacity: 0.9 }}>
-                  manyorder.app/{storeName.toLowerCase().replace(/\s+/g, '-')}
+                  manyorder.app/{storeSlug}
                 </p>
               </div>
 
