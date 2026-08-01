@@ -3,7 +3,6 @@ import { FieldInput, FieldSelect } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { Upload, LogOut, Store, X } from 'lucide-react';
-import { formatMoney } from '../../lib/currency';
 import { storeInitials } from '../../lib/initials';
 import { styledSelect } from '../../lib/selectStyle';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
@@ -114,6 +113,9 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
   const [logoError, setLogoError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Business Name is the one required field (matches the backend's @NotBlank).
+  const [nameError, setNameError] = useState<string | null>(null);
+
   // Keep a live object-URL preview for the current File, revoking the old one.
   useEffect(() => {
     if (!logoFile) {
@@ -145,6 +147,10 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
   };
 
   const handleCreateStore = () => {
+    if (!storeName.trim()) {
+      setNameError('Business name is required.');
+      return;
+    }
     onComplete({
       name: storeName,
       category,
@@ -158,11 +164,6 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
       storeLinkTouched,
     });
   };
-
-  const mockProducts = [
-    { name: 'Iced White', desc: '250ml - Signature', basePrice: 5.5 },
-    { name: 'Cold Brew', desc: '350ml - House blend', basePrice: 6.0 },
-  ];
 
   return (
     <div>
@@ -259,8 +260,11 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                 label="Business Name"
                 placeholder="e.g., Noodle House Delights"
                 value={storeName}
+                required
+                error={nameError ?? undefined}
                 onChange={(value) => {
                   setStoreName(value);
+                  if (value.trim() !== '') setNameError(null);
                   if (value.trim() === '') {
                     // Clearing the name blanks the link and re-arms auto-follow,
                     // so auto and manual modes end in the same clean state.
@@ -284,7 +288,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
 
               <div>
                 <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                  Phone *
+                  Phone
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
                   <select
@@ -322,7 +326,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
 
               <div>
                 <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                  Store link *
+                  Store link
                 </label>
                 <div style={{ position: 'relative' }}>
                   <span
@@ -434,7 +438,9 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                       border: '2px solid rgba(255, 255, 255, 0.3)',
                     }}
                   >
-                    {storeInitials(storeName) ? (
+                    {logoPreview ? (
+                      <img src={logoPreview} alt="Store logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : storeInitials(storeName) ? (
                       storeInitials(storeName)
                     ) : (
                       <Store size={20} color="white" />
@@ -446,27 +452,6 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                 </div>
 
                 <div style={{ flex: 1, background: 'white', padding: '12px', overflowY: 'auto' }}>
-                  {mockProducts.map((product, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: '10px',
-                        background: '#F9FAFB',
-                        borderRadius: '6px',
-                        marginBottom: '6px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827', marginBottom: '2px' }}>{product.name}</div>
-                        <div style={{ fontSize: '10px', color: '#6B7280' }}>{product.desc}</div>
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{formatMoney(product.basePrice, currency)}</div>
-                    </div>
-                  ))}
-
                   <div style={{ marginTop: '12px', padding: '24px 16px', textAlign: 'center', color: '#9CA3AF', fontSize: '11px' }}>
                     Your products will appear here.
                   </div>

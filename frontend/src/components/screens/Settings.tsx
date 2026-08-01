@@ -176,6 +176,12 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
       setErrorKey({ key: 'store', msg: 'Store name cannot be empty' });
       return;
     }
+    // A store must always have a link. The backend silently ignores a blank slug
+    // (leaving the old one), so block it here rather than let the clear vanish.
+    if (!form.slug?.trim()) {
+      setErrorKey({ key: 'store', msg: 'Store link is required' });
+      return;
+    }
     if (form.currency && form.currency !== savedCurrency) {
       const proceed = confirm(
         'Changing currency does not convert your existing product prices — you\'ll need to update them manually. Continue?',
