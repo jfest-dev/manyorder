@@ -1,8 +1,10 @@
 package com.manyorder.api.domain.product;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 
 /** PATCH semantics: null fields are left unchanged. */
 public class UpdateProductRequest {
@@ -13,6 +15,21 @@ public class UpdateProductRequest {
     @Positive
     private BigDecimal price;
 
+    /** Category reference: null = leave unchanged, 0 = clear to none, >0 = set. */
+    private Long categoryId;
+
+    @PositiveOrZero
+    private Integer stock;
+
+    private String sku;
+
+    /** Empty string clears the photo (and deletes the old file); null leaves it. */
+    private String photoUrl;
+
+    private Boolean preOrder;
+    private LocalDate preOrderReadyDate;
+    private String preOrderNote;
+
     public UpdateProductRequest() {}
 
     public String getName() { return name; }
@@ -21,4 +38,18 @@ public class UpdateProductRequest {
     public void setDescription(String description) { this.description = description; }
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
+    public Long getCategoryId() { return categoryId; }
+    public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
+    public Integer getStock() { return stock; }
+    public void setStock(Integer stock) { this.stock = stock; }
+    public String getSku() { return sku; }
+    public void setSku(String sku) { this.sku = sku; }
+    public String getPhotoUrl() { return photoUrl; }
+    public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
+    public Boolean getPreOrder() { return preOrder; }
+    public void setPreOrder(Boolean preOrder) { this.preOrder = preOrder; }
+    public LocalDate getPreOrderReadyDate() { return preOrderReadyDate; }
+    public void setPreOrderReadyDate(LocalDate preOrderReadyDate) { this.preOrderReadyDate = preOrderReadyDate; }
+    public String getPreOrderNote() { return preOrderNote; }
+    public void setPreOrderNote(String preOrderNote) { this.preOrderNote = preOrderNote; }
 }

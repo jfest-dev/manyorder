@@ -112,7 +112,42 @@ export interface ProductResponse {
   description: string | null;
   price: number;
   isActive: boolean;
+  categoryId: number | null;
+  categoryName: string | null;
+  stock: number;
+  sku: string | null;
+  photoUrl: string | null;
+  preOrder: boolean;
+  preOrderReadyDate: string | null; // ISO yyyy-MM-dd
+  preOrderNote: string | null;
+  unitsSold: number;
   createdAt: string;
+}
+
+export interface CreateProductPayload {
+  name: string;
+  description?: string;
+  price: number;
+  categoryId?: number; // reference to a per-store category; omit/0 = none
+  stock?: number;
+  sku?: string;
+  photoUrl?: string;
+  preOrder?: boolean;
+  preOrderReadyDate?: string;
+  preOrderNote?: string;
+}
+
+export interface UpdateProductPayload {
+  name?: string;
+  description?: string;
+  price?: number;
+  categoryId?: number; // null = unchanged, 0 = clear to none, >0 = set
+  stock?: number;
+  sku?: string;
+  photoUrl?: string; // '' clears the photo
+  preOrder?: boolean;
+  preOrderReadyDate?: string;
+  preOrderNote?: string;
 }
 
 export interface StoreResponse {
@@ -333,12 +368,80 @@ export const productsApi = {
   list: (storeId: number, activeOnly = false) =>
     request<ProductResponse[]>(`/merchant/stores/${storeId}/products${activeOnly ? '?activeOnly=true' : ''}`),
 
-  create: (storeId: number, payload: { name: string; description?: string; price: number }) =>
+  get: (storeId: number, productId: number) =>
+    request<ProductResponse>(`/merchant/stores/${storeId}/products/${productId}`),
+
+  create: (storeId: number, payload: CreateProductPayload) =>
     request<ProductResponse>(`/merchant/stores/${storeId}/products`, { method: 'POST', body: payload }),
 
-  update: (storeId: number, productId: number, payload: { name?: string; description?: string; price?: number }) =>
+  update: (storeId: number, productId: number, payload: UpdateProductPayload) =>
     request<ProductResponse>(`/merchant/stores/${storeId}/products/${productId}`, { method: 'PATCH', body: payload }),
 
   deactivate: (storeId: number, productId: number) =>
     request<ProductResponse>(`/merchant/stores/${storeId}/products/${productId}/deactivate`, { method: 'PATCH' }),
+
+  /**
+   * Upload a photo for an existing product and get back its hosted URL. Multipart
+   * (browser sets the boundary — no manual Content-Type). Server validates and
+   * stores it under the product's folder; the caller then PATCHes photoUrl.
+   */
+  uploadPhoto: async (storeId: number, productId: number, file: File): Promise<{ url: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const response = await fetch(`${API_BASE}/merchant/stores/${storeId}/products/${productId}/photo`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      let message = `Request failed (${response.status})`;
+      try {
+        const data = await response.json();
+        if (data?.message) message = data.message;
+      } catch {
+        /* non-JSON error body */
+      }
+      throw new ApiError(response.status, message);
+    }
+    return (await response.json()) as { url: string };
+  },
+};
+
+export interface CategoryResponse {
+  id: number;
+  name: string;
+  color: string | null;
+  displayOrder: number;
+  productCount: number;
+  createdAt: string;
+}
+
+export interface CreateCategoryPayload {
+  name: string;
+  color?: string;
+  displayOrder?: number;
+}
+
+export interface UpdateCategoryPayload {
+  name?: string;
+  color?: string;
+  displayOrder?: number;
+}
+
+export const categoriesApi = {
+  list: (storeId: number) =>
+    request<CategoryResponse[]>(`/merchant/stores/${storeId}/categories`),
+
+  create: (storeId: number, payload: CreateCategoryPayload) =>
+    request<CategoryResponse>(`/merchant/stores/${storeId}/categories`, { method: 'POST', body: payload }),
+
+  update: (storeId: number, categoryId: number, payload: UpdateCategoryPayload) =>
+    request<CategoryResponse>(`/merchant/stores/${storeId}/categories/${categoryId}`, { method: 'PATCH', body: payload }),
+
+  remove: (storeId: number, categoryId: number) =>
+    request<void>(`/merchant/stores/${storeId}/categories/${categoryId}`, { method: 'DELETE' }),
 };

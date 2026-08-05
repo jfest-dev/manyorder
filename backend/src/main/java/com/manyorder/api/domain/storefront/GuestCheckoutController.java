@@ -21,6 +21,7 @@ import com.manyorder.api.domain.order.OrderItem;
 import com.manyorder.api.domain.order.OrderItemRepository;
 import com.manyorder.api.domain.order.OrderRepository;
 import com.manyorder.api.domain.order.OrderService;
+import com.manyorder.api.domain.order.OrderSource;
 import com.manyorder.api.domain.order.OrderType;
 import com.manyorder.api.domain.product.Product;
 import com.manyorder.api.domain.product.ProductRepository;
@@ -73,6 +74,7 @@ public class GuestCheckoutController {
 
         Order order = new Order(customer, merchant, orderType,
                 request.getCustomerName(), request.getCustomerPhone());
+        order.setSource(OrderSource.STOREFRONT); // placed by a customer via the storefront
         order.setContactEmail(request.getCustomerEmail());
 
         if (orderType == OrderType.DELIVERY && request.getDeliveryAddress() != null) {
