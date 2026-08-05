@@ -109,17 +109,26 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
+  // Search across every human-visible field: order number (with/without '#'),
+  // customer name, phone, product names, the status label (Pending … Cancelled),
+  // and payment status (Unpaid / Paid / Refunded). Status is included both
+  // as-shown and collapsed, so "out for delivery" and "outfordelivery" both match.
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return orders.filter((o) => {
       if (tab !== 'ALL' && o.status !== tab) return false;
       if (!q) return true;
-      return (
-        String(o.id).includes(q) ||
-        (o.contactName || '').toLowerCase().includes(q) ||
-        (o.contactPhone || '').toLowerCase().includes(q) ||
-        o.items.some((i) => i.productName.toLowerCase().includes(q))
-      );
+      const status = STATUS_LABEL[o.status] || o.status;
+      const haystack = [
+        String(o.id), `#${o.id}`,
+        o.contactName, o.contactPhone,
+        status, status.replace(/[\s-]/g, ''),
+        o.paymentStatus,
+        ...o.items.map((i) => i.productName),
+      ]
+        .filter(Boolean)
+        .map((s) => String(s).toLowerCase());
+      return haystack.some((h) => h.includes(q));
     });
   }, [orders, tab, query]);
 
@@ -199,7 +208,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by customer, product, order number..."
+            placeholder="Search by order #, customer, product, status or payment"
             style={{
               width: '100%', padding: '10px 14px 10px 40px',
               borderRadius: 'var(--radius-field)', border: '1px solid var(--border-strong)',

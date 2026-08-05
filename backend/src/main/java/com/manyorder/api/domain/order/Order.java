@@ -73,6 +73,12 @@ public class Order {
     @Column(nullable = false)
     private PaymentStatus paymentStatus = PaymentStatus.UNPAID;
 
+    /** How the order was placed. Defaults to MANUAL; the column default backfills
+     *  existing rows so ddl-auto can add it NOT NULL. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(20) default 'MANUAL'")
+    private OrderSource source = OrderSource.MANUAL;
+
     /** e.g. Cash, PayNow, Bank Transfer — free text for manual orders. */
     private String paymentMethod;
 
@@ -148,4 +154,6 @@ public class Order {
     public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
     public String getPaymentReference() { return paymentReference; }
     public void setPaymentReference(String paymentReference) { this.paymentReference = paymentReference; }
+    public OrderSource getSource() { return source; }
+    public void setSource(OrderSource source) { this.source = source; }
 }

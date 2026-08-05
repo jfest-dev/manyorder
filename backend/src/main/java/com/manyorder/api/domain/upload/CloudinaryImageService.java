@@ -75,12 +75,26 @@ public class CloudinaryImageService {
      * @param merchantId the owning account's user id (the logo is not store-scoped)
      */
     public String uploadLogo(byte[] imageBytes, long merchantId) {
+        return uploadToFolder(imageBytes, rootFolder + "/" + merchantId + "/logo");
+    }
+
+    /**
+     * Upload an already-validated product photo and return the hosted secure URL.
+     * Stored store-scoped at
+     * {@code {rootFolder}/{userId}/{storeId}/products/{productId}} per the folder
+     * convention above. Throws 503 if the host is not configured, 502 on failure.
+     */
+    public String uploadProductPhoto(byte[] imageBytes, long merchantId, long storeId, long productId) {
+        return uploadToFolder(imageBytes,
+                rootFolder + "/" + merchantId + "/" + storeId + "/products/" + productId);
+    }
+
+    private String uploadToFolder(byte[] imageBytes, String folder) {
         if (cloudinary == null) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Image uploads are not available right now.");
         }
         try {
-            String folder = rootFolder + "/" + merchantId + "/logo";
             Map<?, ?> result = cloudinary.uploader().upload(imageBytes, ObjectUtils.asMap(
                     "folder", folder,
                     "resource_type", "image"));
@@ -92,7 +106,7 @@ public class CloudinaryImageService {
         } catch (ResponseStatusException e) {
             throw e;
         } catch (Exception e) {
-            log.warn("Logo upload to image host failed", e);
+            log.warn("Image upload to host failed (folder {})", folder, e);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "Could not upload the image. Please try again.");
         }

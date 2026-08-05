@@ -101,18 +101,23 @@ function paramForScreen(screen: Screen): string | null {
  * this restores the current screen from the URL — with a few values deliberately
  * not restored as-is:
  *   - onboarding is driven by store state, not the URL;
- *   - orders-edit needs a selected order id the URL doesn't carry, so with no
- *     id in state it falls back to its list;
+ *   - orders-edit / products-edit need a selected record id the URL doesn't
+ *     carry, so with no id in state they fall back to their list;
  *   - a staff account can never land on an owner-only screen via a stale/hand-
  *     crafted URL.
- * (products-edit is an unwired stub with no record context, so it restores as-is.)
  * Anything unknown falls through to the dashboard (renderScreen's default too).
  */
-function resolveScreen(raw: string | null, isStaff: boolean, editingOrderId: number | null): Screen {
+function resolveScreen(
+  raw: string | null,
+  isStaff: boolean,
+  editingOrderId: number | null,
+  editingProductId: number | null,
+): Screen {
   if (!raw) return 'dashboard';
   if (raw === 'onboarding-1' || raw === 'onboarding-2') return 'dashboard';
   if (isStaff && STAFF_BLOCKED_SCREENS.includes(raw as Screen)) return 'dashboard';
   if (raw === 'orders-edit' && editingOrderId == null) return 'orders-all';
+  if (raw === 'products-edit' && editingProductId == null) return 'products-all';
   return raw as Screen;
 }
 
@@ -185,13 +190,14 @@ function MerchantApp() {
   // load — editingOrderId is always null at mount, so an orders-edit URL falls
   // back to its list.
   const [activeScreen, setActiveScreen] = useState<Screen>(() =>
-    resolveScreen(searchParams.get('screen'), isStaff, null),
+    resolveScreen(searchParams.get('screen'), isStaff, null, null),
   );
 
   const [stores, setStores] = useState<Store[]>([]);
   const [storeLimit, setStoreLimit] = useState(3);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [storeUnavailable, setStoreUnavailable] = useState(false);
   // The onboarding logo pick, held here (not in the localStorage draft — a File
@@ -236,7 +242,7 @@ function MerchantApp() {
       return;
     }
     if (activeScreen === 'onboarding-1' || activeScreen === 'onboarding-2') return;
-    const target = resolveScreen(searchParams.get('screen'), isStaff, editingOrderId);
+    const target = resolveScreen(searchParams.get('screen'), isStaff, editingOrderId, editingProductId);
     setActiveScreen((current) => (current === target ? current : target));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -496,16 +502,36 @@ function MerchantApp() {
         return <CreateStore onComplete={handleDirectStoreCreate} onNavigate={navigateScreen as any} />;
 
       case 'products-all':
-        return <ProductsList onNavigate={navigateScreen as any} />;
+        return activeStore ? (
+          <ProductsList
+            storeId={Number(activeStore.id)}
+            currency={activeStore.currency}
+            onNavigate={navigateScreen as any}
+            onEditProduct={(productId) => {
+              setEditingProductId(productId);
+              setActiveScreen('products-edit');
+            }}
+          />
+        ) : (
+          <Dashboard />
+        );
       case 'products-add':
         return activeStore ? (
-          <AddProducts storeName={activeStore.name} storeColor={activeStore.color} currency={activeStore.currency} />
+          <AddProducts
+            storeId={Number(activeStore.id)}
+            storeName={activeStore.name}
+            storeColor={activeStore.color}
+            currency={activeStore.currency}
+            onNavigate={navigateScreen as any}
+          />
         ) : (
           <Dashboard />
         );
       case 'products-edit':
-        return activeStore ? (
+        return activeStore && editingProductId != null ? (
           <EditProduct
+            storeId={Number(activeStore.id)}
+            productId={editingProductId}
             storeName={activeStore.name}
             storeSlug={activeStore.slug}
             storeColor={activeStore.color}
@@ -516,7 +542,7 @@ function MerchantApp() {
           <Dashboard />
         );
       case 'products-categories':
-        return <Categories />;
+        return activeStore ? <Categories storeId={Number(activeStore.id)} /> : <Dashboard />;
       case 'products-inventory':
         return <Inventory />;
 

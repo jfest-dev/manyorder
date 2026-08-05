@@ -1,13 +1,16 @@
-import { useState } from 'react';
-import { Upload, X, Check, ArrowLeft } from 'lucide-react';
-import { FieldInput } from '../Field';
+import { useEffect, useRef, useState } from 'react';
+import { Upload, X, ArrowLeft } from 'lucide-react';
+import { FieldInput, FieldSelect } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { formatMoney, currencySymbol } from '../../lib/currency';
 import { styledSelect } from '../../lib/selectStyle';
+import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
+import { productsApi, categoriesApi, UpdateProductPayload, CategoryResponse, ApiError } from '../../lib/api';
 
 interface EditProductProps {
-  productId?: string;
+  storeId: number;
+  productId: number;
   storeName?: string;
   storeSlug?: string;
   storeColor?: string;
@@ -16,362 +19,293 @@ interface EditProductProps {
 }
 
 export function EditProduct({
-  productId = '1',
+  storeId,
+  productId,
   storeName = 'My Store',
   storeSlug = 'my-store',
   storeColor = '#000000',
   currency = 'sgd',
-  onNavigate
+  onNavigate,
 }: EditProductProps) {
-  // Pre-fill with existing product data (in real app, fetch from database)
-  const [name, setName] = useState('Wireless Headphones');
-  const [price, setPrice] = useState('89.99');
-  const [description, setDescription] = useState('Premium noise-cancelling headphones');
-  const [category, setCategory] = useState('electronics');
-  const [quantity, setQuantity] = useState('45');
-  const [status, setStatus] = useState('active');
-  const [image, setImage] = useState<string | undefined>(undefined);
-  
-  const [categories, setCategories] = useState([
-    { value: 'electronics', label: 'Electronics' },
-    { value: 'fashion', label: 'Fashion' },
-    { value: 'home', label: 'Home' },
-    { value: 'sports', label: 'Sports' },
-    { value: 'other', label: 'Other' },
-  ]);
-  const [showAddCategory, setShowAddCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      const newValue = newCategoryName.toLowerCase().replace(/\s+/g, '-');
-      setCategories([...categories, { value: newValue, label: newCategoryName.trim() }]);
-      setNewCategoryName('');
-      setShowAddCategory(false);
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+  const [description, setDescription] = useState('');
+  const [categoryId, setCategoryId] = useState(''); // '' = no category
+  const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [stock, setStock] = useState('');
+  const [sku, setSku] = useState('');
+  const [status, setStatus] = useState<'active' | 'draft'>('active');
+
+  // Photo: current saved URL ('' = none) + a newly picked file previewed locally.
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState('');
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Pre-order.
+  const [preOrder, setPreOrder] = useState(false);
+  const [preOrderReadyDate, setPreOrderReadyDate] = useState('');
+  const [preOrderNote, setPreOrderNote] = useState('');
+
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const backToList = () => onNavigate?.('products-all');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    productsApi
+      .get(storeId, productId)
+      .then((p) => {
+        if (cancelled) return;
+        setName(p.name);
+        setPrice(String(p.price));
+        setDescription(p.description ?? '');
+        setCategoryId(p.categoryId != null ? String(p.categoryId) : '');
+        setStock(String(p.stock ?? 0));
+        setSku(p.sku ?? '');
+        setStatus(p.isActive ? 'active' : 'draft');
+        setPhotoUrl(p.photoUrl ?? '');
+        setPreOrder(p.preOrder);
+        setPreOrderReadyDate(p.preOrderReadyDate ?? '');
+        setPreOrderNote(p.preOrderNote ?? '');
+      })
+      .catch((e) => { if (!cancelled) setLoadError(e instanceof ApiError ? e.message : 'Could not load product'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [storeId, productId]);
+
+  useEffect(() => {
+    categoriesApi.list(storeId).then(setCategories).catch(() => setCategories([]));
+  }, [storeId]);
+
+  // Live object-URL preview for a newly picked file.
+  useEffect(() => {
+    if (!photoFile) { setPhotoPreview(''); return; }
+    const url = URL.createObjectURL(photoFile);
+    setPhotoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
+
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const invalid = validateImageFile(file);
+    if (invalid) { setPhotoError(invalid); return; }
+    setPhotoError(null);
+    setPhotoFile(file);
+  };
+
+  const removePhoto = () => {
+    setPhotoError(null);
+    setPhotoFile(null);
+    setPhotoUrl(''); // cleared; the save sends photoUrl:'' so the server deletes it
+  };
+
+  const categoryOptions = categories.map((c) => ({ value: String(c.id), label: c.name }));
+  const categoryName = categories.find((c) => String(c.id) === categoryId)?.name ?? '';
+
+  const handleSave = async () => {
+    setError(null);
+    if (!name.trim()) { setError('Product name is required.'); return; }
+    const priceNum = parseFloat(price);
+    if (Number.isNaN(priceNum) || priceNum <= 0) { setError('Enter a valid price.'); return; }
+    const stockNum = stock.trim() === '' ? 0 : parseInt(stock, 10);
+    if (Number.isNaN(stockNum) || stockNum < 0) { setError('Stock must be 0 or more.'); return; }
+
+    setSaving(true);
+    try {
+      // Deferred photo upload: a newly picked file reaches the host only now.
+      let finalPhotoUrl = photoUrl;
+      if (photoFile) {
+        finalPhotoUrl = (await productsApi.uploadPhoto(storeId, productId, photoFile)).url;
+      }
+
+      const payload: UpdateProductPayload = {
+        name: name.trim(),
+        description: description.trim(),
+        price: priceNum,
+        categoryId: categoryId ? Number(categoryId) : 0, // 0 clears to no category
+        stock: stockNum,
+        sku: sku.trim(),
+        photoUrl: finalPhotoUrl, // '' clears; unchanged is a no-op server-side
+        preOrder,
+        preOrderReadyDate: preOrder && preOrderReadyDate ? preOrderReadyDate : undefined,
+        preOrderNote: preOrder ? preOrderNote.trim() : undefined,
+      };
+      // Status maps to isActive via a dedicated call when it changes to draft/active.
+      await productsApi.update(storeId, productId, payload);
+      if (status === 'draft') {
+        await productsApi.deactivate(storeId, productId);
+      }
+      backToList();
+    } catch (e: any) {
+      setError(e instanceof ApiError ? e.message : 'Could not save changes');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleSaveChanges = () => {
-    if (name && price) {
-      alert('Product updated successfully!');
-      onNavigate?.('products');
-    } else {
-      alert('Please fill in product name and price');
+  const handleDelete = async () => {
+    if (!confirm('Hide this product from your store? You can re-add it later.')) return;
+    setSaving(true);
+    try {
+      await productsApi.deactivate(storeId, productId);
+      backToList();
+    } catch (e: any) {
+      setError(e instanceof ApiError ? e.message : 'Could not delete product');
+      setSaving(false);
     }
   };
 
-  const handleDelete = () => {
-    if (confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
-      alert('Product deleted successfully!');
-      onNavigate?.('products');
-    }
-  };
+  const shownPhoto = photoPreview || photoUrl;
+  const priceNum = parseFloat(price);
+  const previewPrice = Number.isNaN(priceNum) ? '' : formatMoney(priceNum, currency);
 
-  const formatPrice = (price: string) => {
-    const numPrice = parseFloat(price);
-    if (isNaN(numPrice)) return '';
-    return formatMoney(numPrice, currency);
-  };
-
-  const previewProduct = {
-    name: name || 'Product Name',
-    desc: description || 'No description',
-    category: category,
-    price: formatPrice(price),
-    image: image
-  };
+  if (loading) {
+    return <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading product…</p>;
+  }
+  if (loadError) {
+    return (
+      <div>
+        <button onClick={backToList} style={backBtnStyle}><ArrowLeft size={16} /> Back to Products</button>
+        <p className="text-small" style={{ color: 'var(--error-color)' }}>{loadError}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
-      {/* Header with Back Button */}
       <div style={{ marginBottom: '24px' }}>
-        <button
-          onClick={() => onNavigate?.('products')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-secondary)',
-            fontSize: '13px',
-            cursor: 'pointer',
-            padding: '4px 0',
-            marginBottom: '12px',
-          }}
-        >
-          <ArrowLeft size={16} />
-          Back to Products
-        </button>
+        <button onClick={backToList} style={backBtnStyle}><ArrowLeft size={16} /> Back to Products</button>
         <h1 style={{ marginBottom: '8px' }}>Edit Product</h1>
-        <p className="text-small" style={{ color: 'var(--text-secondary)' }}>
-          Update product details and inventory
-        </p>
+        <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Update product details and inventory</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '32px' }}>
-        {/* Left: Product Form */}
+        {/* Left: form */}
         <div>
           <Card title="Product Details">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Image Upload Area */}
+              {/* Photo */}
               <div>
                 <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                  Product Image
+                  Product Photo
                 </label>
-                <label style={{ cursor: 'pointer' }}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setImage(reader.result as string);
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                    style={{ display: 'none' }}
-                  />
-                  <div
-                    style={{
-                      height: '200px',
-                      borderRadius: 'var(--radius-field)',
-                      border: '2px dashed var(--border-strong)',
-                      background: image ? 'transparent' : 'var(--bg-card-subtle)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      overflow: 'hidden',
-                      position: 'relative',
-                    }}
-                  >
-                    {image ? (
-                      <>
-                        <img
-                          src={image}
-                          alt="Product preview"
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                          }}
-                        />
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: '8px',
-                            right: '8px',
-                            padding: '6px',
-                            background: 'rgba(0, 0, 0, 0.6)',
-                            borderRadius: '4px',
-                            color: 'white',
-                            fontSize: '11px',
-                          }}
-                        >
-                          Click to change
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <Upload size={32} style={{ color: 'var(--text-muted)' }} />
-                        <span className="text-small" style={{ color: 'var(--text-muted)' }}>
-                          Click to upload image
-                        </span>
-                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          Recommended: Square image, at least 500x500px
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </label>
+                <input ref={fileInputRef} type="file" accept={ALLOWED_IMAGE_ACCEPT} onChange={handlePhotoSelect} style={{ display: 'none' }} />
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    height: '200px', borderRadius: 'var(--radius-field)', border: '2px dashed var(--border-strong)',
+                    background: shownPhoto ? 'transparent' : 'var(--bg-card-subtle)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                    cursor: 'pointer', overflow: 'hidden', position: 'relative',
+                  }}
+                >
+                  {shownPhoto ? (
+                    <>
+                      <img src={shownPhoto} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removePhoto(); }}
+                        style={{ position: 'absolute', top: '8px', right: '8px', padding: '6px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer', display: 'inline-flex' }}
+                        aria-label="Remove photo"
+                      >
+                        <X size={14} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={32} style={{ color: 'var(--text-muted)' }} />
+                      <span className="text-small" style={{ color: 'var(--text-muted)' }}>Click to upload a photo</span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{IMAGE_RULE_TEXT} Square works best.</span>
+                    </>
+                  )}
+                </div>
+                {photoError && <p className="text-xs" style={{ color: 'var(--error-color)', marginTop: '6px' }}>{photoError}</p>}
               </div>
 
-              <FieldInput
-                label="Product Name"
-                placeholder="Wireless Headphones"
-                value={name}
-                onChange={setName}
-              />
-
-              <FieldInput
-                label="Description"
-                placeholder="Premium noise-cancelling headphones"
-                value={description}
-                onChange={setDescription}
-                helperText="Brief description or variant info"
-              />
-
-              {/* Category with Quick Add */}
+              <FieldInput label="Product Name" placeholder="Wireless Headphones" value={name} onChange={setName} required />
+              <FieldInput label="Description" placeholder="Short description" value={description} onChange={setDescription} helperText="Brief description or variant info" />
               <div>
-                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                  Category
-                </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    style={{ ...styledSelect, width: 'auto', flex: 1 }}
-                  >
-                    <option value="">Select category</option>
-                    {categories.map((cat) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => setShowAddCategory(!showAddCategory)}
-                    style={{
-                      height: '40px',
-                      padding: '0 12px',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-field)',
-                      background: 'var(--bg-card)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      fontSize: '13px',
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    Add
-                  </button>
-                </div>
-
-                {/* Quick Add Category Input */}
-                {showAddCategory && (
-                  <div style={{ marginTop: '8px', display: 'flex', gap: '8px' }}>
-                    <input
-                      type="text"
-                      placeholder="New category name"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleAddCategory()}
-                      style={{
-                        flex: 1,
-                        height: '32px',
-                        padding: '0 10px',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-field)',
-                        background: 'var(--bg-card)',
-                        fontSize: '12px',
-                        outline: 'none',
-                      }}
-                    />
+                <FieldSelect
+                  label="Category"
+                  placeholder="No category"
+                  options={categoryOptions}
+                  value={categoryId}
+                  onChange={setCategoryId}
+                />
+                {categoryOptions.length === 0 && (
+                  <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
+                    No categories yet.{' '}
                     <button
-                      onClick={handleAddCategory}
-                      style={{
-                        height: '32px',
-                        padding: '0 12px',
-                        border: 'none',
-                        borderRadius: 'var(--radius-field)',
-                        background: 'var(--primary-solid)',
-                        color: 'white',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}
+                      type="button"
+                      onClick={() => onNavigate?.('products-categories')}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', textDecoration: 'underline', font: 'inherit' }}
                     >
-                      <Check size={14} />
-                      Save
+                      Create one
                     </button>
-                  </div>
+                  </p>
                 )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <FieldInput
-                  label="Price"
-                  placeholder="89.99"
-                  prefix={currencySymbol(currency)}
-                  type="number"
-                  value={price}
-                  onChange={setPrice}
-                />
-
-                <FieldInput
-                  label="Stock Quantity"
-                  placeholder="45"
-                  type="number"
-                  value={quantity}
-                  onChange={setQuantity}
-                  helperText="Available inventory"
-                />
+                <FieldInput label="Price" placeholder="8.50" prefix={currencySymbol(currency)} type="number" value={price} onChange={setPrice} required />
+                <FieldInput label="Stock Quantity" placeholder="0" type="number" value={stock} onChange={setStock} helperText="Available inventory" />
               </div>
 
-              {/* Product Status */}
+              <FieldInput label="SKU" placeholder="e.g. HDPH-001" value={sku} onChange={setSku} helperText="Optional stock-keeping unit" />
+
+              {/* Status */}
               <div>
-                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                  Product Status
-                </label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  style={styledSelect}
-                >
-                  <option value="active">Active - Visible to customers</option>
-                  <option value="draft">Draft - Hidden from customers</option>
-                  <option value="outofstock">Out of Stock</option>
+                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>Product Status</label>
+                <select value={status} onChange={(e) => setStatus(e.target.value as 'active' | 'draft')} style={styledSelect}>
+                  <option value="active">Active — visible to customers</option>
+                  <option value="draft">Draft — hidden from customers</option>
                 </select>
+                <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>Out of stock shows automatically when stock reaches 0.</p>
               </div>
 
-              {/* Action Buttons */}
-              <div style={{ 
-                display: 'flex', 
-                gap: '12px', 
-                marginTop: '24px',
-                paddingTop: '24px',
-                borderTop: '1px solid var(--border-subtle)',
-              }}>
-                <Button 
-                  variant="primary"
-                  onClick={handleSaveChanges}
-                  fullWidth
-                >
-                  Save Changes
-                </Button>
-                
-                <Button 
-                  variant="ghost"
-                  onClick={() => onNavigate?.('products')}
-                >
-                  Cancel
-                </Button>
+              {/* Pre-order */}
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+                <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={preOrder} onChange={(e) => setPreOrder(e.target.checked)} style={{ marginTop: '3px' }} />
+                  <span>
+                    <span className="text-small" style={{ fontWeight: 600, display: 'block' }}>Pre-order</span>
+                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Sell before it's in stock, with a ready date.</span>
+                  </span>
+                </label>
+                {preOrder && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', paddingLeft: '28px' }}>
+                    <div>
+                      <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ready date</label>
+                      <input type="date" value={preOrderReadyDate} onChange={(e) => setPreOrderReadyDate(e.target.value)}
+                        style={{ height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
+                    </div>
+                    <FieldInput label="Pre-order note" placeholder="e.g. Ships early September" value={preOrderNote} onChange={setPreOrderNote} />
+                  </div>
+                )}
               </div>
 
-              {/* Delete Button */}
+              {error && <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>}
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+                <Button variant="primary" onClick={handleSave} disabled={saving} fullWidth>
+                  {saving ? 'Saving…' : 'Save Changes'}
+                </Button>
+                <Button variant="ghost" onClick={backToList} disabled={saving}>Cancel</Button>
+              </div>
+
               <div style={{ paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
-                <button
-                  onClick={handleDelete}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: 'transparent',
-                    border: '1px solid #DC2626',
-                    borderRadius: 'var(--radius-field)',
-                    color: '#DC2626',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#DC2626';
-                    e.currentTarget.style.color = 'white';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.color = '#DC2626';
-                  }}
+                <button onClick={handleDelete} disabled={saving} style={deleteBtnStyle}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#DC2626'; e.currentTarget.style.color = 'white'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#DC2626'; }}
                 >
                   Delete Product
                 </button>
@@ -380,170 +314,71 @@ export function EditProduct({
           </Card>
         </div>
 
-        {/* Right: Live Preview */}
+        {/* Right: live preview */}
         <div style={{ position: 'sticky', top: '24px', alignSelf: 'start' }}>
           <div style={{ marginBottom: '12px', textAlign: 'center' }}>
-            <h3 className="text-small" style={{ color: 'var(--text-secondary)' }}>
-              Live preview
-            </h3>
+            <h3 className="text-small" style={{ color: 'var(--text-secondary)' }}>Live preview</h3>
           </div>
-
-          {/* Phone Mockup */}
-          <div 
-            style={{
-              width: '280px',
-              margin: '0 auto',
-              background: 'white',
-              borderRadius: '28px',
-              overflow: 'hidden',
-              border: '1px solid var(--border-strong)',
-            }}
-          >
-            <div 
-              style={{
-                height: '560px',
-                display: 'flex',
-                flexDirection: 'column',
-                background: '#F3F4F6',
-              }}
-            >
-              {/* Store Header with Brand Color */}
-              <div 
-                style={{
-                  background: storeColor,
-                  color: 'white',
-                  padding: '16px',
-                  textAlign: 'center',
-                }}
-              >
-                {/* Logo */}
-                <div 
-                  style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '50%',
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 10px',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    border: '2px solid rgba(255, 255, 255, 0.3)',
-                  }}
-                >
+          <div style={{ width: '280px', margin: '0 auto', background: 'white', borderRadius: '28px', overflow: 'hidden', border: '1px solid var(--border-strong)' }}>
+            <div style={{ height: '560px', display: 'flex', flexDirection: 'column', background: '#F3F4F6' }}>
+              <div style={{ background: storeColor, color: 'white', padding: '16px', textAlign: 'center' }}>
+                <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', fontSize: '16px', fontWeight: 600, border: '2px solid rgba(255,255,255,0.3)' }}>
                   {storeName.substring(0, 2).toUpperCase() || 'MS'}
                 </div>
-                
-                <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '2px' }}>
-                  {storeName}
-                </h2>
-                <p style={{ fontSize: '11px', opacity: 0.9 }}>
-                  manyorder.app/{storeSlug}
-                </p>
+                <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '2px' }}>{storeName}</h2>
+                <p style={{ fontSize: '11px', opacity: 0.9 }}>manyorder.app/{storeSlug}</p>
               </div>
-
-              {/* Product Preview */}
               <div style={{ flex: 1, background: 'white', padding: '12px', overflowY: 'auto' }}>
-                <div 
-                  style={{
-                    padding: '10px',
-                    background: '#F9FAFB',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    gap: '10px',
-                    alignItems: 'center',
-                  }}
-                >
-                  {previewProduct.image && (
-                    <img
-                      src={previewProduct.image}
-                      alt={previewProduct.name}
-                      style={{
-                        width: '60px',
-                        height: '60px',
-                        borderRadius: '4px',
-                        objectFit: 'cover',
-                        flexShrink: 0,
-                      }}
-                    />
-                  )}
+                <div style={{ padding: '10px', background: '#F9FAFB', borderRadius: '6px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  {shownPhoto && <img src={shownPhoto} alt={name} style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827', marginBottom: '2px' }}>
-                      {previewProduct.name}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#6B7280', marginBottom: '4px' }}>
-                      {previewProduct.desc}
-                    </div>
-                    {previewProduct.category && (
-                      <div style={{ 
-                        display: 'inline-block',
-                        padding: '2px 6px',
-                        background: '#E5E7EB',
-                        borderRadius: '3px',
-                        fontSize: '9px',
-                        color: '#4B5563',
-                        fontWeight: 500,
-                        textTransform: 'capitalize'
-                      }}>
-                        {previewProduct.category}
-                      </div>
-                    )}
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827', marginBottom: '2px' }}>{name || 'Product Name'}</div>
+                    <div style={{ fontSize: '10px', color: '#6B7280', marginBottom: '4px' }}>{description || 'No description'}</div>
+                    {categoryName && <div style={{ display: 'inline-block', padding: '2px 6px', background: '#E5E7EB', borderRadius: '3px', fontSize: '9px', color: '#4B5563', fontWeight: 500 }}>{categoryName}</div>}
                   </div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', flexShrink: 0 }}>
-                    {previewProduct.price}
-                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', flexShrink: 0 }}>{previewPrice}</div>
                 </div>
-
-                {status !== 'active' && (
-                  <div style={{ 
-                    marginTop: '12px',
-                    padding: '12px',
-                    background: status === 'draft' ? '#FEF3C7' : '#FEE2E2',
-                    borderRadius: '6px',
-                    fontSize: '11px',
-                    color: status === 'draft' ? '#92400E' : '#991B1B',
-                    textAlign: 'center'
-                  }}>
-                    {status === 'draft' ? '⚠️ Draft - Not visible to customers' : '❌ Out of Stock'}
+                {preOrder && (
+                  <div style={{ marginTop: '12px', padding: '10px', background: '#FEF3C7', borderRadius: '6px', fontSize: '11px', color: '#92400E' }}>
+                    🕒 Pre-order{preOrderReadyDate ? ` — ready ${preOrderReadyDate}` : ''}{preOrderNote ? `. ${preOrderNote}` : ''}
+                  </div>
+                )}
+                {!preOrder && status === 'draft' && (
+                  <div style={{ marginTop: '12px', padding: '12px', background: '#FEF3C7', borderRadius: '6px', fontSize: '11px', color: '#92400E', textAlign: 'center' }}>
+                    ⚠️ Draft — not visible to customers
+                  </div>
+                )}
+                {!preOrder && status === 'active' && (stock.trim() === '0') && (
+                  <div style={{ marginTop: '12px', padding: '12px', background: '#FEE2E2', borderRadius: '6px', fontSize: '11px', color: '#991B1B', textAlign: 'center' }}>
+                    ❌ Out of stock
                   </div>
                 )}
               </div>
-
-              {/* Footer */}
               <div style={{ background: 'white', padding: '12px', borderTop: '1px solid #E5E7EB' }}>
-                <button
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    background: '#000000',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    cursor: 'default',
-                  }}
-                >
-                  Order now
-                </button>
+                <button style={{ width: '100%', padding: '10px', background: '#000000', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'default' }}>Order now</button>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Responsive Styles */}
       <style>{`
         @media (max-width: 1024px) {
-          div[style*="grid-template-columns: 1fr 400px"] {
-            grid-template-columns: 1fr !important;
-          }
-          div[style*="position: sticky"] {
-            position: static !important;
-          }
+          div[style*="grid-template-columns: 1fr 400px"] { grid-template-columns: 1fr !important; }
+          div[style*="position: sticky"] { position: static !important; }
         }
       `}</style>
     </div>
   );
 }
+
+const backBtnStyle: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none',
+  color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer', padding: '4px 0', marginBottom: '12px',
+};
+
+const deleteBtnStyle: React.CSSProperties = {
+  width: '100%', padding: '10px', background: 'transparent', border: '1px solid #DC2626',
+  borderRadius: 'var(--radius-field)', color: '#DC2626', fontSize: '13px', fontWeight: 500,
+  cursor: 'pointer', transition: 'all 0.15s ease',
+};

@@ -1,8 +1,10 @@
 package com.manyorder.api.domain.product;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import com.manyorder.api.domain.category.Category;
 import com.manyorder.api.domain.merchant.Merchant;
 
 import jakarta.persistence.Column;
@@ -37,6 +39,30 @@ public class Product {
 
     @Column(nullable = false)
     private Boolean isActive;
+
+    /** Optional reference to a per-store managed category. Null = uncategorized. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private Category category;
+
+    /** Inventory count. Out-of-stock is derived from stock == 0, not a status. */
+    @Column(nullable = false, columnDefinition = "integer default 0 not null")
+    private Integer stock = 0;
+
+    /** Stock-keeping unit — free text, not enforced unique. */
+    private String sku;
+
+    /** Absolute product photo URL on the image host. Null = no photo. */
+    @Column(length = 512)
+    private String photoUrl;
+
+    /** Pre-order toggle + its details (ready date / note). Not a category. */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean preOrder = false;
+
+    private LocalDate preOrderReadyDate;
+
+    private String preOrderNote;
 
     private LocalDateTime createdAt;
 
@@ -96,4 +122,25 @@ public class Product {
     public void setIsActive(Boolean isActive) {
         this.isActive = isActive;
     }
+
+    public Category getCategory() { return category; }
+    public void setCategory(Category category) { this.category = category; }
+
+    public Integer getStock() { return stock; }
+    public void setStock(Integer stock) { this.stock = stock; }
+
+    public String getSku() { return sku; }
+    public void setSku(String sku) { this.sku = sku; }
+
+    public String getPhotoUrl() { return photoUrl; }
+    public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
+
+    public boolean isPreOrder() { return preOrder; }
+    public void setPreOrder(boolean preOrder) { this.preOrder = preOrder; }
+
+    public LocalDate getPreOrderReadyDate() { return preOrderReadyDate; }
+    public void setPreOrderReadyDate(LocalDate preOrderReadyDate) { this.preOrderReadyDate = preOrderReadyDate; }
+
+    public String getPreOrderNote() { return preOrderNote; }
+    public void setPreOrderNote(String preOrderNote) { this.preOrderNote = preOrderNote; }
 }

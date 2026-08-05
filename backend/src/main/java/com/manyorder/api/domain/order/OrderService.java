@@ -64,6 +64,7 @@ public class OrderService {
                 merchant, request.getCustomerName(), request.getEmail(), request.getPhoneNumber());
 
         Order order = new Order(customer, merchant);
+        order.setSource(OrderSource.MANUAL); // merchant-created via the dashboard
         if (request.getPaymentStatus() != null) order.setPaymentStatus(request.getPaymentStatus());
         if (request.getPaymentMethod() != null) order.setPaymentMethod(request.getPaymentMethod());
         if (request.getPaymentReference() != null) order.setPaymentReference(request.getPaymentReference());

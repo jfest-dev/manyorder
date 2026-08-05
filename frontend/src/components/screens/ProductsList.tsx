@@ -1,83 +1,83 @@
-import { Search, Plus, Filter, Download, Edit } from 'lucide-react';
+import { Search, Plus, Download, Edit, Package } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { useState } from 'react';
-
-interface Product {
-  id: string;
-  name: string;
-  category: string;
-  price: string;
-  inventory: number;
-  status: 'active' | 'draft' | 'outofstock';
-}
+import { useEffect, useMemo, useState } from 'react';
+import { productsApi, ProductResponse, ApiError } from '../../lib/api';
+import { formatMoney } from '../../lib/currency';
 
 interface ProductsListProps {
+  storeId: number;
+  currency: string;
   onNavigate?: (screen: string) => void;
+  onEditProduct?: (productId: number) => void;
 }
 
-export function ProductsList({ onNavigate }: ProductsListProps) {
+type DisplayStatus = 'active' | 'draft' | 'outofstock' | 'preorder';
+
+function statusOf(p: ProductResponse): DisplayStatus {
+  if (p.preOrder) return 'preorder';
+  if (p.stock === 0) return 'outofstock';
+  return p.isActive ? 'active' : 'draft';
+}
+
+const STATUS_COLOR: Record<DisplayStatus, string> = {
+  active: '#10B981',
+  draft: '#6B7280',
+  outofstock: '#DC2626',
+  preorder: '#D97706',
+};
+const STATUS_LABEL: Record<DisplayStatus, string> = {
+  active: 'Active',
+  draft: 'Draft',
+  outofstock: 'Out of Stock',
+  preorder: 'Pre-order',
+};
+
+export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: ProductsListProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [products, setProducts] = useState<ProductResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const mockProducts: Product[] = [
-    { id: '1', name: 'Wireless Headphones', category: 'Electronics', price: '$89.99', inventory: 45, status: 'active' },
-    { id: '2', name: 'Leather Wallet', category: 'Fashion', price: '$45.00', inventory: 120, status: 'active' },
-    { id: '3', name: 'Smart Watch', category: 'Electronics', price: '$299.00', inventory: 0, status: 'outofstock' },
-    { id: '4', name: 'Coffee Mug Set', category: 'Home', price: '$24.99', inventory: 78, status: 'active' },
-    { id: '5', name: 'Yoga Mat', category: 'Sports', price: '$35.00', inventory: 34, status: 'active' },
-    { id: '6', name: 'Desk Lamp', category: 'Home', price: '$56.50', inventory: 12, status: 'draft' },
-  ];
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    productsApi
+      .list(storeId)
+      .then((res) => { if (!cancelled) setProducts(res); })
+      .catch((e) => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load products'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [storeId]);
 
-  const filteredProducts = mockProducts.filter(product => 
-    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    product.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return '#10B981';
-      case 'draft':
-        return '#6B7280';
-      case 'outofstock':
-        return '#DC2626';
-      default:
-        return 'var(--text-muted)';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'Active';
-      case 'draft':
-        return 'Draft';
-      case 'outofstock':
-        return 'Out of Stock';
-      default:
-        return status;
-    }
-  };
+  // Search across every human-visible field: name, category, SKU, and the
+  // derived status label (Active / Draft / Out of Stock / Pre-order). The
+  // status is included both as-shown and collapsed, so "pre-order" and
+  // "preorder" (or "out of stock" / "outofstock") both match.
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => {
+      const status = STATUS_LABEL[statusOf(p)];
+      const haystack = [p.name, p.categoryName, p.sku, status, status.replace(/[\s-]/g, '')]
+        .filter(Boolean)
+        .map((s) => String(s).toLowerCase());
+      return haystack.some((h) => h.includes(q));
+    });
+  }, [products, searchQuery]);
 
   const handleExportProducts = () => {
-    // Create CSV content
-    const headers = ['Product ID', 'Name', 'Category', 'Price', 'Inventory', 'Status'];
-    const csvContent = [
+    const headers = ['Product ID', 'Name', 'SKU', 'Category', 'Price', 'Stock', 'Units Sold', 'Status'];
+    const csv = [
       headers.join(','),
-      ...filteredProducts.map(product => 
-        [
-          product.id,
-          product.name,
-          product.category,
-          product.price,
-          product.inventory,
-          getStatusLabel(product.status)
-        ].join(',')
-      )
+      ...filtered.map((p) =>
+        [p.id, p.name, p.sku || '', p.categoryName || '', p.price, p.stock, p.unitsSold, STATUS_LABEL[statusOf(p)]]
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(','),
+      ),
     ].join('\n');
-
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -86,6 +86,38 @@ export function ProductsList({ onNavigate }: ProductsListProps) {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
+  };
+
+  const Thumb = ({ p, size }: { p: ProductResponse; size: number }) => (
+    <div
+      style={{
+        width: size, height: size, borderRadius: '8px', flexShrink: 0, overflow: 'hidden',
+        background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      {p.photoUrl ? (
+        <img src={p.photoUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      ) : (
+        <Package size={18} style={{ color: 'var(--text-muted)' }} />
+      )}
+    </div>
+  );
+
+  const StatusTag = ({ p }: { p: ProductResponse }) => {
+    const s = statusOf(p);
+    return (
+      <span
+        className="text-tag"
+        style={{
+          padding: '4px 8px', borderRadius: '4px',
+          background: `${STATUS_COLOR[s]}20`, color: STATUS_COLOR[s],
+          fontSize: '12px', fontWeight: 500,
+        }}
+      >
+        {STATUS_LABEL[s]}
+      </span>
+    );
   };
 
   return (
@@ -99,40 +131,18 @@ export function ProductsList({ onNavigate }: ProductsListProps) {
       </div>
 
       {/* Actions Bar */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '12px', 
-        marginBottom: '24px',
-        flexWrap: 'wrap',
-        alignItems: 'center'
-      }}>
-        {/* Search */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ flex: 1, minWidth: '250px', position: 'relative' }}>
-          <Search 
-            size={18} 
-            style={{ 
-              position: 'absolute', 
-              left: '12px', 
-              top: '50%', 
-              transform: 'translateY(-50%)',
-              color: 'var(--text-muted)' 
-            }} 
-          />
+          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
-            placeholder="Search by product, variant names or SKU"
+            placeholder="Search by product, category, SKU or status"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
-              width: '100%',
-              height: '40px',
-              paddingLeft: '40px',
-              paddingRight: '12px',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-field)',
-              background: 'var(--bg-card)',
-              fontSize: '13px',
-              outline: 'none',
+              width: '100%', height: '40px', paddingLeft: '40px', paddingRight: '12px',
+              border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)',
+              background: 'var(--bg-card)', fontSize: '13px', outline: 'none',
             }}
           />
         </div>
@@ -144,7 +154,7 @@ export function ProductsList({ onNavigate }: ProductsListProps) {
           </div>
         </Button>
 
-        <Button onClick={handleExportProducts}>
+        <Button variant="secondary" onClick={handleExportProducts}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Download size={16} />
             Export Products
@@ -152,204 +162,121 @@ export function ProductsList({ onNavigate }: ProductsListProps) {
         </Button>
       </div>
 
-      {/* Products Table */}
       <Card>
-        {/* Desktop Table */}
-        <div className="desktop-table" style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-card-subtle)' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Product</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Category</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Price</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Inventory</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Status</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProducts.map((product) => (
-                <tr key={product.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={{ padding: '12px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div
-                        style={{
-                          width: '40px',
-                          height: '40px',
-                          borderRadius: '8px',
-                          background: 'var(--bg-card-subtle)',
-                          border: '1px solid var(--border-subtle)',
-                          flexShrink: 0,
-                        }}
-                      />
-                      <span className="text-small" style={{ fontWeight: 500 }}>{product.name}</span>
+        {loading ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading products…</div>
+        ) : error ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--error-color)' }}>{error}</div>
+        ) : (
+          <>
+            {/* Desktop Table */}
+            <div className="desktop-table" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-card-subtle)' }}>
+                    {['Product', 'Category', 'Price', 'Stock', 'Units Sold', 'Status'].map((h) => (
+                      <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>{h}</th>
+                    ))}
+                    <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((p) => (
+                    <tr key={p.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: '12px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <Thumb p={p} size={40} />
+                          <div>
+                            <div className="text-small" style={{ fontWeight: 500 }}>{p.name}</div>
+                            {p.sku && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>SKU: {p.sku}</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.categoryName || '—'}</td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{formatMoney(p.price, currency)}</td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px' }}>
+                        <span style={{ color: p.stock === 0 && !p.preOrder ? '#DC2626' : 'var(--text-primary)' }}>{p.stock} in stock</span>
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.unitsSold}</td>
+                      <td style={{ padding: '12px 16px' }}><StatusTag p={p} /></td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        <button
+                          onClick={() => onEditProduct?.(p.id)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                            background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-field)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-app)'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-card-subtle)'; }}
+                        >
+                          <Edit size={16} />
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {filtered.length === 0 && (
+                <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  {products.length === 0 ? 'No products yet — add your first one.' : 'No products match your search.'}
+                </div>
+              )}
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="mobile-cards" style={{ display: 'none' }}>
+              {filtered.map((p) => (
+                <div key={p.id} style={{ padding: '16px', borderRadius: '8px', background: 'var(--bg-card-subtle)', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                    <Thumb p={p} size={48} />
+                    <div style={{ flex: 1 }}>
+                      <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>{p.name}</div>
+                      <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        {p.categoryName || '—'}{p.sku ? ` · SKU: ${p.sku}` : ''}
+                      </div>
                     </div>
-                  </td>
-                  <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{product.category}</td>
-                  <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{product.price}</td>
-                  <td style={{ padding: '12px 16px', fontSize: '13px' }}>
-                    <span style={{ color: product.inventory === 0 ? '#DC2626' : 'var(--text-primary)' }}>
-                      {product.inventory} in stock
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <span 
-                      className="text-tag"
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        background: `${getStatusColor(product.status)}20`,
-                        color: getStatusColor(product.status),
-                        fontSize: '12px',
-                        fontWeight: 500,
-                      }}
-                    >
-                      {getStatusLabel(product.status)}
-                    </span>
-                  </td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                    <button
-                      onClick={() => onNavigate?.('products-edit')}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 12px',
-                        background: 'var(--bg-card-subtle)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-field)',
-                        color: 'var(--text-primary)',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--bg-app)';
-                        e.currentTarget.style.borderColor = 'var(--border-primary)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--bg-card-subtle)';
-                        e.currentTarget.style.borderColor = 'var(--border-subtle)';
-                      }}
-                    >
-                      <Edit size={16} />
-                      Edit
-                    </button>
-                  </td>
-                </tr>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <div>
+                      <span className="text-small" style={{ fontWeight: 500 }}>{formatMoney(p.price, currency)}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>{p.stock} in stock · {p.unitsSold} sold</span>
+                    </div>
+                    <StatusTag p={p} />
+                  </div>
+                  <button
+                    onClick={() => onEditProduct?.(p.id)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px',
+                      background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)',
+                      color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
+                    }}
+                  >
+                    <Edit size={16} />
+                    Edit Product
+                  </button>
+                </div>
               ))}
-            </tbody>
-          </table>
-
-          {filteredProducts.length === 0 && (
-            <div style={{ 
-              padding: '48px 24px', 
-              textAlign: 'center', 
-              color: 'var(--text-muted)' 
-            }}>
-              No products found
             </div>
-          )}
-        </div>
 
-        {/* Mobile Cards */}
-        <div className="mobile-cards" style={{ display: 'none' }}>
-          {filteredProducts.map((product) => (
-            <div 
-              key={product.id}
-              style={{ 
-                padding: '16px',
-                borderRadius: '8px',
-                background: 'var(--bg-card-subtle)',
-                marginBottom: '12px',
-              }}
-            >
-              <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
-                <div
-                  style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '8px',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-subtle)',
-                    flexShrink: 0,
-                  }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>{product.name}</div>
-                  <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{product.category}</div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <div>
-                  <span className="text-small" style={{ fontWeight: 500 }}>{product.price}</span>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>
-                    {product.inventory} in stock
-                  </span>
-                </div>
-                <span 
-                  className="text-tag"
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    background: `${getStatusColor(product.status)}20`,
-                    color: getStatusColor(product.status),
-                    fontSize: '12px',
-                    fontWeight: 500,
-                  }}
-                >
-                  {getStatusLabel(product.status)}
-                </span>
-              </div>
-              <button
-                onClick={() => onNavigate?.('products-edit')}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '8px',
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  color: 'var(--text-primary)',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <Edit size={16} />
-                Edit Product
-              </button>
-            </div>
-          ))}
-        </div>
-
-        <style>{`
-          @media (max-width: 767px) {
-            .desktop-table {
-              display: none !important;
-            }
-            .mobile-cards {
-              display: block !important;
-            }
-          }
-        `}</style>
+            <style>{`
+              @media (max-width: 767px) {
+                .desktop-table { display: none !important; }
+                .mobile-cards { display: block !important; }
+              }
+            `}</style>
+          </>
+        )}
       </Card>
 
-      {/* Pagination */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginTop: '16px',
-        padding: '0 8px'
-      }}>
-        <span className="text-small" style={{ color: 'var(--text-secondary)' }}>
-          Total {filteredProducts.length} products
-        </span>
-      </div>
+      {!loading && !error && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '0 8px' }}>
+          <span className="text-small" style={{ color: 'var(--text-secondary)' }}>Total {filtered.length} products</span>
+        </div>
+      )}
     </div>
   );
 }
