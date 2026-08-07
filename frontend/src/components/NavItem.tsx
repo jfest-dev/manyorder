@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { LucideIcon, ChevronDown } from 'lucide-react';
 
 interface NavItemProps {
@@ -9,45 +9,31 @@ interface NavItemProps {
   subItems?: { label: string; id: string }[];
   activeSubItem?: string;
   onSubItemClick?: (id: string) => void;
+  // Expansion is controlled by the Sidebar so multiple submenus can stay open
+  // independently (each toggles only via its own header — no click-outside close).
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
-export function NavItem({ 
-  icon: Icon, 
-  label, 
-  active, 
-  onClick, 
+export function NavItem({
+  icon: Icon,
+  label,
+  active,
+  onClick,
   subItems,
   activeSubItem,
-  onSubItemClick 
+  onSubItemClick,
+  isExpanded = false,
+  onToggleExpand,
 }: NavItemProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  // Keep the latest expanded state in a ref so the always-on listener below
-  // reads it without needing to re-subscribe on every toggle.
-  const expandedRef = useRef(isExpanded);
-  expandedRef.current = isExpanded;
 
   const handleMainClick = () => {
     if (subItems) {
-      setIsExpanded(!isExpanded);
+      onToggleExpand?.();
     }
     onClick?.();
   };
-
-  // Collapse the submenu when the user clicks anywhere outside this item. The
-  // listener is registered once and always on (guarded by the ref), so it can
-  // never miss a menu that was already open — this is what keeps the behavior
-  // consistent across every expandable nav item.
-  useEffect(() => {
-    const onDocPointerDown = (e: MouseEvent) => {
-      if (expandedRef.current && rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setIsExpanded(false);
-      }
-    };
-    document.addEventListener('mousedown', onDocPointerDown);
-    return () => document.removeEventListener('mousedown', onDocPointerDown);
-  }, []);
 
   const isAnySubItemActive = subItems?.some(item => item.id === activeSubItem);
   const isActive = active || isAnySubItemActive;
@@ -66,7 +52,7 @@ export function NavItem({
       : 'var(--text-secondary)';
 
   return (
-    <div ref={rootRef}>
+    <div>
       <button
         onClick={handleMainClick}
         onMouseEnter={() => setIsHovered(true)}

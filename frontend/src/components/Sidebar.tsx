@@ -35,6 +35,17 @@ export function Sidebar({
   dropdownOpenRef.current = showStoreDropdown;
   const activeStore = stores.find(s => s.id === activeStoreId) || stores[0];
 
+  // Which submenu sections are expanded. A set so multiple can stay open at
+  // once — each toggles only via its own header (no click-outside close).
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const toggleSection = (key: string) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
   // Close the store switcher when clicking anywhere outside it. Always-on
   // listener (guarded by the ref) so it can't miss an already-open dropdown.
   useEffect(() => {
@@ -341,6 +352,8 @@ export function Sidebar({
               subItems={orderSubItems}
               activeSubItem={activeItem}
               onSubItemClick={handleOrderSubItem}
+              isExpanded={openSections.has('orders')}
+              onToggleExpand={() => toggleSection('orders')}
             />
 
             <NavItem
@@ -351,6 +364,8 @@ export function Sidebar({
               subItems={productSubItems}
               activeSubItem={activeItem}
               onSubItemClick={handleProductSubItem}
+              isExpanded={openSections.has('products')}
+              onToggleExpand={() => toggleSection('products')}
             />
 
             <NavItem
@@ -375,6 +390,8 @@ export function Sidebar({
               subItems={storeSubItems}
               activeSubItem={activeItem}
               onSubItemClick={handleStoreSubItem}
+              isExpanded={openSections.has('stores')}
+              onToggleExpand={() => toggleSection('stores')}
             />
 
             <div style={{ margin: '16px 0', borderTop: '1px solid var(--border-subtle)' }} />
