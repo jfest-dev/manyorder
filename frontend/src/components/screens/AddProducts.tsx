@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, Upload, X, Check, Package } from 'lucide-react';
-import { FieldInput, FieldSelect } from '../Field';
+import { FieldInput } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
+import { CategorySelect } from '../CategorySelect';
 import { formatMoney, currencySymbol, priceLimits } from '../../lib/currency';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
-import { productsApi, categoriesApi, CreateProductPayload, CategoryResponse, ApiError } from '../../lib/api';
+import { productsApi, CreateProductPayload, ApiError } from '../../lib/api';
 
 interface Product {
   id: string; // local form id
@@ -25,16 +26,19 @@ interface Product {
 type FieldErrors = { name?: string; price?: string; quantity?: string };
 
 interface AddProductsProps {
-  /** Present in the dashboard: products are created on the backend. Absent in
-   *  onboarding step 2, where products are drafted locally via onComplete. */
-  storeId?: number;
+  /** The store products are created against. Always present now — onboarding
+   *  step 2 creates the store up front, so it uses the same backend flow as the
+   *  dashboard rather than a separate local-draft path. */
+  storeId: number;
   storeName?: string;
   storeLink?: string;
   storeColor?: string;
   currency?: string;
   showHeader?: boolean;
   onNavigate?: (screen: string) => void;
-  onComplete?: (products: any[]) => void;
+  /** Onboarding only: shown as a "Finish setup → dashboard" action (products are
+   *  already persisted as they're added). Absent in the dashboard. */
+  onFinish?: () => void;
 }
 
 const blank = (id: string): Product => ({
@@ -49,25 +53,13 @@ export function AddProducts({
   currency = 'sgd',
   showHeader = true,
   onNavigate,
-  onComplete,
+  onFinish,
 }: AddProductsProps) {
   const [products, setProducts] = useState<Product[]>([blank('1')]);
   const [saved, setSaved] = useState<Record<string, boolean>>({}); // form id -> created/added
   const [savingId, setSavingId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, FieldErrors>>({});
   const [formError, setFormError] = useState<Record<string, string>>({});
-  const [categories, setCategories] = useState<CategoryResponse[]>([]);
-
-  // Categories are per-store; only available in the dashboard (storeId present).
-  useEffect(() => {
-    if (storeId == null) return;
-    categoriesApi.list(storeId).then(setCategories).catch(() => setCategories([]));
-  }, [storeId]);
-
-  const categoryOptions = useMemo(
-    () => categories.map((c) => ({ value: String(c.id), label: c.name })),
-    [categories],
-  );
 
   const limits = priceLimits(currency);
 
@@ -135,12 +127,6 @@ export function AddProducts({
     const errs = validateProduct(product);
     setErrors((prev) => ({ ...prev, [product.id]: errs }));
     if (hasErrors(errs)) return;
-
-    // Onboarding (no storeId): keep the local draft behavior.
-    if (storeId == null) {
-      setSaved((s) => ({ ...s, [product.id]: true }));
-      return;
-    }
 
     setSavingId(product.id);
     setFormError((s) => { const n = { ...s }; delete n[product.id]; return n; });
@@ -226,31 +212,11 @@ export function AddProducts({
 
                     <FieldInput label="Product Name" placeholder="Iced White" value={product.name} onChange={(v) => update(product.id, 'name', v)} maxLength={60} error={errors[product.id]?.name} />
                     <FieldInput label="Description" placeholder="250ml - Signature" value={product.description} onChange={(v) => update(product.id, 'description', v)} helperText="Brief description or variant info" maxLength={100} multiline />
-                    {storeId != null && (
-                      <div>
-                        <FieldSelect
-                          label="Category"
-                          placeholder="No category"
-                          options={categoryOptions}
-                          value={product.categoryId}
-                          onChange={(v) => update(product.id, 'categoryId', v)}
-                        />
-                        {categoryOptions.length === 0 && (
-                          <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
-                            No categories yet.{' '}
-                            {onNavigate && (
-                              <button
-                                type="button"
-                                onClick={() => onNavigate('products-categories')}
-                                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', textDecoration: 'underline', font: 'inherit' }}
-                              >
-                                Create one
-                              </button>
-                            )}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    <CategorySelect
+                      storeId={storeId}
+                      value={product.categoryId}
+                      onChange={(v) => update(product.id, 'categoryId', v)}
+                    />
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                       <FieldInput label="Price" placeholder="5.50" prefix={currencySymbol(currency)} type="number" min={limits.min} max={limits.max} step={limits.step} value={product.price} onChange={(v) => update(product.id, 'price', v)} error={errors[product.id]?.price} />
@@ -301,9 +267,9 @@ export function AddProducts({
               </div>
             </Button>
 
-            {onComplete ? (
-              <Button fullWidth onClick={() => onComplete(savedList)}>
-                Finish setup → Go to dashboard ({savedList.length} products)
+            {onFinish ? (
+              <Button fullWidth onClick={onFinish}>
+                Finish setup → Go to dashboard ({savedList.length} {savedList.length === 1 ? 'product' : 'products'})
               </Button>
             ) : (
               savedList.length > 0 && (

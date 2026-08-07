@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload, X, ArrowLeft } from 'lucide-react';
-import { FieldInput, FieldSelect } from '../Field';
+import { FieldInput } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
+import { CategorySelect } from '../CategorySelect';
 import { formatMoney, currencySymbol } from '../../lib/currency';
 import { styledSelect } from '../../lib/selectStyle';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
-import { productsApi, categoriesApi, UpdateProductPayload, CategoryResponse, ApiError } from '../../lib/api';
+import { productsApi, UpdateProductPayload, ApiError } from '../../lib/api';
 
 interface EditProductProps {
   storeId: number;
@@ -34,7 +35,7 @@ export function EditProduct({
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(''); // '' = no category
-  const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [categoryName, setCategoryName] = useState(''); // resolved name, for the preview badge
   const [stock, setStock] = useState('');
   const [sku, setSku] = useState('');
   const [status, setStatus] = useState<'active' | 'draft'>('active');
@@ -81,10 +82,6 @@ export function EditProduct({
     return () => { cancelled = true; };
   }, [storeId, productId]);
 
-  useEffect(() => {
-    categoriesApi.list(storeId).then(setCategories).catch(() => setCategories([]));
-  }, [storeId]);
-
   // Live object-URL preview for a newly picked file.
   useEffect(() => {
     if (!photoFile) { setPhotoPreview(''); return; }
@@ -109,8 +106,6 @@ export function EditProduct({
     setPhotoUrl(''); // cleared; the save sends photoUrl:'' so the server deletes it
   };
 
-  const categoryOptions = categories.map((c) => ({ value: String(c.id), label: c.name }));
-  const categoryName = categories.find((c) => String(c.id) === categoryId)?.name ?? '';
 
   const handleSave = async () => {
     setError(null);
@@ -233,27 +228,12 @@ export function EditProduct({
 
               <FieldInput label="Product Name" placeholder="Wireless Headphones" value={name} onChange={setName} required />
               <FieldInput label="Description" placeholder="Short description" value={description} onChange={setDescription} helperText="Brief description or variant info" />
-              <div>
-                <FieldSelect
-                  label="Category"
-                  placeholder="No category"
-                  options={categoryOptions}
-                  value={categoryId}
-                  onChange={setCategoryId}
-                />
-                {categoryOptions.length === 0 && (
-                  <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
-                    No categories yet.{' '}
-                    <button
-                      type="button"
-                      onClick={() => onNavigate?.('products-categories')}
-                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-primary)', textDecoration: 'underline', font: 'inherit' }}
-                    >
-                      Create one
-                    </button>
-                  </p>
-                )}
-              </div>
+              <CategorySelect
+                storeId={storeId}
+                value={categoryId}
+                onChange={setCategoryId}
+                onCategoryName={(n) => setCategoryName(n ?? '')}
+              />
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <FieldInput label="Price" placeholder="8.50" prefix={currencySymbol(currency)} type="number" value={price} onChange={setPrice} required />
