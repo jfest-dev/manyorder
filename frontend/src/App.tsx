@@ -204,6 +204,11 @@ function MerchantApp() {
   // can't be serialized) so it survives the step 1 → step 2 transition and is
   // uploaded only when the store is actually created.
   const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
+  // The store is created for real when step 1 completes (so step 2 saves real
+  // products against a real store, the same flow as the dashboard). Its id is
+  // held here so a Back to step 1 updates that store instead of creating a
+  // second one, and so step 2 can render against it.
+  const [onboardingStoreId, setOnboardingStoreId] = useState<string | null>(null);
 
   // --- Screen <-> URL sync (single-route screen-switcher) ---
   // State is the source of truth for what's rendered; the URL mirrors it so a
@@ -331,33 +336,61 @@ function MerchantApp() {
     return toStore(created);
   };
 
-  // Onboarding step 1 -> stash draft locally + hold the logo pick, continue to
-  // the products step. The File is kept in React state (the draft can't hold it).
-  const handleOnboardingStoreDraft = (data: DraftStore & { logoFile?: File | null }) => {
-    const { logoFile, ...store } = data;
-    setDraft({ store, products: [] });
-    setPendingLogoFile(logoFile ?? null);
-    setActiveScreen('onboarding-2');
+  // Re-entry from step 2 -> step 1 -> Continue: update the store we already
+  // created rather than creating a second one. The logo is only re-uploaded when
+  // a genuinely new file was picked (CreateStore re-emits the same File reference
+  // when the logo is untouched, so reference-equality detects a real change).
+  const updateStoreOnServer = async (storeId: string, draft: DraftStore, logoFile?: File | null): Promise<Store> => {
+    let logoUrl: string | undefined;
+    if (logoFile && logoFile !== pendingLogoFile) {
+      logoUrl = (await uploadsApi.logo(logoFile)).url;
+    }
+    const updated = await storesApi.update(Number(storeId), {
+      storeName: draft.name?.trim() || '',
+      slug: draft.storeLink?.trim() ? slugify(draft.storeLink) : undefined,
+      businessType: draft.category || undefined,
+      currency: (draft.currency || 'sgd').toUpperCase(),
+      themeColor: draft.color || '#000000',
+      storePhone: draft.phone || undefined,
+      logoUrl, // undefined leaves the existing logo unchanged
+    });
+    return toStore(updated);
   };
 
-  // Onboarding step 2 (or skip) -> create the store for real.
-  const finalizeOnboarding = async () => {
-    const draft = getDraft();
-    if (!draft) {
-      setActiveScreen('dashboard');
-      return;
-    }
+  // Onboarding step 1 -> create the store for real now, then continue to the
+  // products step so it saves real products against a real store (the same flow
+  // as the dashboard). A Back + Continue updates that store, never duplicating it.
+  const handleOnboardingStoreDraft = async (data: DraftStore & { logoFile?: File | null }) => {
+    const { logoFile, ...store } = data;
+    // Persist the store fields locally so a Back to step 1 repopulates the form.
+    setDraft({ store, products: [] });
     try {
-      const newStore = await createStoreOnServer(draft.store, pendingLogoFile);
-      clearDraft(); // drafted products are wired to the Products API in Batch 2
-      setPendingLogoFile(null);
-      setStores((prev) => [...prev, newStore]);
-      setActiveStoreId(newStore.id);
-      setActiveScreen('dashboard');
+      if (onboardingStoreId) {
+        const updated = await updateStoreOnServer(onboardingStoreId, store, logoFile);
+        setStores((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+        setActiveStoreId(updated.id);
+        if (logoFile) setPendingLogoFile(logoFile);
+      } else {
+        const created = await createStoreOnServer(store, logoFile);
+        setOnboardingStoreId(created.id);
+        setStores((prev) => [...prev, created]);
+        setActiveStoreId(created.id);
+        setPendingLogoFile(logoFile ?? null);
+      }
+      setActiveScreen('onboarding-2');
     } catch (e: any) {
+      // Stay on step 1 and surface the error (e.g. 409 slug already taken).
       alert(e instanceof ApiError ? e.message : 'Store create failed. Check console.');
-      if (e instanceof ApiError && e.status === 409) setActiveScreen('onboarding-1');
     }
+  };
+
+  // Onboarding done (Skip or Finish): the store and any products are already
+  // persisted, so this just clears the draft state and lands on the dashboard.
+  const finalizeOnboarding = () => {
+    clearDraft();
+    setPendingLogoFile(null);
+    setOnboardingStoreId(null);
+    setActiveScreen('dashboard');
   };
 
   // In-dashboard Create Store (stores 2-3) -> no products step, create directly.
@@ -436,21 +469,21 @@ function MerchantApp() {
         );
 
       case 'onboarding-2':
-        return (
+        return activeStore ? (
           <OnboardingStep2 onSkip={finalizeOnboarding} onBack={() => setActiveScreen('onboarding-1')}>
             <AddProducts
-              storeName={getDraft()?.store?.name || ''}
-              storeLink={getDraft()?.store?.storeLink || ''}
-              storeColor={getDraft()?.store?.color || '#000000'}
-              currency={getDraft()?.store?.currency || 'sgd'}
+              storeId={Number(activeStore.id)}
+              storeName={activeStore.name}
+              storeLink={activeStore.slug}
+              storeColor={activeStore.color}
+              currency={activeStore.currency}
               showHeader={false}
-              onComplete={(products) => {
-                const draft = getDraft();
-                if (draft) setDraft({ ...draft, products });
-                finalizeOnboarding();
-              }}
+              onNavigate={navigateScreen as any}
+              onFinish={finalizeOnboarding}
             />
           </OnboardingStep2>
+        ) : (
+          <Dashboard />
         );
 
       case 'orders-all':
