@@ -29,6 +29,15 @@ import jakarta.validation.Valid;
 @RequestMapping("/merchant/stores")
 public class MerchantStoreController {
 
+    /**
+     * Slugs that would shadow an app route (the storefront lives at the root path
+     * {@code manyorder.app/{slug}}). Reserved so a store link can never collide
+     * with a real page. Existing store slugs were checked and none collide.
+     */
+    private static final java.util.Set<String> RESERVED_SLUGS = java.util.Set.of(
+            "signin", "register", "login", "logout", "forgot-password", "reset-password",
+            "app", "admin", "api", "public", "storefront", "assets", "static");
+
     private final MerchantRepository merchantRepository;
     private final CurrentUserService currentUserService;
     private final StoreAccessService storeAccessService;
@@ -83,6 +92,7 @@ public class MerchantStoreController {
         merchant.setLogoUrl(request.getLogoUrl());
         merchant.setStoreDescription(request.getStoreDescription());
         merchant.setPaymentInstruction(request.getPaymentInstruction());
+        merchant.setDeliveryFee(request.getDeliveryFee());
 
         merchantRepository.save(merchant);
         return new StoreResponse(merchant);
@@ -101,6 +111,7 @@ public class MerchantStoreController {
         }
         if (request.getSlug() != null && !request.getSlug().isBlank()) {
             String slug = request.getSlug().trim().toLowerCase();
+            ensureSlugAllowed(slug);
             if (!slug.equals(merchant.getSlug()) && merchantRepository.existsBySlug(slug)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Store link already taken. Please choose another.");
@@ -126,6 +137,7 @@ public class MerchantStoreController {
         }
         if (request.getStoreDescription() != null) merchant.setStoreDescription(request.getStoreDescription());
         if (request.getPaymentInstruction() != null) merchant.setPaymentInstruction(request.getPaymentInstruction());
+        if (request.getDeliveryFee() != null) merchant.setDeliveryFee(request.getDeliveryFee());
         if (request.getStreetAddress() != null) merchant.setStreetAddress(request.getStreetAddress());
         if (request.getCity() != null) merchant.setCity(request.getCity());
         if (request.getPostalCode() != null) merchant.setPostalCode(request.getPostalCode());
@@ -193,18 +205,28 @@ public class MerchantStoreController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Store link cannot be empty");
         }
         if (requested != null && !requested.isBlank()) {
+            ensureSlugAllowed(base);
             if (merchantRepository.existsBySlug(base)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Store link already taken. Please choose another.");
             }
             return base;
         }
+        // Auto-derived from the name: skip reserved words too, and de-dupe.
         String candidate = base;
         int suffix = 2;
-        while (merchantRepository.existsBySlug(candidate)) {
+        while (merchantRepository.existsBySlug(candidate) || RESERVED_SLUGS.contains(candidate)) {
             candidate = base + "-" + suffix++;
         }
         return candidate;
+    }
+
+    /** Reject a slug that would shadow an app route (see {@link #RESERVED_SLUGS}). */
+    private void ensureSlugAllowed(String slug) {
+        if (RESERVED_SLUGS.contains(slug)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "That store link is reserved. Please choose another.");
+        }
     }
 
     private String normalizeCurrency(String raw) {

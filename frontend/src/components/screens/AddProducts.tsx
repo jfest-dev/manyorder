@@ -5,6 +5,7 @@ import { Button } from '../Button';
 import { Card } from '../Card';
 import { CategorySelect } from '../CategorySelect';
 import { formatMoney, currencySymbol, priceLimits } from '../../lib/currency';
+import { formatPreorderReady } from '../../lib/datetime';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { productsApi, CreateProductPayload, ApiError } from '../../lib/api';
 
@@ -18,6 +19,8 @@ interface Product {
   sku: string;
   preOrder: boolean;
   readyDate: string;
+  readyTimeStart: string;
+  readyTimeEnd: string;
   note: string;
   photoFile?: File;
   photoPreview?: string;
@@ -43,7 +46,7 @@ interface AddProductsProps {
 
 const blank = (id: string): Product => ({
   id, name: '', price: '', description: '', categoryId: '', quantity: '',
-  sku: '', preOrder: false, readyDate: '', note: '', photoFile: undefined, photoPreview: undefined,
+  sku: '', preOrder: false, readyDate: '', readyTimeStart: '', readyTimeEnd: '', note: '', photoFile: undefined, photoPreview: undefined,
 });
 
 export function AddProducts({
@@ -140,6 +143,8 @@ export function AddProducts({
         sku: product.sku.trim() || undefined,
         preOrder: product.preOrder,
         preOrderReadyDate: product.preOrder && product.readyDate ? product.readyDate : undefined,
+        preOrderReadyTimeStart: product.preOrder && product.readyTimeStart ? product.readyTimeStart : undefined,
+        preOrderReadyTimeEnd: product.preOrder && product.readyTimeEnd ? product.readyTimeEnd : undefined,
         preOrderNote: product.preOrder && product.note.trim() ? product.note.trim() : undefined,
       };
       const created = await productsApi.create(storeId, payload);
@@ -241,6 +246,18 @@ export function AddProducts({
                             <input type="date" value={product.readyDate} onChange={(e) => update(product.id, 'readyDate', e.target.value)}
                               style={{ height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
                           </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <div>
+                              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ready from (optional)</label>
+                              <input type="time" value={product.readyTimeStart} onChange={(e) => update(product.id, 'readyTimeStart', e.target.value)}
+                                style={{ width: '100%', height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
+                            </div>
+                            <div>
+                              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ready until (optional)</label>
+                              <input type="time" value={product.readyTimeEnd} onChange={(e) => update(product.id, 'readyTimeEnd', e.target.value)}
+                                style={{ width: '100%', height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
+                            </div>
+                          </div>
                           <FieldInput label="Pre-order note" placeholder="e.g. Ships early September" value={product.note} onChange={(v) => update(product.id, 'note', v)} />
                         </div>
                       )}
@@ -309,7 +326,7 @@ export function AddProducts({
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827' }}>{p.name}</div>
-                        {p.preOrder && <div style={{ fontSize: '9px', color: '#92400E' }}>Pre-order{p.readyDate ? ` · ${p.readyDate}` : ''}</div>}
+                        {p.preOrder && (() => { const r = formatPreorderReady(p.readyDate, p.readyTimeStart, p.readyTimeEnd); return <div style={{ fontSize: '9px', color: '#92400E' }}>Pre-order{r ? ` · ${r}` : ''}</div>; })()}
                       </div>
                       <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', flexShrink: 0 }}>{formatMoney(parseFloat(p.price) || 0, currency)}</div>
                     </div>

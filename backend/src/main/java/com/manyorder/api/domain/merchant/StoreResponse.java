@@ -1,5 +1,6 @@
 package com.manyorder.api.domain.merchant;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class StoreResponse {
@@ -15,6 +16,8 @@ public class StoreResponse {
     private String logoUrl;
     private String storeDescription;
     private String paymentInstruction;
+    private BigDecimal deliveryFee;
+    private boolean whatsappVerified;
     private String streetAddress;
     private String city;
     private String postalCode;
@@ -36,6 +39,8 @@ public class StoreResponse {
         this.logoUrl = m.getLogoUrl();
         this.storeDescription = m.getStoreDescription();
         this.paymentInstruction = m.getPaymentInstruction();
+        this.deliveryFee = m.getDeliveryFee();
+        this.whatsappVerified = m.isWhatsappVerified();
         this.streetAddress = m.getStreetAddress();
         this.city = m.getCity();
         this.postalCode = m.getPostalCode();
@@ -57,6 +62,8 @@ public class StoreResponse {
     public String getLogoUrl() { return logoUrl; }
     public String getStoreDescription() { return storeDescription; }
     public String getPaymentInstruction() { return paymentInstruction; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public boolean isWhatsappVerified() { return whatsappVerified; }
     public String getStreetAddress() { return streetAddress; }
     public String getCity() { return city; }
     public String getPostalCode() { return postalCode; }

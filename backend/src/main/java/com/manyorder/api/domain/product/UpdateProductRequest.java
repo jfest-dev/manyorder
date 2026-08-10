@@ -2,6 +2,7 @@ package com.manyorder.api.domain.product;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -28,6 +29,8 @@ public class UpdateProductRequest {
 
     private Boolean preOrder;
     private LocalDate preOrderReadyDate;
+    private LocalTime preOrderReadyTimeStart;
+    private LocalTime preOrderReadyTimeEnd;
     private String preOrderNote;
 
     public UpdateProductRequest() {}
@@ -50,6 +53,10 @@ public class UpdateProductRequest {
     public void setPreOrder(Boolean preOrder) { this.preOrder = preOrder; }
     public LocalDate getPreOrderReadyDate() { return preOrderReadyDate; }
     public void setPreOrderReadyDate(LocalDate preOrderReadyDate) { this.preOrderReadyDate = preOrderReadyDate; }
+    public LocalTime getPreOrderReadyTimeStart() { return preOrderReadyTimeStart; }
+    public void setPreOrderReadyTimeStart(LocalTime preOrderReadyTimeStart) { this.preOrderReadyTimeStart = preOrderReadyTimeStart; }
+    public LocalTime getPreOrderReadyTimeEnd() { return preOrderReadyTimeEnd; }
+    public void setPreOrderReadyTimeEnd(LocalTime preOrderReadyTimeEnd) { this.preOrderReadyTimeEnd = preOrderReadyTimeEnd; }
     public String getPreOrderNote() { return preOrderNote; }
     public void setPreOrderNote(String preOrderNote) { this.preOrderNote = preOrderNote; }
 }

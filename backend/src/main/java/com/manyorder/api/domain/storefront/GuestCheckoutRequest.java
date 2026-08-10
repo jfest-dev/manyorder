@@ -26,6 +26,14 @@ public class GuestCheckoutRequest {
 
     private String deliveryAddress;
 
+    private String notes;
+
+    /** For the merchant's reference only, e.g. PayNow / Cash / Bank Transfer. */
+    private String paymentMethod;
+
+    /** Optional voucher code entered at checkout. */
+    private String discountCode;
+
     @Valid
     @NotEmpty
     private List<ItemRequest> items;
@@ -44,6 +52,12 @@ public class GuestCheckoutRequest {
     public void setFulfilmentMethod(String fulfilmentMethod) { this.fulfilmentMethod = fulfilmentMethod; }
     public String getDeliveryAddress() { return deliveryAddress; }
     public void setDeliveryAddress(String deliveryAddress) { this.deliveryAddress = deliveryAddress; }
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+    public String getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    public String getDiscountCode() { return discountCode; }
+    public void setDiscountCode(String discountCode) { this.discountCode = discountCode; }
     public List<ItemRequest> getItems() { return items; }
     public void setItems(List<ItemRequest> items) { this.items = items; }
 

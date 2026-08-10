@@ -99,6 +99,8 @@ class ProductIntegrationTest extends IntegrationTestBase {
                                   "photoUrl": "https://res.cloudinary.com/x/image/upload/v1/manyorder/1/9/products/1/a.png",
                                   "preOrder": true,
                                   "preOrderReadyDate": "2026-09-01",
+                                  "preOrderReadyTimeStart": "14:00",
+                                  "preOrderReadyTimeEnd": "18:00",
                                   "preOrderNote": "Ships in September"
                                 }
                                 """.formatted(categoryId)))
@@ -111,6 +113,8 @@ class ProductIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.photoUrl").value("https://res.cloudinary.com/x/image/upload/v1/manyorder/1/9/products/1/a.png"))
                 .andExpect(jsonPath("$.preOrder").value(true))
                 .andExpect(jsonPath("$.preOrderReadyDate").value("2026-09-01"))
+                .andExpect(jsonPath("$.preOrderReadyTimeStart").value(org.hamcrest.Matchers.startsWith("14:00")))
+                .andExpect(jsonPath("$.preOrderReadyTimeEnd").value(org.hamcrest.Matchers.startsWith("18:00")))
                 .andExpect(jsonPath("$.preOrderNote").value("Ships in September"))
                 .andExpect(jsonPath("$.unitsSold").value(0));
     }

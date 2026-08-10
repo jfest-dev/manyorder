@@ -11,6 +11,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.manyorder.api.domain.merchant.Merchant;
 import com.manyorder.api.domain.merchant.MerchantRepository;
+import com.manyorder.api.domain.order.OrderItemRepository;
+import com.manyorder.api.domain.order.OrderSource;
+import com.manyorder.api.domain.order.OrderStatus;
 import com.manyorder.api.domain.product.ProductResponse;
 import com.manyorder.api.domain.product.ProductService;
 
@@ -18,13 +21,20 @@ import com.manyorder.api.domain.product.ProductService;
 @RequestMapping("/public")
 public class StorefrontController {
 
+    /** An item counts as "sold" once its order is completed or delivered (matches ProductService). */
+    private static final List<OrderStatus> SOLD_STATUSES =
+            List.of(OrderStatus.COMPLETED, OrderStatus.DELIVERED);
+
     private final ProductService productService;
     private final MerchantRepository merchantRepository;
+    private final OrderItemRepository orderItemRepository;
 
     public StorefrontController(ProductService productService,
-                                MerchantRepository merchantRepository) {
+                                MerchantRepository merchantRepository,
+                                OrderItemRepository orderItemRepository) {
         this.productService = productService;
         this.merchantRepository = merchantRepository;
+        this.orderItemRepository = orderItemRepository;
     }
 
     /** Public store lookup by slug — powers the storefront and Sign In to Store branding. */
@@ -32,7 +42,11 @@ public class StorefrontController {
     public PublicStoreResponse getStoreBySlug(@PathVariable String slug) {
         Merchant merchant = merchantRepository.findBySlugAndArchivedAtIsNull(slug.toLowerCase())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
-        return new PublicStoreResponse(merchant);
+        // Public "sold" tally counts STOREFRONT orders only (manual dashboard
+        // orders don't inflate the number a customer sees).
+        long totalItemsSold = orderItemRepository.sumAllSoldByMerchantAndSource(
+                merchant, SOLD_STATUSES, OrderSource.STOREFRONT);
+        return new PublicStoreResponse(merchant, totalItemsSold);
     }
 
     @GetMapping("/storefront/{merchantId}/products")

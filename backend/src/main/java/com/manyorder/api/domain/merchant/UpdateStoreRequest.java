@@ -1,6 +1,10 @@
 package com.manyorder.api.domain.merchant;
 
+import java.math.BigDecimal;
+
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 /** PATCH semantics: null fields are left unchanged. */
 public class UpdateStoreRequest {
@@ -20,8 +24,14 @@ public class UpdateStoreRequest {
     /** Absolute logo URL from the upload endpoint. Empty string clears the logo; null leaves it unchanged. */
     private String logoUrl;
 
+    @Size(max = 200, message = "Store description must be 200 characters or fewer")
     private String storeDescription;
     private String paymentInstruction;
+
+    /** Flat delivery fee. Null leaves it unchanged; 0 means no fee (free delivery). */
+    @PositiveOrZero
+    private BigDecimal deliveryFee;
+
     private String streetAddress;
     private String city;
     private String postalCode;
@@ -52,6 +62,8 @@ public class UpdateStoreRequest {
     public void setStoreDescription(String storeDescription) { this.storeDescription = storeDescription; }
     public String getPaymentInstruction() { return paymentInstruction; }
     public void setPaymentInstruction(String paymentInstruction) { this.paymentInstruction = paymentInstruction; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
     public String getStreetAddress() { return streetAddress; }
     public void setStreetAddress(String streetAddress) { this.streetAddress = streetAddress; }
     public String getCity() { return city; }

@@ -5,6 +5,7 @@ import { Button } from '../Button';
 import { Card } from '../Card';
 import { CategorySelect } from '../CategorySelect';
 import { formatMoney, currencySymbol } from '../../lib/currency';
+import { formatPreorderReady } from '../../lib/datetime';
 import { styledSelect } from '../../lib/selectStyle';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { productsApi, UpdateProductPayload, ApiError } from '../../lib/api';
@@ -50,6 +51,8 @@ export function EditProduct({
   // Pre-order.
   const [preOrder, setPreOrder] = useState(false);
   const [preOrderReadyDate, setPreOrderReadyDate] = useState('');
+  const [preOrderReadyTimeStart, setPreOrderReadyTimeStart] = useState('');
+  const [preOrderReadyTimeEnd, setPreOrderReadyTimeEnd] = useState('');
   const [preOrderNote, setPreOrderNote] = useState('');
 
   const [saving, setSaving] = useState(false);
@@ -75,6 +78,8 @@ export function EditProduct({
         setPhotoUrl(p.photoUrl ?? '');
         setPreOrder(p.preOrder);
         setPreOrderReadyDate(p.preOrderReadyDate ?? '');
+        setPreOrderReadyTimeStart((p.preOrderReadyTimeStart ?? '').slice(0, 5)); // HH:mm for <input type=time>
+        setPreOrderReadyTimeEnd((p.preOrderReadyTimeEnd ?? '').slice(0, 5));
         setPreOrderNote(p.preOrderNote ?? '');
       })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof ApiError ? e.message : 'Could not load product'); })
@@ -133,6 +138,8 @@ export function EditProduct({
         photoUrl: finalPhotoUrl, // '' clears; unchanged is a no-op server-side
         preOrder,
         preOrderReadyDate: preOrder && preOrderReadyDate ? preOrderReadyDate : undefined,
+        preOrderReadyTimeStart: preOrder && preOrderReadyTimeStart ? preOrderReadyTimeStart : undefined,
+        preOrderReadyTimeEnd: preOrder && preOrderReadyTimeEnd ? preOrderReadyTimeEnd : undefined,
         preOrderNote: preOrder ? preOrderNote.trim() : undefined,
       };
       // Status maps to isActive via a dedicated call when it changes to draft/active.
@@ -268,6 +275,18 @@ export function EditProduct({
                       <input type="date" value={preOrderReadyDate} onChange={(e) => setPreOrderReadyDate(e.target.value)}
                         style={{ height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
                     </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ready from (optional)</label>
+                        <input type="time" value={preOrderReadyTimeStart} onChange={(e) => setPreOrderReadyTimeStart(e.target.value)}
+                          style={{ width: '100%', height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
+                      </div>
+                      <div>
+                        <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ready until (optional)</label>
+                        <input type="time" value={preOrderReadyTimeEnd} onChange={(e) => setPreOrderReadyTimeEnd(e.target.value)}
+                          style={{ width: '100%', height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
+                      </div>
+                    </div>
                     <FieldInput label="Pre-order note" placeholder="e.g. Ships early September" value={preOrderNote} onChange={setPreOrderNote} />
                   </div>
                 )}
@@ -318,11 +337,14 @@ export function EditProduct({
                   </div>
                   <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', flexShrink: 0 }}>{previewPrice}</div>
                 </div>
-                {preOrder && (
-                  <div style={{ marginTop: '12px', padding: '10px', background: '#FEF3C7', borderRadius: '6px', fontSize: '11px', color: '#92400E' }}>
-                    🕒 Pre-order{preOrderReadyDate ? ` — ready ${preOrderReadyDate}` : ''}{preOrderNote ? `. ${preOrderNote}` : ''}
-                  </div>
-                )}
+                {preOrder && (() => {
+                  const ready = formatPreorderReady(preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd);
+                  return (
+                    <div style={{ marginTop: '12px', padding: '10px', background: '#FEF3C7', borderRadius: '6px', fontSize: '11px', color: '#92400E' }}>
+                      🕒 Pre-order{ready ? ` — ready ${ready}` : ''}{preOrderNote ? `. ${preOrderNote}` : ''}
+                    </div>
+                  );
+                })()}
                 {!preOrder && status === 'draft' && (
                   <div style={{ marginTop: '12px', padding: '12px', background: '#FEF3C7', borderRadius: '6px', fontSize: '11px', color: '#92400E', textAlign: 'center' }}>
                     ⚠️ Draft — not visible to customers

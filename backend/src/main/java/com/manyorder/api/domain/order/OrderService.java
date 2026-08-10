@@ -85,17 +85,20 @@ public class OrderService {
         }
         orderRepository.save(order);
 
-        BigDecimal total = BigDecimal.ZERO;
+        BigDecimal subtotal = BigDecimal.ZERO;
         if (request.getItems() != null) {
             for (CreateMerchantOrderRequest.ItemRequest itemReq : request.getItems()) {
                 Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                 "Product not found in this store: " + itemReq.getProductId()));
                 orderItemRepository.save(new OrderItem(order, product, itemReq.getQuantity(), product.getPrice()));
-                total = total.add(product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())));
+                subtotal = subtotal.add(product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())));
             }
         }
-        order.setTotalAmount(total);
+        BigDecimal fee = request.getDeliveryFee() != null ? request.getDeliveryFee() : BigDecimal.ZERO;
+        order.setSubtotal(subtotal);
+        order.setDeliveryFee(fee);
+        order.setTotalAmount(subtotal.add(fee).max(BigDecimal.ZERO));
         return toResponse(orderRepository.save(order));
     }
 
@@ -136,16 +139,32 @@ public class OrderService {
             orderItemRepository.deleteAll(orderItemRepository.findByOrder(order));
             orderItemRepository.flush();
 
-            BigDecimal total = BigDecimal.ZERO;
+            BigDecimal subtotal = BigDecimal.ZERO;
             for (CreateMerchantOrderRequest.ItemRequest itemReq : request.getItems()) {
                 Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                                 "Product not found in this store: " + itemReq.getProductId()));
                 orderItemRepository.save(new OrderItem(order, product, itemReq.getQuantity(), product.getPrice()));
-                total = total.add(product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())));
+                subtotal = subtotal.add(product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())));
             }
-            order.setTotalAmount(total);
+            order.setSubtotal(subtotal);
         }
+
+        // Delivery fee override + total recompute. Legacy orders (pre-breakdown)
+        // stored a 0 subtotal but a real total, so derive their subtotal on the
+        // fly before recomputing, otherwise a fee edit would zero the total.
+        if (request.getDeliveryFee() != null) {
+            order.setDeliveryFee(request.getDeliveryFee());
+        }
+        BigDecimal subtotal = order.getSubtotal();
+        if (subtotal.signum() == 0 && order.getTotalAmount().signum() > 0) {
+            subtotal = order.getTotalAmount().add(order.getDiscountAmount()).subtract(order.getDeliveryFee());
+            order.setSubtotal(subtotal.max(BigDecimal.ZERO));
+        }
+        order.setTotalAmount(order.getSubtotal()
+                .add(order.getDeliveryFee())
+                .subtract(order.getDiscountAmount())
+                .max(BigDecimal.ZERO));
 
         return toResponse(orderRepository.save(order));
     }
@@ -274,6 +293,10 @@ public class OrderService {
                 order.getScheduledDate(),
                 order.getScheduledTime(),
                 order.getCreatedAt(),
+                order.getSubtotal(),
+                order.getDeliveryFee(),
+                order.getDiscountAmount(),
+                order.getDiscountCode(),
                 order.getTotalAmount(),
                 items);
     }

@@ -96,3 +96,8 @@ p, body {
 * {
   box-sizing: border-box;
 }
+
+/* Spinner keyframe (used by upload "Uploading…" indicators). */
+@keyframes mo-spin {
+  to { transform: rotate(360deg); }
+}

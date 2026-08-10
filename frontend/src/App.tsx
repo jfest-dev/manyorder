@@ -22,6 +22,7 @@ import { SignIn } from './components/screens/SignIn';
 import { CreateAccount } from './components/screens/CreateAccount';
 import { ForgotPassword } from './components/screens/ForgotPassword';
 import { ResetPassword } from './components/screens/ResetPassword';
+import { StorefrontApp } from './components/storefront/StorefrontApp';
 
 import { useAuth } from './context/AuthContext';
 import { ApiError, storesApi, uploadsApi, StoreResponse } from './lib/api';
@@ -647,6 +648,10 @@ export default function App() {
           </RequireAuth>
         }
       />
+      {/* Public storefront — customer-facing, no auth, no dashboard chrome.
+          Matched after the static routes above; a reserved-slug guard keeps
+          store links from shadowing them. */}
+      <Route path="/:slug/*" element={<StorefrontApp />} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
   );

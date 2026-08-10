@@ -1,8 +1,10 @@
 package com.manyorder.api.domain.order;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 
 /**
  * Edit an existing manual order (Edit Order). The store and order come from the
@@ -23,6 +25,10 @@ public class UpdateMerchantOrderRequest {
     private OrderType orderType;
     private String deliveryAddress;
     private String notes;
+
+    /** Per-order delivery fee override. Null leaves the current fee unchanged. */
+    @PositiveOrZero
+    private BigDecimal deliveryFee;
 
     /**
      * When present, replaces the order's line items (allowed only while
@@ -45,6 +51,8 @@ public class UpdateMerchantOrderRequest {
     public void setDeliveryAddress(String deliveryAddress) { this.deliveryAddress = deliveryAddress; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
     public List<CreateMerchantOrderRequest.ItemRequest> getItems() { return items; }
     public void setItems(List<CreateMerchantOrderRequest.ItemRequest> items) { this.items = items; }
 }

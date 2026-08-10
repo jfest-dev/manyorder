@@ -15,6 +15,7 @@ import com.manyorder.api.domain.category.CategoryRepository;
 import com.manyorder.api.domain.merchant.Merchant;
 import com.manyorder.api.domain.merchant.MerchantRepository;
 import com.manyorder.api.domain.order.OrderItemRepository;
+import com.manyorder.api.domain.order.OrderSource;
 import com.manyorder.api.domain.order.OrderStatus;
 import com.manyorder.api.domain.upload.CloudinaryImageService;
 
@@ -55,12 +56,17 @@ public class ProductService {
         return withUnitsSold(merchant, productRepository.findByMerchantAndIsActiveTrue(merchant));
     }
 
-    /** Public storefront path (no auth): id comes from the public URL. */
+    /**
+     * Public storefront path (no auth): id comes from the public URL. Public
+     * "sold" counts include STOREFRONT orders only, so a merchant can't inflate
+     * the numbers with manual dashboard orders. The merchant's own list keeps
+     * counting all sources (see {@link #withUnitsSold}).
+     */
     @Transactional(readOnly = true)
     public List<ProductResponse> getActiveProductsByMerchantId(Long merchantId) {
         Merchant merchant = merchantRepository.findById(merchantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
-        return getActiveProducts(merchant);
+        return withStorefrontUnitsSold(merchant, productRepository.findByMerchantAndIsActiveTrue(merchant));
     }
 
     @Transactional(readOnly = true)
@@ -81,6 +87,8 @@ public class ProductService {
         product.setPhotoUrl(isBlank(request.getPhotoUrl()) ? null : request.getPhotoUrl());
         product.setPreOrder(request.isPreOrder());
         product.setPreOrderReadyDate(request.getPreOrderReadyDate());
+        product.setPreOrderReadyTimeStart(request.getPreOrderReadyTimeStart());
+        product.setPreOrderReadyTimeEnd(request.getPreOrderReadyTimeEnd());
         product.setPreOrderNote(request.getPreOrderNote());
         return toResponse(productRepository.save(product));
     }
@@ -104,6 +112,8 @@ public class ProductService {
         if (request.getSku() != null) product.setSku(request.getSku());
         if (request.getPreOrder() != null) product.setPreOrder(request.getPreOrder());
         if (request.getPreOrderReadyDate() != null) product.setPreOrderReadyDate(request.getPreOrderReadyDate());
+        if (request.getPreOrderReadyTimeStart() != null) product.setPreOrderReadyTimeStart(request.getPreOrderReadyTimeStart());
+        if (request.getPreOrderReadyTimeEnd() != null) product.setPreOrderReadyTimeEnd(request.getPreOrderReadyTimeEnd());
         if (request.getPreOrderNote() != null) product.setPreOrderNote(request.getPreOrderNote());
 
         // Photo: empty string clears, null leaves unchanged. Remember the old URL
@@ -164,6 +174,17 @@ public class ProductService {
             map.put((Long) row[0], ((Number) row[1]).longValue());
         }
         return map;
+    }
+
+    /** Public variant: fold in units-sold counting STOREFRONT orders only. */
+    private List<ProductResponse> withStorefrontUnitsSold(Merchant merchant, List<Product> products) {
+        Map<Long, Long> sold = new HashMap<>();
+        for (Object[] row : orderItemRepository.sumSoldByMerchantAndSource(merchant, SOLD_STATUSES, OrderSource.STOREFRONT)) {
+            sold.put((Long) row[0], ((Number) row[1]).longValue());
+        }
+        return products.stream()
+                .map(p -> new ProductResponse(p, sold.getOrDefault(p.getId(), 0L)))
+                .toList();
     }
 
     /** Single-product response (units-sold via one focused query). */

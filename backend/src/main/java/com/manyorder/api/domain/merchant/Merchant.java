@@ -1,5 +1,6 @@
 package com.manyorder.api.domain.merchant;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import com.manyorder.api.domain.user.User;
@@ -62,6 +63,18 @@ public class Merchant {
     @Column(columnDefinition = "TEXT")
     private String paymentInstruction;
 
+    /** Optional flat delivery fee, applied to DELIVERY storefront orders. Null = none. */
+    private BigDecimal deliveryFee;
+
+    /**
+     * Whether the store's WhatsApp number has been verified as belonging to the
+     * merchant. Unused for now (we accept the entered number at this stage); the
+     * column exists so a future "send-to-verify" flow can set it without a
+     * migration. SQL default backfills existing rows.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean whatsappVerified = false;
+
     private String streetAddress;
     private String city;
     private String postalCode;
@@ -119,6 +132,10 @@ public class Merchant {
     public void setStoreDescription(String storeDescription) { this.storeDescription = storeDescription; }
     public String getPaymentInstruction() { return paymentInstruction; }
     public void setPaymentInstruction(String paymentInstruction) { this.paymentInstruction = paymentInstruction; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
+    public boolean isWhatsappVerified() { return whatsappVerified; }
+    public void setWhatsappVerified(boolean whatsappVerified) { this.whatsappVerified = whatsappVerified; }
     public String getStreetAddress() { return streetAddress; }
     public void setStreetAddress(String streetAddress) { this.streetAddress = streetAddress; }
     public String getCity() { return city; }

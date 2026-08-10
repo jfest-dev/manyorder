@@ -3,6 +3,7 @@ package com.manyorder.api.domain.product;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 public class ProductResponse {
 
@@ -19,6 +20,8 @@ public class ProductResponse {
     private final String photoUrl;
     private final boolean preOrder;
     private final LocalDate preOrderReadyDate;
+    private final LocalTime preOrderReadyTimeStart;
+    private final LocalTime preOrderReadyTimeEnd;
     private final String preOrderNote;
     /** Units sold, derived from order history (see ProductService). */
     private final long unitsSold;
@@ -38,6 +41,8 @@ public class ProductResponse {
         this.photoUrl = p.getPhotoUrl();
         this.preOrder = p.isPreOrder();
         this.preOrderReadyDate = p.getPreOrderReadyDate();
+        this.preOrderReadyTimeStart = p.getPreOrderReadyTimeStart();
+        this.preOrderReadyTimeEnd = p.getPreOrderReadyTimeEnd();
         this.preOrderNote = p.getPreOrderNote();
         this.unitsSold = unitsSold;
         this.createdAt = p.getCreatedAt();
@@ -56,6 +61,8 @@ public class ProductResponse {
     public String getPhotoUrl() { return photoUrl; }
     public boolean isPreOrder() { return preOrder; }
     public LocalDate getPreOrderReadyDate() { return preOrderReadyDate; }
+    public LocalTime getPreOrderReadyTimeStart() { return preOrderReadyTimeStart; }
+    public LocalTime getPreOrderReadyTimeEnd() { return preOrderReadyTimeEnd; }
     public String getPreOrderNote() { return preOrderNote; }
     public long getUnitsSold() { return unitsSold; }
     public LocalDateTime getCreatedAt() { return createdAt; }

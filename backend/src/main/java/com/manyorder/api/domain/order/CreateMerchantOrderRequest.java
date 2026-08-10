@@ -1,10 +1,12 @@
 package com.manyorder.api.domain.order;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 
 /** Manual order entry (Add Order). The store comes from the URL path, never the body. */
 public class CreateMerchantOrderRequest {
@@ -31,6 +33,10 @@ public class CreateMerchantOrderRequest {
 
     /** Address for DELIVERY orders. May be blank even for DELIVERY (fill in later via Edit). */
     private String deliveryAddress;
+
+    /** Optional per-order delivery fee. Null = none (0). */
+    @PositiveOrZero
+    private BigDecimal deliveryFee;
 
     public static class ItemRequest {
         @NotNull
@@ -67,4 +73,6 @@ public class CreateMerchantOrderRequest {
     public void setOrderType(OrderType orderType) { this.orderType = orderType; }
     public String getDeliveryAddress() { return deliveryAddress; }
     public void setDeliveryAddress(String deliveryAddress) { this.deliveryAddress = deliveryAddress; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
 }

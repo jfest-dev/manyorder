@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Upload, AlertTriangle, X } from 'lucide-react';
+import { Upload, AlertTriangle, X, Loader2 } from 'lucide-react';
 import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
 import { PasswordField } from '../PasswordField';
@@ -371,6 +371,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
             <div
               style={{
+                position: 'relative',
                 width: '72px', height: '72px', borderRadius: '50%',
                 background: (logoPreview || form.logoUrl) ? 'transparent' : (form.themeColor || '#000000'), color: 'white',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -381,6 +382,11 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
                 <img src={logoPreview || form.logoUrl} alt="Store logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 initials
+              )}
+              {savingKey === 'store' && pendingLogoFile && (
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Loader2 size={22} color="white" style={{ animation: 'mo-spin 0.8s linear infinite' }} />
+                </div>
               )}
             </div>
             <div>
@@ -482,7 +488,15 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
             </div>
             <div>
               <p className="text-small" style={{ fontWeight: 500, marginBottom: '6px' }}>Store Description</p>
-              <textarea style={textareaStyle} value={form.storeDescription || ''} onChange={(e) => set('storeDescription', e.target.value)} />
+              <textarea
+                style={textareaStyle}
+                maxLength={200}
+                value={form.storeDescription || ''}
+                onChange={(e) => set('storeDescription', e.target.value.slice(0, 200))}
+              />
+              <p className="text-xs" style={{ color: (form.storeDescription || '').length >= 200 ? '#B91C1C' : 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
+                {(form.storeDescription || '').length}/200
+              </p>
             </div>
           </div>
 

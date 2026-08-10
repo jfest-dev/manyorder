@@ -37,4 +37,37 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
             """)
     long sumSoldForProduct(@Param("product") Product product,
                            @Param("statuses") Collection<OrderStatus> statuses);
+
+    /** Total units sold across the whole store (all products, incl. now-inactive). */
+    @Query("""
+            SELECT COALESCE(SUM(oi.quantity), 0)
+            FROM OrderItem oi
+            WHERE oi.order.merchant = :merchant AND oi.order.status IN :statuses
+            """)
+    long sumAllSoldByMerchant(@Param("merchant") Merchant merchant,
+                              @Param("statuses") Collection<OrderStatus> statuses);
+
+    // --- Public (storefront-only) variants: exclude MANUAL orders so a merchant
+    //     can't inflate the public "sold" numbers from their own dashboard. ---
+
+    @Query("""
+            SELECT oi.product.id, SUM(oi.quantity)
+            FROM OrderItem oi
+            WHERE oi.order.merchant = :merchant AND oi.order.status IN :statuses
+              AND oi.order.source = :source
+            GROUP BY oi.product.id
+            """)
+    List<Object[]> sumSoldByMerchantAndSource(@Param("merchant") Merchant merchant,
+                                              @Param("statuses") Collection<OrderStatus> statuses,
+                                              @Param("source") OrderSource source);
+
+    @Query("""
+            SELECT COALESCE(SUM(oi.quantity), 0)
+            FROM OrderItem oi
+            WHERE oi.order.merchant = :merchant AND oi.order.status IN :statuses
+              AND oi.order.source = :source
+            """)
+    long sumAllSoldByMerchantAndSource(@Param("merchant") Merchant merchant,
+                                       @Param("statuses") Collection<OrderStatus> statuses,
+                                       @Param("source") OrderSource source);
 }

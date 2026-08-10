@@ -1,5 +1,7 @@
 // REST client for the ManyOrder Spring Boot API (replaces Supabase).
 
+import { downscaleImage } from './image';
+
 export const API_BASE: string =
   (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8080';
 
@@ -119,6 +121,8 @@ export interface ProductResponse {
   photoUrl: string | null;
   preOrder: boolean;
   preOrderReadyDate: string | null; // ISO yyyy-MM-dd
+  preOrderReadyTimeStart: string | null; // ISO HH:mm[:ss]
+  preOrderReadyTimeEnd: string | null;
   preOrderNote: string | null;
   unitsSold: number;
   createdAt: string;
@@ -134,6 +138,8 @@ export interface CreateProductPayload {
   photoUrl?: string;
   preOrder?: boolean;
   preOrderReadyDate?: string;
+  preOrderReadyTimeStart?: string; // 'HH:mm'
+  preOrderReadyTimeEnd?: string;
   preOrderNote?: string;
 }
 
@@ -147,6 +153,8 @@ export interface UpdateProductPayload {
   photoUrl?: string; // '' clears the photo
   preOrder?: boolean;
   preOrderReadyDate?: string;
+  preOrderReadyTimeStart?: string;
+  preOrderReadyTimeEnd?: string;
   preOrderNote?: string;
 }
 
@@ -162,6 +170,8 @@ export interface StoreResponse {
   logoUrl: string | null;
   storeDescription: string | null;
   paymentInstruction: string | null;
+  deliveryFee: number | null;
+  whatsappVerified: boolean;
   streetAddress: string | null;
   city: string | null;
   postalCode: string | null;
@@ -293,8 +303,10 @@ export const uploadsApi = {
    * and returns 400 (bad image), 401/403 (auth), or 503 (uploads unavailable).
    */
   logo: async (file: File): Promise<{ url: string }> => {
+    // Shrink before upload: a logo never needs a multi-MB original.
+    const upload = await downscaleImage(file, 512);
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', upload);
 
     const headers: Record<string, string> = {};
     const token = getToken();
@@ -386,8 +398,9 @@ export const productsApi = {
    * stores it under the product's folder; the caller then PATCHes photoUrl.
    */
   uploadPhoto: async (storeId: number, productId: number, file: File): Promise<{ url: string }> => {
+    const upload = await downscaleImage(file, 1024); // product photos: larger cap than logos
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', upload);
     const headers: Record<string, string> = {};
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -444,4 +457,87 @@ export const categoriesApi = {
 
   remove: (storeId: number, categoryId: number) =>
     request<void>(`/merchant/stores/${storeId}/categories/${categoryId}`, { method: 'DELETE' }),
+};
+
+// ---------- Public storefront (no auth) ----------
+
+export interface PublicStoreResponse {
+  id: number;
+  name: string;
+  slug: string;
+  storeDescription: string | null;
+  currency: string;
+  themeColor: string | null;
+  logoUrl: string | null;
+  phoneNumber: string | null;
+  paymentInstruction: string | null;
+  deliveryFee: number | null;
+  totalItemsSold: number;
+}
+
+export type FulfilmentMethod = 'PICKUP' | 'DELIVERY';
+
+export interface GuestCheckoutItem {
+  productId: number;
+  quantity: number;
+}
+
+export interface GuestCheckoutPayload {
+  merchantId: number;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  fulfilmentMethod: FulfilmentMethod;
+  deliveryAddress?: string;
+  notes?: string;
+  paymentMethod?: string;
+  discountCode?: string;
+  items: GuestCheckoutItem[];
+}
+
+export interface GuestCheckoutItemSummary {
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+export interface GuestCheckoutResult {
+  orderId: number;
+  storeName: string;
+  storePhone: string | null;
+  paymentInstruction: string | null;
+  paymentMethod: string | null;
+  customerName: string;
+  fulfilmentMethod: string;
+  deliveryAddress: string | null;
+  notes: string | null;
+  orderStatus: string;
+  paymentStatus: string;
+  subtotal: number;
+  deliveryFee: number;
+  discountAmount: number;
+  discountCode: string | null;
+  totalAmount: number;
+  createdAt: string;
+  items: GuestCheckoutItemSummary[];
+}
+
+export interface DiscountValidationResult {
+  code: string;
+  discountAmount: number;
+}
+
+export const storefrontApi = {
+  getStore: (slug: string) =>
+    request<PublicStoreResponse>(`/public/stores/${encodeURIComponent(slug)}`, { auth: false }),
+
+  getProducts: (merchantId: number) =>
+    request<ProductResponse[]>(`/public/storefront/${merchantId}/products`, { auth: false }),
+
+  checkout: (payload: GuestCheckoutPayload) =>
+    request<GuestCheckoutResult>(`/public/checkout`, { method: 'POST', body: payload, auth: false }),
+
+  validateDiscount: (payload: { merchantId: number; code: string; subtotal: number }) =>
+    request<DiscountValidationResult>(`/public/discounts/validate`, { method: 'POST', body: payload, auth: false }),
 };

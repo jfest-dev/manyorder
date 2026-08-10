@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FieldInput, FieldSelect } from '../Field';
 import { Button } from '../Button';
 import { Card } from '../Card';
-import { Upload, LogOut, Store, X } from 'lucide-react';
+import { Upload, LogOut, Store, X, Loader2 } from 'lucide-react';
 import { storeInitials } from '../../lib/initials';
 import { styledSelect } from '../../lib/selectStyle';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
@@ -116,6 +116,12 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
   // Business Name is the one required field (matches the backend's @NotBlank).
   const [nameError, setNameError] = useState<string | null>(null);
 
+  // Submit state — the logo re-encode + upload happens during this, so we show a
+  // clear "Uploading…" cue rather than letting it feel stuck.
+  const [submitting, setSubmitting] = useState(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
+
   // Keep a live object-URL preview for the current File, revoking the old one.
   useEffect(() => {
     if (!logoFile) {
@@ -146,23 +152,28 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
     setLogoError(null);
   };
 
-  const handleCreateStore = () => {
+  const handleCreateStore = async () => {
     if (!storeName.trim()) {
       setNameError('Business name is required.');
       return;
     }
-    onComplete({
-      name: storeName,
-      category,
-      color: selectedColor,
-      logoFile,
+    setSubmitting(true);
+    try {
+      await onComplete({
+        name: storeName,
+        category,
+        color: selectedColor,
+        logoFile,
 
-      // extra fields (won’t break App.tsx)
-      currency,
-      phone: `${countryCode}${phoneNumber}`,
-      storeLink,
-      storeLinkTouched,
-    });
+        // extra fields (won’t break App.tsx)
+        currency,
+        phone: `${countryCode}${phoneNumber}`,
+        storeLink,
+        storeLinkTouched,
+      });
+    } finally {
+      if (mountedRef.current) setSubmitting(false);
+    }
   };
 
   return (
@@ -202,6 +213,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                   {/* Avatar preview — the picked logo when set, else initials/colour. */}
                   <div
                     style={{
+                      position: 'relative',
                       width: '64px',
                       height: '64px',
                       borderRadius: '50%',
@@ -222,6 +234,11 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                       storeInitials(storeName)
                     ) : (
                       <Store size={26} color="white" />
+                    )}
+                    {submitting && logoFile && (
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Loader2 size={20} color="white" style={{ animation: 'mo-spin 0.8s linear infinite' }} />
+                      </div>
                     )}
                   </div>
 
@@ -404,8 +421,8 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
               </div>
 
               <div style={{ marginTop: '8px' }}>
-                <Button fullWidth onClick={handleCreateStore}>
-                  Create store
+                <Button fullWidth onClick={handleCreateStore} disabled={submitting}>
+                  {submitting ? (logoFile ? 'Uploading…' : 'Creating store…') : 'Create store'}
                 </Button>
               </div>
             </div>

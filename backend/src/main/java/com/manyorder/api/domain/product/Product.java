@@ -3,6 +3,7 @@ package com.manyorder.api.domain.product;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 import com.manyorder.api.domain.category.Category;
 import com.manyorder.api.domain.merchant.Merchant;
@@ -61,6 +62,10 @@ public class Product {
     private boolean preOrder = false;
 
     private LocalDate preOrderReadyDate;
+
+    /** Optional ready time window shown on the storefront (both required to show a range). */
+    private LocalTime preOrderReadyTimeStart;
+    private LocalTime preOrderReadyTimeEnd;
 
     private String preOrderNote;
 
@@ -140,6 +145,11 @@ public class Product {
 
     public LocalDate getPreOrderReadyDate() { return preOrderReadyDate; }
     public void setPreOrderReadyDate(LocalDate preOrderReadyDate) { this.preOrderReadyDate = preOrderReadyDate; }
+
+    public LocalTime getPreOrderReadyTimeStart() { return preOrderReadyTimeStart; }
+    public void setPreOrderReadyTimeStart(LocalTime preOrderReadyTimeStart) { this.preOrderReadyTimeStart = preOrderReadyTimeStart; }
+    public LocalTime getPreOrderReadyTimeEnd() { return preOrderReadyTimeEnd; }
+    public void setPreOrderReadyTimeEnd(LocalTime preOrderReadyTimeEnd) { this.preOrderReadyTimeEnd = preOrderReadyTimeEnd; }
 
     public String getPreOrderNote() { return preOrderNote; }
     public void setPreOrderNote(String preOrderNote) { this.preOrderNote = preOrderNote; }

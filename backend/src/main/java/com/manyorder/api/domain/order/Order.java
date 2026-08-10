@@ -64,6 +64,21 @@ public class Order {
 
     private LocalTime scheduledTime;
 
+    // Order accounting. totalAmount = subtotal + deliveryFee - discountAmount.
+    // SQL defaults let ddl-auto add these NOT NULL to tables with existing rows;
+    // pre-existing orders keep only totalAmount meaningful (breakdown reads 0).
+    @Column(nullable = false, columnDefinition = "numeric default 0")
+    private BigDecimal subtotal = BigDecimal.ZERO;
+
+    @Column(nullable = false, columnDefinition = "numeric default 0")
+    private BigDecimal deliveryFee = BigDecimal.ZERO;
+
+    @Column(nullable = false, columnDefinition = "numeric default 0")
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    /** Snapshot of the applied discount code (stable if the voucher is later edited/deleted). */
+    private String discountCode;
+
     @Column(nullable = false)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
@@ -146,6 +161,14 @@ public class Order {
     public LocalTime getScheduledTime() { return scheduledTime; }
     public void setScheduledTime(LocalTime scheduledTime) { this.scheduledTime = scheduledTime; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public BigDecimal getSubtotal() { return subtotal; }
+    public void setSubtotal(BigDecimal subtotal) { this.subtotal = subtotal; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
+    public BigDecimal getDiscountAmount() { return discountAmount; }
+    public void setDiscountAmount(BigDecimal discountAmount) { this.discountAmount = discountAmount; }
+    public String getDiscountCode() { return discountCode; }
+    public void setDiscountCode(String discountCode) { this.discountCode = discountCode; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
     public PaymentStatus getPaymentStatus() { return paymentStatus; }

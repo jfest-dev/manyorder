@@ -26,6 +26,10 @@ public class OrderResponse {
     private LocalDate scheduledDate;
     private LocalTime scheduledTime;
     private LocalDateTime createdAt;
+    private BigDecimal subtotal;
+    private BigDecimal deliveryFee;
+    private BigDecimal discountAmount;
+    private String discountCode;
     private BigDecimal totalAmount;
     private List<OrderItemResponse> items;
 
@@ -48,6 +52,10 @@ public class OrderResponse {
             LocalDate scheduledDate,
             LocalTime scheduledTime,
             LocalDateTime createdAt,
+            BigDecimal subtotal,
+            BigDecimal deliveryFee,
+            BigDecimal discountAmount,
+            String discountCode,
             BigDecimal totalAmount,
             List<OrderItemResponse> items) {
         this.id = id;
@@ -68,6 +76,10 @@ public class OrderResponse {
         this.scheduledDate = scheduledDate;
         this.scheduledTime = scheduledTime;
         this.createdAt = createdAt;
+        this.subtotal = subtotal;
+        this.deliveryFee = deliveryFee;
+        this.discountAmount = discountAmount;
+        this.discountCode = discountCode;
         this.totalAmount = totalAmount;
         this.items = items;
     }
@@ -90,6 +102,10 @@ public class OrderResponse {
     public LocalDate getScheduledDate() { return scheduledDate; }
     public LocalTime getScheduledTime() { return scheduledTime; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public BigDecimal getSubtotal() { return subtotal; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public BigDecimal getDiscountAmount() { return discountAmount; }
+    public String getDiscountCode() { return discountCode; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public List<OrderItemResponse> getItems() { return items; }
 }
