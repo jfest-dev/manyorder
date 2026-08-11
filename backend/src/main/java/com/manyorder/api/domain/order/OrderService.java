@@ -297,6 +297,7 @@ public class OrderService {
                 order.getDeliveryFee(),
                 order.getDiscountAmount(),
                 order.getDiscountCode(),
+                order.getOrderGroupId(),
                 order.getTotalAmount(),
                 items);
     }

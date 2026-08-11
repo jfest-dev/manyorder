@@ -14,7 +14,17 @@ export interface StorefrontStore {
   totalItemsSold?: number;
 }
 
-/** One line in the guest cart. */
+/**
+ * What actually persists in the cart: product id + quantity only, never a
+ * product snapshot — so price / name / stock / pre-order details are always
+ * resolved fresh and can never go stale.
+ */
+export interface CartItem {
+  productId: number;
+  quantity: number;
+}
+
+/** A cart item hydrated against the freshly-fetched product, for rendering. */
 export interface CartLine {
   product: ProductResponse;
   quantity: number;

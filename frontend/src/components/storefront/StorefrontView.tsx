@@ -149,7 +149,7 @@ export function StorefrontView({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{formatMoney(p.price, currency)}</span>
                     {p.preOrder && <span style={{ fontSize: '9px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', padding: '2px 6px', borderRadius: '4px' }}>Pre-order</span>}
-                    {!orderable && <span style={{ fontSize: '9px', fontWeight: 600, color: '#B91C1C', background: '#FEE2E2', padding: '2px 6px', borderRadius: '4px' }}>Out of stock</span>}
+                    {!orderable && <span style={{ fontSize: '9px', fontWeight: 600, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: '4px' }}>Out of stock</span>}
                   </div>
                   {readyLine && (
                     <div style={{ fontSize: '10px', color: '#92400E', marginTop: '3px' }}>Ready {readyLine}</div>

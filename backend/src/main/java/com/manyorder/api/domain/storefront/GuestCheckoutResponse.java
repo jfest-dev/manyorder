@@ -6,6 +6,9 @@ import java.util.List;
 
 public class GuestCheckoutResponse {
 
+    /** Shared id when the checkout was split into two orders; null for a single order. */
+    private String orderGroupId;
+    /** Primary order id — the (single) order, or the "ready now" order of a split. */
     private Long orderId;
     private String storeName;
     /** Store WhatsApp / contact number for the wa.me handoff on the confirmation screen. */
@@ -18,6 +21,7 @@ public class GuestCheckoutResponse {
     private String notes;
     private String orderStatus;
     private String paymentStatus;
+    // Combined across all orders in this checkout (equals the single order when not split).
     private BigDecimal subtotal;
     private BigDecimal deliveryFee;
     private BigDecimal discountAmount;
@@ -25,14 +29,17 @@ public class GuestCheckoutResponse {
     private BigDecimal totalAmount;
     private LocalDateTime createdAt;
     private List<ItemSummary> items;
+    /** Per-order breakdown: one entry normally, two when split (ready + pre-order). */
+    private List<OrderSummary> orders;
 
-    public GuestCheckoutResponse(Long orderId, String storeName, String storePhone,
+    public GuestCheckoutResponse(String orderGroupId, Long orderId, String storeName, String storePhone,
                                   String paymentInstruction, String paymentMethod,
                                   String customerName, String fulfilmentMethod,
                                   String deliveryAddress, String notes, String orderStatus,
                                   String paymentStatus, BigDecimal subtotal, BigDecimal deliveryFee,
                                   BigDecimal discountAmount, String discountCode, BigDecimal totalAmount,
-                                  LocalDateTime createdAt, List<ItemSummary> items) {
+                                  LocalDateTime createdAt, List<ItemSummary> items, List<OrderSummary> orders) {
+        this.orderGroupId = orderGroupId;
         this.orderId = orderId;
         this.storeName = storeName;
         this.storePhone = storePhone;
@@ -51,8 +58,10 @@ public class GuestCheckoutResponse {
         this.totalAmount = totalAmount;
         this.createdAt = createdAt;
         this.items = items;
+        this.orders = orders;
     }
 
+    public String getOrderGroupId() { return orderGroupId; }
     public Long getOrderId() { return orderId; }
     public String getStoreName() { return storeName; }
     public String getStorePhone() { return storePhone; }
@@ -71,6 +80,44 @@ public class GuestCheckoutResponse {
     public BigDecimal getTotalAmount() { return totalAmount; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public List<ItemSummary> getItems() { return items; }
+    public List<OrderSummary> getOrders() { return orders; }
+
+    /** One split order's own breakdown. kind: READY | PREORDER | STANDARD. */
+    public static class OrderSummary {
+        private Long orderId;
+        private String kind;
+        private String orderStatus;
+        private String paymentStatus;
+        private BigDecimal subtotal;
+        private BigDecimal deliveryFee;
+        private BigDecimal discountAmount;
+        private BigDecimal totalAmount;
+        private List<ItemSummary> items;
+
+        public OrderSummary(Long orderId, String kind, String orderStatus, String paymentStatus,
+                            BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal discountAmount,
+                            BigDecimal totalAmount, List<ItemSummary> items) {
+            this.orderId = orderId;
+            this.kind = kind;
+            this.orderStatus = orderStatus;
+            this.paymentStatus = paymentStatus;
+            this.subtotal = subtotal;
+            this.deliveryFee = deliveryFee;
+            this.discountAmount = discountAmount;
+            this.totalAmount = totalAmount;
+            this.items = items;
+        }
+
+        public Long getOrderId() { return orderId; }
+        public String getKind() { return kind; }
+        public String getOrderStatus() { return orderStatus; }
+        public String getPaymentStatus() { return paymentStatus; }
+        public BigDecimal getSubtotal() { return subtotal; }
+        public BigDecimal getDeliveryFee() { return deliveryFee; }
+        public BigDecimal getDiscountAmount() { return discountAmount; }
+        public BigDecimal getTotalAmount() { return totalAmount; }
+        public List<ItemSummary> getItems() { return items; }
+    }
 
     public static class ItemSummary {
         private String productName;

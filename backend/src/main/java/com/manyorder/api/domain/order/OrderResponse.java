@@ -30,6 +30,7 @@ public class OrderResponse {
     private BigDecimal deliveryFee;
     private BigDecimal discountAmount;
     private String discountCode;
+    private String orderGroupId;
     private BigDecimal totalAmount;
     private List<OrderItemResponse> items;
 
@@ -56,6 +57,7 @@ public class OrderResponse {
             BigDecimal deliveryFee,
             BigDecimal discountAmount,
             String discountCode,
+            String orderGroupId,
             BigDecimal totalAmount,
             List<OrderItemResponse> items) {
         this.id = id;
@@ -80,6 +82,7 @@ public class OrderResponse {
         this.deliveryFee = deliveryFee;
         this.discountAmount = discountAmount;
         this.discountCode = discountCode;
+        this.orderGroupId = orderGroupId;
         this.totalAmount = totalAmount;
         this.items = items;
     }
@@ -106,6 +109,7 @@ public class OrderResponse {
     public BigDecimal getDeliveryFee() { return deliveryFee; }
     public BigDecimal getDiscountAmount() { return discountAmount; }
     public String getDiscountCode() { return discountCode; }
+    public String getOrderGroupId() { return orderGroupId; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public List<OrderItemResponse> getItems() { return items; }
 }

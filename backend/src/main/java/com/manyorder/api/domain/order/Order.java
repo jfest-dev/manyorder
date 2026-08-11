@@ -79,6 +79,13 @@ public class Order {
     /** Snapshot of the applied discount code (stable if the voucher is later edited/deleted). */
     private String discountCode;
 
+    /**
+     * Shared reference across orders created from one storefront checkout that was
+     * split (ready items vs pre-order items). Null when the checkout produced a
+     * single order. Lets the merchant see the two rows are one customer's checkout.
+     */
+    private String orderGroupId;
+
     @Column(nullable = false)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
@@ -169,6 +176,8 @@ public class Order {
     public void setDiscountAmount(BigDecimal discountAmount) { this.discountAmount = discountAmount; }
     public String getDiscountCode() { return discountCode; }
     public void setDiscountCode(String discountCode) { this.discountCode = discountCode; }
+    public String getOrderGroupId() { return orderGroupId; }
+    public void setOrderGroupId(String orderGroupId) { this.orderGroupId = orderGroupId; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
     public PaymentStatus getPaymentStatus() { return paymentStatus; }

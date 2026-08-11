@@ -1,8 +1,10 @@
 package com.manyorder.api.domain.storefront;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,79 +78,147 @@ public class GuestCheckoutController {
                 ? OrderType.DELIVERY
                 : OrderType.PICKUP;
 
+        // 1) Resolve + classify each line into ready (in-stock) vs pre-order, and
+        //    tally the combined subtotal (discount is computed against the whole cart).
+        List<Line> ready = new ArrayList<>();
+        List<Line> preorder = new ArrayList<>();
+        BigDecimal combinedSubtotal = BigDecimal.ZERO;
+        for (GuestCheckoutRequest.ItemRequest itemReq : request.getItems()) {
+            Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Product not found in this store: " + itemReq.getProductId()));
+            BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity()));
+            (product.isPreOrder() ? preorder : ready).add(new Line(product, itemReq.getQuantity(), lineTotal));
+            combinedSubtotal = combinedSubtotal.add(lineTotal);
+        }
+
+        // 2) Delivery fee — charged once for the whole checkout (delivery orders only).
+        BigDecimal deliveryFee = (orderType == OrderType.DELIVERY && merchant.getDeliveryFee() != null)
+                ? merchant.getDeliveryFee()
+                : BigDecimal.ZERO;
+
+        // 3) Discount — validated + redeemed once against the combined subtotal.
+        BigDecimal combinedDiscount = BigDecimal.ZERO;
+        String discountCode = null;
+        if (request.getDiscountCode() != null && !request.getDiscountCode().isBlank()) {
+            DiscountService.Redemption redemption =
+                    discountService.redeemForCheckout(merchant, request.getDiscountCode(), combinedSubtotal);
+            combinedDiscount = redemption.amount();
+            discountCode = redemption.code();
+        }
+
+        // 4) One order, or a split into two linked orders when the cart mixes
+        //    ready and pre-order items. On a split the delivery fee sits on the
+        //    ready order and the discount is allocated by subtotal share.
+        boolean split = !ready.isEmpty() && !preorder.isEmpty();
+        List<GuestCheckoutResponse.OrderSummary> summaries = new ArrayList<>();
+        Order primary;
+
+        if (split) {
+            String groupId = UUID.randomUUID().toString();
+            BigDecimal readySubtotal = sumLines(ready);
+            BigDecimal readyDiscount = combinedDiscount.signum() == 0
+                    ? BigDecimal.ZERO
+                    : combinedDiscount.multiply(readySubtotal).divide(combinedSubtotal, 2, RoundingMode.HALF_UP);
+            BigDecimal preDiscount = combinedDiscount.subtract(readyDiscount); // remainder, so shares sum exactly
+
+            Order readyOrder = persistOrder(merchant, customer, orderType, request, groupId,
+                    ready, readySubtotal, deliveryFee, readyDiscount, discountCode);
+            Order preOrder = persistOrder(merchant, customer, orderType, request, groupId,
+                    preorder, sumLines(preorder), BigDecimal.ZERO, preDiscount, discountCode);
+
+            summaries.add(summaryOf(readyOrder, "READY", ready));
+            summaries.add(summaryOf(preOrder, "PREORDER", preorder));
+            primary = readyOrder;
+        } else {
+            List<Line> all = ready.isEmpty() ? preorder : ready; // exactly one bucket is non-empty
+            Order single = persistOrder(merchant, customer, orderType, request, null,
+                    all, combinedSubtotal, deliveryFee, combinedDiscount, discountCode);
+            summaries.add(summaryOf(single, "STANDARD", all));
+            primary = single;
+        }
+
+        BigDecimal combinedTotal = combinedSubtotal.add(deliveryFee).subtract(combinedDiscount).max(BigDecimal.ZERO);
+        List<GuestCheckoutResponse.ItemSummary> allItems = new ArrayList<>();
+        for (Line l : ready) allItems.add(l.toSummary());
+        for (Line l : preorder) allItems.add(l.toSummary());
+
+        return new GuestCheckoutResponse(
+                primary.getOrderGroupId(),
+                primary.getId(),
+                merchant.getName(),
+                merchant.getPhoneNumber(),
+                merchant.getPaymentInstruction(),
+                primary.getPaymentMethod(),
+                request.getCustomerName(),
+                orderType.name(),
+                primary.getDeliveryAddress(),
+                primary.getNotes(),
+                primary.getStatus().name(),
+                primary.getPaymentStatus().name(),
+                combinedSubtotal,
+                deliveryFee,
+                combinedDiscount,
+                discountCode,
+                combinedTotal,
+                primary.getCreatedAt(),
+                allItems,
+                summaries);
+    }
+
+    /** Persist one order + its items with the given money breakdown. */
+    private Order persistOrder(Merchant merchant, Customer customer, OrderType orderType,
+                               GuestCheckoutRequest request, String groupId, List<Line> lines,
+                               BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal discount, String discountCode) {
         Order order = new Order(customer, merchant, orderType,
                 request.getCustomerName(), request.getCustomerPhone());
-        order.setSource(OrderSource.STOREFRONT); // placed by a customer via the storefront
+        order.setSource(OrderSource.STOREFRONT);
         order.setContactEmail(request.getCustomerEmail());
+        order.setOrderGroupId(groupId);
         if (request.getNotes() != null && !request.getNotes().isBlank()) {
             order.setNotes(request.getNotes().trim());
         }
         if (request.getPaymentMethod() != null && !request.getPaymentMethod().isBlank()) {
             order.setPaymentMethod(request.getPaymentMethod().trim());
         }
-
         if (orderType == OrderType.DELIVERY && request.getDeliveryAddress() != null) {
             order.setDeliveryAddress(request.getDeliveryAddress());
         }
         orderRepository.save(order);
 
-        // 1) Line items -> subtotal.
-        BigDecimal subtotal = BigDecimal.ZERO;
-        List<GuestCheckoutResponse.ItemSummary> itemSummaries = new ArrayList<>();
-        for (GuestCheckoutRequest.ItemRequest itemReq : request.getItems()) {
-            Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "Product not found in this store: " + itemReq.getProductId()));
-
-            orderItemRepository.save(new OrderItem(order, product, itemReq.getQuantity(), product.getPrice()));
-
-            BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity()));
-            subtotal = subtotal.add(lineTotal);
-            itemSummaries.add(new GuestCheckoutResponse.ItemSummary(
-                    product.getName(), itemReq.getQuantity(), product.getPrice(), lineTotal));
+        for (Line l : lines) {
+            orderItemRepository.save(new OrderItem(order, l.product(), l.quantity(), l.product().getPrice()));
         }
-
-        // 2) Delivery fee — merchant's configured flat fee, delivery orders only.
-        BigDecimal deliveryFee = (orderType == OrderType.DELIVERY && merchant.getDeliveryFee() != null)
-                ? merchant.getDeliveryFee()
-                : BigDecimal.ZERO;
-
-        // 3) Discount — validated + redeemed here (increments usage). Invalid codes 400.
-        BigDecimal discountAmount = BigDecimal.ZERO;
-        if (request.getDiscountCode() != null && !request.getDiscountCode().isBlank()) {
-            DiscountService.Redemption redemption =
-                    discountService.redeemForCheckout(merchant, request.getDiscountCode(), subtotal);
-            discountAmount = redemption.amount();
-            order.setDiscountCode(redemption.code());
-        }
-
-        BigDecimal total = subtotal.add(deliveryFee).subtract(discountAmount).max(BigDecimal.ZERO);
 
         order.setSubtotal(subtotal);
         order.setDeliveryFee(deliveryFee);
-        order.setDiscountAmount(discountAmount);
-        order.setTotalAmount(total);
-        orderRepository.save(order);
+        order.setDiscountAmount(discount);
+        if (discount.signum() > 0) order.setDiscountCode(discountCode);
+        order.setTotalAmount(subtotal.add(deliveryFee).subtract(discount).max(BigDecimal.ZERO));
+        return orderRepository.save(order);
+    }
 
-        return new GuestCheckoutResponse(
-                order.getId(),
-                merchant.getName(),
-                merchant.getPhoneNumber(),
-                merchant.getPaymentInstruction(),
-                order.getPaymentMethod(),
-                request.getCustomerName(),
-                orderType.name(),
-                order.getDeliveryAddress(),
-                order.getNotes(),
-                order.getStatus().name(),
-                order.getPaymentStatus().name(),
-                subtotal,
-                deliveryFee,
-                discountAmount,
-                order.getDiscountCode(),
-                total,
-                order.getCreatedAt(),
-                itemSummaries);
+    private GuestCheckoutResponse.OrderSummary summaryOf(Order order, String kind, List<Line> lines) {
+        List<GuestCheckoutResponse.ItemSummary> items = new ArrayList<>();
+        for (Line l : lines) items.add(l.toSummary());
+        return new GuestCheckoutResponse.OrderSummary(
+                order.getId(), kind, order.getStatus().name(), order.getPaymentStatus().name(),
+                order.getSubtotal(), order.getDeliveryFee(), order.getDiscountAmount(),
+                order.getTotalAmount(), items);
+    }
+
+    private static BigDecimal sumLines(List<Line> lines) {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (Line l : lines) sum = sum.add(l.lineTotal());
+        return sum;
+    }
+
+    /** A resolved cart line (product + quantity + its line total). */
+    private record Line(Product product, int quantity, BigDecimal lineTotal) {
+        GuestCheckoutResponse.ItemSummary toSummary() {
+            return new GuestCheckoutResponse.ItemSummary(
+                    product.getName(), quantity, product.getPrice(), lineTotal);
+        }
     }
 
     /** Live check of a voucher code before submit; 400 with a reason when not valid. */

@@ -502,7 +502,24 @@ export interface GuestCheckoutItemSummary {
   subtotal: number;
 }
 
+/** One order's own breakdown. A checkout that mixes ready + pre-order items
+ *  yields two (kind READY + PREORDER); otherwise one (STANDARD). */
+export interface GuestCheckoutOrderSummary {
+  orderId: number;
+  kind: 'READY' | 'PREORDER' | 'STANDARD';
+  orderStatus: string;
+  paymentStatus: string;
+  subtotal: number;
+  deliveryFee: number;
+  discountAmount: number;
+  totalAmount: number;
+  items: GuestCheckoutItemSummary[];
+}
+
 export interface GuestCheckoutResult {
+  /** Shared id when the checkout was split into two orders; null for a single order. */
+  orderGroupId: string | null;
+  /** Primary order id — the single order, or the "ready now" order of a split. */
   orderId: number;
   storeName: string;
   storePhone: string | null;
@@ -514,6 +531,7 @@ export interface GuestCheckoutResult {
   notes: string | null;
   orderStatus: string;
   paymentStatus: string;
+  // Combined across all orders (equals the single order when not split).
   subtotal: number;
   deliveryFee: number;
   discountAmount: number;
@@ -521,6 +539,8 @@ export interface GuestCheckoutResult {
   totalAmount: number;
   createdAt: string;
   items: GuestCheckoutItemSummary[];
+  /** Per-order breakdown: one entry normally, two when split. */
+  orders: GuestCheckoutOrderSummary[];
 }
 
 export interface DiscountValidationResult {

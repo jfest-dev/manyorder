@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Tag } from 'lucide-react';
+import { ArrowLeft, Tag, Clock } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
+import { formatPreorderReady } from '../../lib/datetime';
 import {
   storefrontApi, ApiError,
   type PublicStoreResponse, type GuestCheckoutResult, type FulfilmentMethod,
@@ -38,6 +39,11 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
   const [error, setError] = useState<string | null>(null);
 
   const subtotal = useMemo(() => items.reduce((s, l) => s + l.product.price * l.quantity, 0), [items]);
+  // Preview the split: ready (in-stock) vs pre-order lines. Two non-empty groups
+  // means the checkout will produce two separate orders.
+  const readyLines = useMemo(() => items.filter((l) => !l.product.preOrder), [items]);
+  const preorderLines = useMemo(() => items.filter((l) => l.product.preOrder), [items]);
+  const willSplit = readyLines.length > 0 && preorderLines.length > 0;
   const deliveryFee = fulfilment === 'DELIVERY' && store.deliveryFee ? store.deliveryFee : 0;
   const discount = applied?.amount ?? 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
@@ -178,6 +184,19 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
           {discountError && <p style={{ fontSize: '12px', color: '#B91C1C', marginTop: '6px' }}>{discountError}</p>}
         </section>
 
+        {/* Split preview — a mixed cart becomes two orders. */}
+        {willSplit && (
+          <section style={{ background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12px', color: '#92400E', background: '#FEF3C7', borderRadius: '8px', padding: '8px 10px', marginBottom: '12px' }}>
+              <Clock size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <span>This checkout will be placed as <strong>2 separate orders</strong> — your ready items and your pre-order items are fulfilled at different times.</span>
+            </div>
+            <SplitGroup title="Ready now" lines={readyLines} currency={currency} />
+            <div style={{ height: '10px' }} />
+            <SplitGroup title="Pre-order" lines={preorderLines} currency={currency} showReady />
+          </section>
+        )}
+
         {/* Summary */}
         <section style={{ background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px' }}>
           <Row label="Subtotal" value={formatMoney(subtotal, currency)} />
@@ -197,6 +216,28 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
           {submitting ? 'Placing order…' : `Place order · ${formatMoney(total, currency)}`}
         </button>
       </div>
+    </div>
+  );
+}
+
+function SplitGroup({ title, lines, currency, showReady }: { title: string; lines: CartLine[]; currency: string; showReady?: boolean }) {
+  return (
+    <div>
+      <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '6px' }}>{title}</div>
+      {lines.map((l) => {
+        const ready = showReady
+          ? formatPreorderReady(l.product.preOrderReadyDate, l.product.preOrderReadyTimeStart, l.product.preOrderReadyTimeEnd)
+          : null;
+        return (
+          <div key={l.product.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              {l.quantity} × {l.product.name}
+              {ready && <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}> · ready {ready}</span>}
+            </span>
+            <span>{formatMoney(l.product.price * l.quantity, currency)}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

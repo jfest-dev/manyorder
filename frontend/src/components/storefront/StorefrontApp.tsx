@@ -9,7 +9,21 @@ import { ProductDetailView } from './ProductDetailView';
 import { CartView } from './CartView';
 import { CheckoutView } from './CheckoutView';
 import { OrderConfirmationView } from './OrderConfirmationView';
-import type { CartLine } from './storefrontTypes';
+import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
+import type { CartItem, CartLine } from './storefrontTypes';
+
+/** Parse persisted cart, tolerating the old {product, quantity} snapshot shape. */
+function parseCart(raw: string | null): CartItem[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as any[];
+    return parsed
+      .map((l) => ({ productId: Number(l?.productId ?? l?.product?.id), quantity: Number(l?.quantity) || 0 }))
+      .filter((it) => Number.isFinite(it.productId) && it.quantity > 0);
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Public storefront container mounted at /:slug/*. Fetches the store + products,
@@ -25,7 +39,7 @@ export function StorefrontApp() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const [cart, setCart] = useState<CartLine[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [orderResult, setOrderResult] = useState<GuestCheckoutResult | null>(null);
 
   const cartKey = store ? `manyorder_cart_${store.id}` : null;
@@ -48,10 +62,7 @@ export function StorefrontApp() {
 
   useEffect(() => {
     if (!cartKey) return;
-    try {
-      const raw = localStorage.getItem(cartKey);
-      if (raw) setCart(JSON.parse(raw) as CartLine[]);
-    } catch { /* ignore malformed cart */ }
+    setCart(parseCart(localStorage.getItem(cartKey)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartKey]);
 
@@ -59,28 +70,39 @@ export function StorefrontApp() {
     if (cartKey) localStorage.setItem(cartKey, JSON.stringify(cart));
   }, [cart, cartKey]);
 
-  const cartCount = useMemo(() => cart.reduce((n, l) => n + l.quantity, 0), [cart]);
+  // Resolve cart ids against the freshly-fetched products every render, so cart
+  // and checkout always show current price / name / pre-order details. Lines
+  // whose product no longer exists are dropped.
+  const hydratedCart = useMemo<CartLine[]>(
+    () => cart
+      .map((it) => {
+        const product = products.find((p) => p.id === it.productId);
+        return product ? { product, quantity: it.quantity } : null;
+      })
+      .filter((l): l is CartLine => l !== null),
+    [cart, products],
+  );
+
+  const cartCount = useMemo(() => cart.reduce((n, it) => n + it.quantity, 0), [cart]);
   const quantities = useMemo(
-    () => Object.fromEntries(cart.map((l) => [l.product.id, l.quantity])) as Record<number, number>,
+    () => Object.fromEntries(cart.map((it) => [it.productId, it.quantity])) as Record<number, number>,
     [cart],
   );
 
   const addToCart = (productId: number, quantity = 1) => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
     setCart((prev) => {
-      const existing = prev.find((l) => l.product.id === productId);
-      if (existing) return prev.map((l) => l.product.id === productId ? { ...l, quantity: l.quantity + quantity } : l);
-      return [...prev, { product, quantity }];
+      const existing = prev.find((it) => it.productId === productId);
+      if (existing) return prev.map((it) => it.productId === productId ? { ...it, quantity: it.quantity + quantity } : it);
+      return [...prev, { productId, quantity }];
     });
   };
 
   const setQty = (productId: number, quantity: number) => {
     if (quantity <= 0) { removeFromCart(productId); return; }
-    setCart((prev) => prev.map((l) => l.product.id === productId ? { ...l, quantity } : l));
+    setCart((prev) => prev.map((it) => it.productId === productId ? { ...it, quantity } : it));
   };
 
-  const removeFromCart = (productId: number) => setCart((prev) => prev.filter((l) => l.product.id !== productId));
+  const removeFromCart = (productId: number) => setCart((prev) => prev.filter((it) => it.productId !== productId));
 
   const goShop = () => navigate(`/${slug}`);
   const goCart = () => navigate(`/${slug}/cart`);
@@ -95,47 +117,49 @@ export function StorefrontApp() {
 
   return (
     <Frame>
-      <Routes>
-        <Route index element={
-          <StorefrontView
-            store={store}
-            products={products}
-            onProductClick={(id) => navigate(`/${slug}/p/${id}`)}
-            onAddToCart={(id) => addToCart(id, 1)}
-            quantities={quantities}
-            onSetQuantity={setQty}
-            cartCount={cartCount}
-            onViewCart={goCart}
-          />
-        } />
-        <Route path="p/:productId" element={
-          <PdpRoute products={products} store={store}
-            onAddToCart={(id, qty) => { addToCart(id, qty); goCart(); }}
-            onBack={goShop} />
-        } />
-        <Route path="cart" element={
-          <CartView
-            items={cart}
-            currency={store.currency}
-            onQtyChange={setQty}
-            onRemove={removeFromCart}
-            onCheckout={goCheckout}
-            onBack={goShop}
-          />
-        } />
-        <Route path="checkout" element={
-          cart.length === 0
-            ? <Navigate to={`/${slug}`} replace />
-            : <CheckoutView store={store} items={cart} onBack={goCart}
-                onPlaced={(result) => { setOrderResult(result); setCart([]); navigate(`/${slug}/confirmation`); }} />
-        } />
-        <Route path="confirmation" element={
-          orderResult
-            ? <OrderConfirmationView result={orderResult} store={store} onBackToShop={goShop} />
-            : <Navigate to={`/${slug}`} replace />
-        } />
-        <Route path="*" element={<Navigate to={`/${slug}`} replace />} />
-      </Routes>
+      <StorefrontErrorBoundary onBackToShop={goShop}>
+        <Routes>
+          <Route index element={
+            <StorefrontView
+              store={store}
+              products={products}
+              onProductClick={(id) => navigate(`/${slug}/p/${id}`)}
+              onAddToCart={(id) => addToCart(id, 1)}
+              quantities={quantities}
+              onSetQuantity={setQty}
+              cartCount={cartCount}
+              onViewCart={goCart}
+            />
+          } />
+          <Route path="p/:productId" element={
+            <PdpRoute products={products} store={store}
+              onAddToCart={(id, qty) => { addToCart(id, qty); goCart(); }}
+              onBack={goShop} />
+          } />
+          <Route path="cart" element={
+            <CartView
+              items={hydratedCart}
+              currency={store.currency}
+              onQtyChange={setQty}
+              onRemove={removeFromCart}
+              onCheckout={goCheckout}
+              onBack={goShop}
+            />
+          } />
+          <Route path="checkout" element={
+            hydratedCart.length === 0
+              ? <Navigate to={`/${slug}`} replace />
+              : <CheckoutView store={store} items={hydratedCart} onBack={goCart}
+                  onPlaced={(result) => { setOrderResult(result); setCart([]); navigate(`/${slug}/confirmation`); }} />
+          } />
+          <Route path="confirmation" element={
+            orderResult
+              ? <OrderConfirmationView result={orderResult} store={store} onBackToShop={goShop} />
+              : <Navigate to={`/${slug}`} replace />
+          } />
+          <Route path="*" element={<Navigate to={`/${slug}`} replace />} />
+        </Routes>
+      </StorefrontErrorBoundary>
     </Frame>
   );
 }
