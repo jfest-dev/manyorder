@@ -69,6 +69,10 @@ type DraftStore = {
   phone?: string;
   storeLink?: string;
   storeLinkTouched?: boolean;
+  streetAddress?: string;
+  city?: string;
+  postalCode?: string;
+  operatingHours?: string;
 };
 
 type Draft = {
@@ -341,6 +345,10 @@ function MerchantApp() {
       themeColor: draft.color || '#000000',
       logoUrl,
       storePhone: draft.phone || undefined,
+      streetAddress: draft.streetAddress || undefined,
+      city: draft.city || undefined,
+      postalCode: draft.postalCode || undefined,
+      operatingHours: draft.operatingHours || undefined,
     });
     return toStore(created);
   };
@@ -361,6 +369,10 @@ function MerchantApp() {
       currency: (draft.currency || 'sgd').toUpperCase(),
       themeColor: draft.color || '#000000',
       storePhone: draft.phone || undefined,
+      streetAddress: draft.streetAddress || undefined,
+      city: draft.city || undefined,
+      postalCode: draft.postalCode || undefined,
+      operatingHours: draft.operatingHours || undefined,
       logoUrl, // undefined leaves the existing logo unchanged
     });
     return toStore(updated);

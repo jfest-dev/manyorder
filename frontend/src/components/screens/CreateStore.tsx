@@ -23,6 +23,10 @@ interface CreateStoreProps {
     phone?: string;
     storeLink?: string;
     storeLinkTouched?: boolean;
+    streetAddress?: string;
+    city?: string;
+    postalCode?: string;
+    operatingHours?: string;
   }) => void;
 
   onNavigate?: (screen: string) => void;
@@ -46,6 +50,10 @@ interface CreateStoreProps {
     phone?: string;
     storeLink?: string;
     storeLinkTouched?: boolean;
+    streetAddress?: string;
+    city?: string;
+    postalCode?: string;
+    operatingHours?: string;
   };
 }
 
@@ -104,6 +112,10 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
   // flag into the draft so it survives a Back round-trip — an auto-derived
   // link must NOT be mistaken for a user-customized one.
   const [storeLinkTouched, setStoreLinkTouched] = useState(!!initialData?.storeLinkTouched);
+  const [streetAddress, setStreetAddress] = useState(initialData?.streetAddress || '');
+  const [city, setCity] = useState(initialData?.city || '');
+  const [postalCode, setPostalCode] = useState(initialData?.postalCode || '');
+  const [operatingHours, setOperatingHours] = useState(initialData?.operatingHours || '');
 
   // Logo: held locally as a File and previewed via an object URL. Nothing is
   // uploaded here — the caller uploads it only when the store is created, so a
@@ -170,6 +182,10 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
         phone: `${countryCode}${phoneNumber}`,
         storeLink,
         storeLinkTouched,
+        streetAddress,
+        city,
+        postalCode,
+        operatingHours,
       });
     } finally {
       if (mountedRef.current) setSubmitting(false);
@@ -394,6 +410,26 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                 value={currency}
                 onChange={setCurrency}
                 helperText="Auto-selects from country, but you can change it anytime"
+              />
+
+              {/* Address & hours — shown on the storefront; editable later in Settings. */}
+              <FieldInput
+                label="Street address"
+                placeholder="123 Main Street"
+                value={streetAddress}
+                onChange={setStreetAddress}
+                helperText="Shown to customers on your storefront (optional)."
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <FieldInput label="City" placeholder="Singapore" value={city} onChange={setCity} />
+                <FieldInput label="Postal code" placeholder="123456" value={postalCode} onChange={setPostalCode} />
+              </div>
+              <FieldInput
+                label="Operating hours"
+                placeholder="e.g. Mon–Sat, 9am–6pm · Closed Sun"
+                value={operatingHours}
+                onChange={setOperatingHours}
+                helperText="Free text — shown on your storefront (optional)."
               />
 
               <div>
