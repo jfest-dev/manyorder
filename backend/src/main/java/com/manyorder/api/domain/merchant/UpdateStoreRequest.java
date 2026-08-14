@@ -26,6 +26,7 @@ public class UpdateStoreRequest {
 
     @Size(max = 200, message = "Store description must be 200 characters or fewer")
     private String storeDescription;
+    private String operatingHours;
     private String paymentInstruction;
 
     /** Flat delivery fee. Null leaves it unchanged; 0 means no fee (free delivery). */
@@ -64,6 +65,8 @@ public class UpdateStoreRequest {
     public void setPaymentInstruction(String paymentInstruction) { this.paymentInstruction = paymentInstruction; }
     public BigDecimal getDeliveryFee() { return deliveryFee; }
     public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
+    public String getOperatingHours() { return operatingHours; }
+    public void setOperatingHours(String operatingHours) { this.operatingHours = operatingHours; }
     public String getStreetAddress() { return streetAddress; }
     public void setStreetAddress(String streetAddress) { this.streetAddress = streetAddress; }
     public String getCity() { return city; }

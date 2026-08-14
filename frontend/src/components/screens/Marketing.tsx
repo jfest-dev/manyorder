@@ -3,6 +3,7 @@ import { Plus, Percent, Tag, X, Edit2, Trash2, Users, Package } from 'lucide-rea
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
+import { MoneyField } from '../MoneyField';
 import { styledSelect } from '../../lib/selectStyle';
 
 interface Promotion {
@@ -21,7 +22,12 @@ interface Promotion {
   isPremium?: boolean;
 }
 
-export function Marketing() {
+interface MarketingProps {
+  /** Store currency, so the fixed-amount discount value formats correctly. */
+  currency?: string;
+}
+
+export function Marketing({ currency = 'sgd' }: MarketingProps = {}) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingPromo, setEditingPromo] = useState<Promotion | null>(null);
@@ -160,6 +166,22 @@ export function Marketing() {
     });
   };
 
+  // A percentage is a plain 0–100 number; a fixed amount is real money, so it
+  // uses the currency-aware MoneyField (value is kept as a string in this mock's
+  // form state, bridged to/from MoneyField's numeric value).
+  const renderValueField = (type: 'percentage' | 'fixed', value: string, setValue: (v: string) => void) =>
+    type === 'percentage' ? (
+      <FieldInput label="Value *" placeholder="10" type="number" min={0} max={100} value={value} onChange={setValue} prefix="%" />
+    ) : (
+      <MoneyField
+        label="Value *"
+        currency={currency}
+        value={value === '' ? null : Number(value)}
+        onChange={(v) => setValue(v === null ? '' : String(v))}
+        min={0}
+      />
+    );
+
   const activePromos = mockPromotions.filter(p => p.status === 'active');
   const expiredPromos = mockPromotions.filter(p => p.status === 'expired');
 
@@ -264,14 +286,7 @@ export function Marketing() {
             </div>
 
             <div>
-              <FieldInput
-                label="Value *"
-                placeholder={newPromo.type === 'percentage' ? '10' : '5.00'}
-                type="number"
-                value={newPromo.value}
-                onChange={(value) => setNewPromo({ ...newPromo, value: value })}
-                prefix={newPromo.type === 'percentage' ? '%' : '$'}
-              />
+              {renderValueField(newPromo.type, newPromo.value, (value) => setNewPromo({ ...newPromo, value }))}
             </div>
 
             <div>
@@ -466,14 +481,7 @@ export function Marketing() {
             </div>
 
             <div>
-              <FieldInput
-                label="Value *"
-                placeholder={editPromoData.type === 'percentage' ? '10' : '5.00'}
-                type="number"
-                value={editPromoData.value}
-                onChange={(value) => setEditPromoData({ ...editPromoData, value: value })}
-                prefix={editPromoData.type === 'percentage' ? '%' : '$'}
-              />
+              {renderValueField(editPromoData.type, editPromoData.value, (value) => setEditPromoData({ ...editPromoData, value }))}
             </div>
 
             <div>

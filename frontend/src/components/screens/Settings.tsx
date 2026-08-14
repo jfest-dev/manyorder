@@ -69,7 +69,7 @@ function SaveRow({ label, active, saved, error, disabled, onSave }: {
 const STORE_KEYS: (keyof UpdateStorePayload)[] =
   ['storeName', 'slug', 'storeEmail', 'storePhone', 'businessType', 'currency', 'themeColor', 'logoUrl', 'storeDescription'];
 const PAYMENT_KEYS: (keyof UpdateStorePayload)[] = ['paymentInstruction'];
-const ADDRESS_KEYS: (keyof UpdateStorePayload)[] = ['streetAddress', 'city', 'postalCode'];
+const ADDRESS_KEYS: (keyof UpdateStorePayload)[] = ['streetAddress', 'city', 'postalCode', 'operatingHours'];
 const NOTIFICATION_KEYS: (keyof UpdateStorePayload)[] = ['notifyNewOrderEmail', 'notifyLowStockEmail'];
 
 export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
@@ -124,6 +124,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
         themeColor: s.themeColor ?? '#000000',
         logoUrl: s.logoUrl ?? '',
         storeDescription: s.storeDescription ?? '',
+        operatingHours: s.operatingHours ?? '',
         paymentInstruction: s.paymentInstruction ?? '',
         streetAddress: s.streetAddress ?? '',
         city: s.city ?? '',
@@ -234,6 +235,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
     streetAddress: form.streetAddress,
     city: form.city,
     postalCode: form.postalCode,
+    operatingHours: form.operatingHours,
   });
 
   const saveNotifications = () => saveCard('notifications', {
@@ -532,15 +534,16 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
           />
         </div>
 
-        {/* Address */}
+        {/* Address & hours */}
         <div style={sectionCard}>
-          <h3 style={{ marginBottom: '20px' }}>Store Address</h3>
+          <h3 style={{ marginBottom: '20px' }}>Store Address & Hours</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <FieldInput label="Street Address" placeholder="123 Main Street" value={form.streetAddress || ''} onChange={(v) => set('streetAddress', v)} />
+            <FieldInput label="Street Address" placeholder="123 Main Street" value={form.streetAddress || ''} onChange={(v) => set('streetAddress', v)} helperText="Shown to customers on your storefront." />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <FieldInput label="City" placeholder="Singapore" value={form.city || ''} onChange={(v) => set('city', v)} />
               <FieldInput label="Postal Code" placeholder="123456" value={form.postalCode || ''} onChange={(v) => set('postalCode', v)} />
             </div>
+            <FieldInput label="Operating hours" placeholder="e.g. Mon–Sat, 9am–6pm · Closed Sun" value={form.operatingHours || ''} onChange={(v) => set('operatingHours', v)} helperText="Free text — shown on your storefront." />
           </div>
           <SaveRow
             label="Save"

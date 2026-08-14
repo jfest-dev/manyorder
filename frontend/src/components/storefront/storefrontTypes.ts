@@ -12,6 +12,9 @@ export interface StorefrontStore {
   themeColor?: string | null;
   currency: string;
   totalItemsSold?: number;
+  phoneNumber?: string | null;
+  address?: string | null;
+  operatingHours?: string | null;
 }
 
 /**

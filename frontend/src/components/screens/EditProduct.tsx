@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload, X, ArrowLeft } from 'lucide-react';
 import { FieldInput } from '../Field';
+import { MoneyField } from '../MoneyField';
+import { TimeField } from '../TimeField';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { CategorySelect } from '../CategorySelect';
-import { formatMoney, currencySymbol } from '../../lib/currency';
+import { formatMoney, priceLimits } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
-import { styledSelect } from '../../lib/selectStyle';
+import { ToggleSwitch } from '../ToggleSwitch';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { productsApi, UpdateProductPayload, ApiError } from '../../lib/api';
 
@@ -33,7 +35,7 @@ export function EditProduct({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
+  const [price, setPrice] = useState<number | null>(null);
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(''); // '' = no category
   const [categoryName, setCategoryName] = useState(''); // resolved name, for the preview badge
@@ -58,6 +60,13 @@ export function EditProduct({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Draft persistence: in-progress edits survive a refresh / accidental nav and
+  // restore automatically, cleared once the product saves. Photo (a File) isn't
+  // persisted — only the text/schedule fields. `hydrated` gates the save effect
+  // so we don't persist the blank pre-load state over a real draft.
+  const draftKey = `manyorder_editdraft_${storeId}_${productId}`;
+  const [hydrated, setHydrated] = useState(false);
+
   const backToList = () => onNavigate?.('products-all');
 
   useEffect(() => {
@@ -69,7 +78,7 @@ export function EditProduct({
       .then((p) => {
         if (cancelled) return;
         setName(p.name);
-        setPrice(String(p.price));
+        setPrice(p.price);
         setDescription(p.description ?? '');
         setCategoryId(p.categoryId != null ? String(p.categoryId) : '');
         setStock(String(p.stock ?? 0));
@@ -81,11 +90,44 @@ export function EditProduct({
         setPreOrderReadyTimeStart((p.preOrderReadyTimeStart ?? '').slice(0, 5)); // HH:mm for <input type=time>
         setPreOrderReadyTimeEnd((p.preOrderReadyTimeEnd ?? '').slice(0, 5));
         setPreOrderNote(p.preOrderNote ?? '');
+
+        // Overlay any unsaved draft on top of the freshly-loaded values.
+        try {
+          const raw = sessionStorage.getItem(draftKey);
+          if (raw) {
+            const d = JSON.parse(raw);
+            if (d.name !== undefined) setName(d.name);
+            if (d.price !== undefined) setPrice(d.price);
+            if (d.description !== undefined) setDescription(d.description);
+            if (d.categoryId !== undefined) setCategoryId(d.categoryId);
+            if (d.stock !== undefined) setStock(d.stock);
+            if (d.sku !== undefined) setSku(d.sku);
+            if (d.status !== undefined) setStatus(d.status);
+            if (d.preOrder !== undefined) setPreOrder(d.preOrder);
+            if (d.preOrderReadyDate !== undefined) setPreOrderReadyDate(d.preOrderReadyDate);
+            if (d.preOrderReadyTimeStart !== undefined) setPreOrderReadyTimeStart(d.preOrderReadyTimeStart);
+            if (d.preOrderReadyTimeEnd !== undefined) setPreOrderReadyTimeEnd(d.preOrderReadyTimeEnd);
+            if (d.preOrderNote !== undefined) setPreOrderNote(d.preOrderNote);
+          }
+        } catch { /* ignore a malformed draft */ }
+        setHydrated(true);
       })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof ApiError ? e.message : 'Could not load product'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [storeId, productId]);
+  }, [storeId, productId, draftKey]);
+
+  // Persist in-progress edits (text/schedule fields) once the form is hydrated.
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify({
+        name, price, description, categoryId, stock, sku, status,
+        preOrder, preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd, preOrderNote,
+      }));
+    } catch { /* storage full — draft is best-effort */ }
+  }, [hydrated, draftKey, name, price, description, categoryId, stock, sku, status,
+      preOrder, preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd, preOrderNote]);
 
   // Live object-URL preview for a newly picked file.
   useEffect(() => {
@@ -115,8 +157,8 @@ export function EditProduct({
   const handleSave = async () => {
     setError(null);
     if (!name.trim()) { setError('Product name is required.'); return; }
-    const priceNum = parseFloat(price);
-    if (Number.isNaN(priceNum) || priceNum <= 0) { setError('Enter a valid price.'); return; }
+    const priceNum = price;
+    if (priceNum === null || priceNum <= 0) { setError('Enter a valid price.'); return; }
     const stockNum = stock.trim() === '' ? 0 : parseInt(stock, 10);
     if (Number.isNaN(stockNum) || stockNum < 0) { setError('Stock must be 0 or more.'); return; }
 
@@ -147,6 +189,7 @@ export function EditProduct({
       if (status === 'draft') {
         await productsApi.deactivate(storeId, productId);
       }
+      sessionStorage.removeItem(draftKey); // saved — drop the draft
       backToList();
     } catch (e: any) {
       setError(e instanceof ApiError ? e.message : 'Could not save changes');
@@ -160,6 +203,7 @@ export function EditProduct({
     setSaving(true);
     try {
       await productsApi.deactivate(storeId, productId);
+      sessionStorage.removeItem(draftKey); // product hidden — drop the draft
       backToList();
     } catch (e: any) {
       setError(e instanceof ApiError ? e.message : 'Could not delete product');
@@ -168,8 +212,7 @@ export function EditProduct({
   };
 
   const shownPhoto = photoPreview || photoUrl;
-  const priceNum = parseFloat(price);
-  const previewPrice = Number.isNaN(priceNum) ? '' : formatMoney(priceNum, currency);
+  const previewPrice = price === null ? '' : formatMoney(price, currency);
 
   if (loading) {
     return <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading product…</p>;
@@ -243,7 +286,7 @@ export function EditProduct({
               />
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <FieldInput label="Price" placeholder="8.50" prefix={currencySymbol(currency)} type="number" value={price} onChange={setPrice} required />
+                <MoneyField label="Price" currency={currency} value={price} onChange={setPrice} min={priceLimits(currency).min} max={priceLimits(currency).max} required />
                 <FieldInput label="Stock Quantity" placeholder="0" type="number" value={stock} onChange={setStock} helperText="Available inventory" />
               </div>
 
@@ -251,23 +294,23 @@ export function EditProduct({
 
               {/* Status */}
               <div>
-                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>Product Status</label>
-                <select value={status} onChange={(e) => setStatus(e.target.value as 'active' | 'draft')} style={styledSelect}>
-                  <option value="active">Active — visible to customers</option>
-                  <option value="draft">Draft — hidden from customers</option>
-                </select>
+                <ToggleSwitch
+                  checked={status === 'active'}
+                  onChange={(c) => setStatus(c ? 'active' : 'draft')}
+                  label="Visible to customers"
+                  description={status === 'active' ? 'Active — shown on your storefront.' : 'Draft — hidden from customers.'}
+                />
                 <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>Out of stock shows automatically when stock reaches 0.</p>
               </div>
 
               {/* Pre-order */}
               <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
-                <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={preOrder} onChange={(e) => setPreOrder(e.target.checked)} style={{ marginTop: '3px' }} />
-                  <span>
-                    <span className="text-small" style={{ fontWeight: 600, display: 'block' }}>Pre-order</span>
-                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Sell before it's in stock, with a ready date.</span>
-                  </span>
-                </label>
+                <ToggleSwitch
+                  checked={preOrder}
+                  onChange={setPreOrder}
+                  label="Pre-order"
+                  description="Sell before it's in stock, with a ready date."
+                />
                 {preOrder && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', paddingLeft: '28px' }}>
                     <div>
@@ -275,16 +318,25 @@ export function EditProduct({
                       <input type="date" value={preOrderReadyDate} onChange={(e) => setPreOrderReadyDate(e.target.value)}
                         style={{ height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                      <div>
-                        <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ready from (optional)</label>
-                        <input type="time" value={preOrderReadyTimeStart} onChange={(e) => setPreOrderReadyTimeStart(e.target.value)}
-                          style={{ width: '100%', height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Ready time (optional)</label>
+                        {(preOrderReadyTimeStart || preOrderReadyTimeEnd) && (
+                          <button type="button" onClick={() => { setPreOrderReadyTimeStart(''); setPreOrderReadyTimeEnd(''); }}
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, textDecoration: 'underline' }}>
+                            Clear
+                          </button>
+                        )}
                       </div>
-                      <div>
-                        <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ready until (optional)</label>
-                        <input type="time" value={preOrderReadyTimeEnd} onChange={(e) => setPreOrderReadyTimeEnd(e.target.value)}
-                          style={{ width: '100%', height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <div>
+                          <div className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>From</div>
+                          <TimeField value={preOrderReadyTimeStart} onChange={setPreOrderReadyTimeStart} ariaLabel="Ready from time" />
+                        </div>
+                        <div>
+                          <div className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>Until</div>
+                          <TimeField value={preOrderReadyTimeEnd} onChange={setPreOrderReadyTimeEnd} ariaLabel="Ready until time" />
+                        </div>
                       </div>
                     </div>
                     <FieldInput label="Pre-order note" placeholder="e.g. Ships early September" value={preOrderNote} onChange={setPreOrderNote} />

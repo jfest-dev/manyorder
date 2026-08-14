@@ -121,6 +121,10 @@ public class DataSeeder implements CommandLineRunner {
             orderItemRepository.save(new OrderItem(order, product, qty, product.getPrice()));
             total = total.add(product.getPrice().multiply(BigDecimal.valueOf(qty)));
         }
+        // Seed orders have no delivery fee or discount, so subtotal == total.
+        // Set both so the money breakdown renders correctly in the dashboard and
+        // order-lookup (otherwise subtotal defaults to 0 and reads as "S$0.00").
+        order.setSubtotal(total);
         order.setTotalAmount(total);
         order.setStatus(status);
         order.setPaymentStatus(paymentStatus);

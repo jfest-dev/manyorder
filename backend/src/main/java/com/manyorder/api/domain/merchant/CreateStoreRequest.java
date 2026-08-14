@@ -31,11 +31,20 @@ public class CreateStoreRequest {
 
     @Size(max = 200, message = "Store description must be 200 characters or fewer")
     private String storeDescription;
+    /** Free-text opening hours, e.g. "Mon–Sat, 9am–6pm". */
+    private String operatingHours;
+    private String streetAddress;
+    private String city;
+    private String postalCode;
     private String paymentInstruction;
 
-    /** Optional flat delivery fee. Null = none. */
+    /** Optional flat delivery fee. Null = to-be-confirmed; 0 = free. */
     @PositiveOrZero
     private BigDecimal deliveryFee;
+
+    /** Waive the delivery fee at/above this subtotal. Null = no threshold. */
+    @PositiveOrZero
+    private BigDecimal freeDeliveryThreshold;
 
     public CreateStoreRequest() {}
 
@@ -57,8 +66,18 @@ public class CreateStoreRequest {
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public String getStoreDescription() { return storeDescription; }
     public void setStoreDescription(String storeDescription) { this.storeDescription = storeDescription; }
+    public String getOperatingHours() { return operatingHours; }
+    public void setOperatingHours(String operatingHours) { this.operatingHours = operatingHours; }
+    public String getStreetAddress() { return streetAddress; }
+    public void setStreetAddress(String streetAddress) { this.streetAddress = streetAddress; }
+    public String getCity() { return city; }
+    public void setCity(String city) { this.city = city; }
+    public String getPostalCode() { return postalCode; }
+    public void setPostalCode(String postalCode) { this.postalCode = postalCode; }
     public String getPaymentInstruction() { return paymentInstruction; }
     public void setPaymentInstruction(String paymentInstruction) { this.paymentInstruction = paymentInstruction; }
     public BigDecimal getDeliveryFee() { return deliveryFee; }
     public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
+    public BigDecimal getFreeDeliveryThreshold() { return freeDeliveryThreshold; }
+    public void setFreeDeliveryThreshold(BigDecimal freeDeliveryThreshold) { this.freeDeliveryThreshold = freeDeliveryThreshold; }
 }

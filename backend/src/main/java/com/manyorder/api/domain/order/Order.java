@@ -73,6 +73,14 @@ public class Order {
     @Column(nullable = false, columnDefinition = "numeric default 0")
     private BigDecimal deliveryFee = BigDecimal.ZERO;
 
+    /**
+     * True when a DELIVERY order was placed while the store had no delivery fee
+     * configured — the real fee is confirmed with the customer off-platform, then
+     * set via the per-order edit (which clears this). SQL default backfills rows.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean deliveryFeePending = false;
+
     @Column(nullable = false, columnDefinition = "numeric default 0")
     private BigDecimal discountAmount = BigDecimal.ZERO;
 
@@ -172,6 +180,8 @@ public class Order {
     public void setSubtotal(BigDecimal subtotal) { this.subtotal = subtotal; }
     public BigDecimal getDeliveryFee() { return deliveryFee; }
     public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
+    public boolean isDeliveryFeePending() { return deliveryFeePending; }
+    public void setDeliveryFeePending(boolean deliveryFeePending) { this.deliveryFeePending = deliveryFeePending; }
     public BigDecimal getDiscountAmount() { return discountAmount; }
     public void setDiscountAmount(BigDecimal discountAmount) { this.discountAmount = discountAmount; }
     public String getDiscountCode() { return discountCode; }

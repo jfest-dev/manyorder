@@ -21,6 +21,9 @@ interface FieldInputProps {
   multiline?: boolean;
   rows?: number;
   style?: React.CSSProperties;
+  inputMode?: 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url' | 'none';
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 export function FieldInput({
@@ -43,6 +46,9 @@ export function FieldInput({
   multiline,
   rows = 2,
   style,
+  inputMode,
+  onFocus,
+  onBlur,
 }: FieldInputProps) {
   const [isFocused, setIsFocused] = useState(false);
 
@@ -111,6 +117,7 @@ export function FieldInput({
         ) : (
           <input
             type={type}
+            inputMode={inputMode}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
@@ -120,8 +127,8 @@ export function FieldInput({
             min={min}
             max={max}
             step={step}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+            onFocus={() => { setIsFocused(true); onFocus?.(); }}
+            onBlur={() => { setIsFocused(false); onBlur?.(); }}
             className="text-small w-full"
             style={{
               height: '40px',

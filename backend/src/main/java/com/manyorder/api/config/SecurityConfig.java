@@ -7,10 +7,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -72,6 +74,11 @@ public class SecurityConfig {
                         .requestMatchers("/admin/**").hasRole("PLATFORM_ADMIN")
                         .requestMatchers("/merchant/**").hasAnyRole("MERCHANT", "STAFF")
                         .anyRequest().authenticated())
+                // Unauthenticated requests (no/invalid/expired token) → 401, so the
+                // client can distinguish "session expired" (re-login) from 403
+                // "authenticated but not allowed". Without this, Spring's default
+                // returns 403 for both, and the SPA can't tell them apart.
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

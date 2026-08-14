@@ -13,6 +13,7 @@ import com.manyorder.api.domain.order.OrderRepository;
 import com.manyorder.api.domain.order.OrderSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -159,6 +160,95 @@ class ProductIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.categoryId").doesNotExist())
                 .andExpect(jsonPath("$.categoryName").doesNotExist());
+    }
+
+    @Test
+    void updateProduct_clearsPreOrderScheduleWhenFieldsOmitted() throws Exception {
+        String token = registerAndGetToken("prod-preorder-clear@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PreOrder Store", "preorder-store");
+        long id = createProduct(token, storeId, """
+                {
+                  "name": "Mooncake",
+                  "price": 12.00,
+                  "preOrder": true,
+                  "preOrderReadyDate": "2026-09-01",
+                  "preOrderReadyTimeStart": "14:00",
+                  "preOrderReadyTimeEnd": "18:00",
+                  "preOrderNote": "Ships in September"
+                }
+                """);
+
+        // Still a pre-order, but the times + note are cleared (omitted). Under the
+        // old "null = unchanged" rule these stuck; now an omitted sub-field clears.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + id)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"preOrder\":true,\"preOrderReadyDate\":\"2026-10-05\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preOrder").value(true))
+                .andExpect(jsonPath("$.preOrderReadyDate").value("2026-10-05"))
+                .andExpect(jsonPath("$.preOrderReadyTimeStart").doesNotExist())
+                .andExpect(jsonPath("$.preOrderReadyTimeEnd").doesNotExist())
+                .andExpect(jsonPath("$.preOrderNote").doesNotExist());
+
+        // Turning pre-order off wipes the whole schedule (no stale ready date).
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + id)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"preOrder\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preOrder").value(false))
+                .andExpect(jsonPath("$.preOrderReadyDate").doesNotExist())
+                .andExpect(jsonPath("$.preOrderReadyTimeStart").doesNotExist());
+
+        // A partial PATCH that doesn't mention preOrder leaves the flag untouched.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + id)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"price\":13.50}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preOrder").value(false));
+    }
+
+    @Test
+    void updateProduct_preOrderOnWithNoScheduleAtAll_clearsDateAndTimes() throws Exception {
+        // A merchant wants pre-order ON but with NO date/time at all — just a note.
+        // Clearing every schedule field (all omitted) while pre-order stays on must
+        // persist as genuinely empty, not revert to the previously-saved schedule.
+        String token = registerAndGetToken("prod-preorder-noschedule@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "NoSchedule Store", "noschedule-store");
+        long id = createProduct(token, storeId, """
+                {
+                  "name": "Seasonal Bake",
+                  "price": 9.00,
+                  "preOrder": true,
+                  "preOrderReadyDate": "2026-09-01",
+                  "preOrderReadyTimeStart": "14:00",
+                  "preOrderReadyTimeEnd": "18:00",
+                  "preOrderNote": "Ships in September"
+                }
+                """);
+
+        // Pre-order stays on; date AND both times are cleared, only a note remains.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + id)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"preOrder\":true,\"preOrderNote\":\"Just a note, no schedule\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preOrder").value(true))
+                .andExpect(jsonPath("$.preOrderReadyDate").doesNotExist())
+                .andExpect(jsonPath("$.preOrderReadyTimeStart").doesNotExist())
+                .andExpect(jsonPath("$.preOrderReadyTimeEnd").doesNotExist())
+                .andExpect(jsonPath("$.preOrderNote").value("Just a note, no schedule"));
+
+        // And it survives a reload (fresh GET), not just the PATCH response.
+        mockMvc.perform(get("/merchant/stores/" + storeId + "/products/" + id)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preOrder").value(true))
+                .andExpect(jsonPath("$.preOrderReadyDate").doesNotExist())
+                .andExpect(jsonPath("$.preOrderReadyTimeStart").doesNotExist())
+                .andExpect(jsonPath("$.preOrderReadyTimeEnd").doesNotExist());
     }
 
     @Test

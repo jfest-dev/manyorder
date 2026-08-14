@@ -15,8 +15,11 @@ public class StoreResponse {
     private String themeColor;
     private String logoUrl;
     private String storeDescription;
+    private String operatingHours;
     private String paymentInstruction;
     private BigDecimal deliveryFee;
+    private BigDecimal freeDeliveryThreshold;
+    private String deliveryToBeConfirmedMessage;
     private boolean whatsappVerified;
     private String streetAddress;
     private String city;
@@ -38,8 +41,11 @@ public class StoreResponse {
         this.themeColor = m.getThemeColor();
         this.logoUrl = m.getLogoUrl();
         this.storeDescription = m.getStoreDescription();
+        this.operatingHours = m.getOperatingHours();
         this.paymentInstruction = m.getPaymentInstruction();
         this.deliveryFee = m.getDeliveryFee();
+        this.freeDeliveryThreshold = m.getFreeDeliveryThreshold();
+        this.deliveryToBeConfirmedMessage = m.getDeliveryToBeConfirmedMessage();
         this.whatsappVerified = m.isWhatsappVerified();
         this.streetAddress = m.getStreetAddress();
         this.city = m.getCity();
@@ -61,8 +67,11 @@ public class StoreResponse {
     public String getThemeColor() { return themeColor; }
     public String getLogoUrl() { return logoUrl; }
     public String getStoreDescription() { return storeDescription; }
+    public String getOperatingHours() { return operatingHours; }
     public String getPaymentInstruction() { return paymentInstruction; }
     public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public BigDecimal getFreeDeliveryThreshold() { return freeDeliveryThreshold; }
+    public String getDeliveryToBeConfirmedMessage() { return deliveryToBeConfirmedMessage; }
     public boolean isWhatsappVerified() { return whatsappVerified; }
     public String getStreetAddress() { return streetAddress; }
     public String getCity() { return city; }

@@ -28,6 +28,7 @@ public class OrderResponse {
     private LocalDateTime createdAt;
     private BigDecimal subtotal;
     private BigDecimal deliveryFee;
+    private boolean deliveryFeePending;
     private BigDecimal discountAmount;
     private String discountCode;
     private String orderGroupId;
@@ -55,6 +56,7 @@ public class OrderResponse {
             LocalDateTime createdAt,
             BigDecimal subtotal,
             BigDecimal deliveryFee,
+            boolean deliveryFeePending,
             BigDecimal discountAmount,
             String discountCode,
             String orderGroupId,
@@ -80,6 +82,7 @@ public class OrderResponse {
         this.createdAt = createdAt;
         this.subtotal = subtotal;
         this.deliveryFee = deliveryFee;
+        this.deliveryFeePending = deliveryFeePending;
         this.discountAmount = discountAmount;
         this.discountCode = discountCode;
         this.orderGroupId = orderGroupId;
@@ -107,6 +110,7 @@ public class OrderResponse {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public BigDecimal getSubtotal() { return subtotal; }
     public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public boolean isDeliveryFeePending() { return deliveryFeePending; }
     public BigDecimal getDiscountAmount() { return discountAmount; }
     public String getDiscountCode() { return discountCode; }
     public String getOrderGroupId() { return orderGroupId; }

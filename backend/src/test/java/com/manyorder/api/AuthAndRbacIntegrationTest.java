@@ -131,6 +131,17 @@ class AuthAndRbacIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void unauthenticatedRequests_return401_notForbidden() throws Exception {
+        // A missing token is "not authenticated" → 401 (so the SPA re-logs-in),
+        // distinct from an authenticated-but-forbidden 403.
+        mockMvc.perform(get("/merchant/stores"))
+                .andExpect(status().isUnauthorized());
+        // An invalid/expired token is also "not authenticated" → 401.
+        mockMvc.perform(get("/merchant/stores").header("Authorization", "Bearer not.a.valid.token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void storeLimit_isThree_andSlugsAreUnique() throws Exception {
         String token = registerAndGetToken("rbac-limit@test.com", "MERCHANT", null);
         createStore(token, "Limit One", "limit-one");

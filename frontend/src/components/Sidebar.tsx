@@ -1,4 +1,4 @@
-import { Store, Package, LayoutDashboard, Settings, ShoppingCart, Users, ChevronDown, LogOut, Megaphone, Crown, Check } from 'lucide-react';
+import { Store, Package, LayoutDashboard, Settings, ShoppingCart, Users, ChevronDown, LogOut, Megaphone, Crown, Check, Truck } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { NavItem } from './NavItem';
 import logoImage from 'figma:asset/656d97789c4d3f72628639902518b8fbf366d5ba.png';
@@ -380,6 +380,13 @@ export function Sidebar({
               label="Marketing"
               active={activeItem === 'marketing'}
               onClick={() => onNavigate('marketing')}
+            />
+
+            <NavItem
+              icon={Truck}
+              label="Delivery"
+              active={activeItem === 'delivery'}
+              onClick={() => onNavigate('delivery')}
             />
 
             <NavItem

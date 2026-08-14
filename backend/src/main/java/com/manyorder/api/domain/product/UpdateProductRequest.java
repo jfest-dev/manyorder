@@ -27,6 +27,9 @@ public class UpdateProductRequest {
     /** Empty string clears the photo (and deletes the old file); null leaves it. */
     private String photoUrl;
 
+    // Pre-order schedule. When preOrder is present it's applied as a unit: the
+    // sub-fields are set absolutely (a null/omitted one clears it), and preOrder
+    // = false wipes them all. When preOrder is null the whole block is untouched.
     private Boolean preOrder;
     private LocalDate preOrderReadyDate;
     private LocalTime preOrderReadyTimeStart;

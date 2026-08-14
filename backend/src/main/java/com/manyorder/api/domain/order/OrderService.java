@@ -155,6 +155,7 @@ public class OrderService {
         // fly before recomputing, otherwise a fee edit would zero the total.
         if (request.getDeliveryFee() != null) {
             order.setDeliveryFee(request.getDeliveryFee());
+            order.setDeliveryFeePending(false); // merchant has now confirmed the real fee
         }
         BigDecimal subtotal = order.getSubtotal();
         if (subtotal.signum() == 0 && order.getTotalAmount().signum() > 0) {
@@ -295,6 +296,7 @@ public class OrderService {
                 order.getCreatedAt(),
                 order.getSubtotal(),
                 order.getDeliveryFee(),
+                order.isDeliveryFeePending(),
                 order.getDiscountAmount(),
                 order.getDiscountCode(),
                 order.getOrderGroupId(),

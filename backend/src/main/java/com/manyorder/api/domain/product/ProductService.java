@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.manyorder.api.common.MoneyValidation;
 import com.manyorder.api.domain.category.Category;
 import com.manyorder.api.domain.category.CategoryRepository;
 import com.manyorder.api.domain.merchant.Merchant;
@@ -76,6 +77,7 @@ public class ProductService {
 
     @Transactional
     public ProductResponse createProduct(Merchant merchant, CreateProductRequest request) {
+        MoneyValidation.requireValidScale(request.getPrice(), merchant.getCurrency(), "Price");
         Product product = new Product(
                 merchant,
                 request.getName(),
@@ -101,7 +103,10 @@ public class ProductService {
             product.setName(request.getName());
         }
         if (request.getDescription() != null) product.setDescription(request.getDescription());
-        if (request.getPrice() != null) product.setPrice(request.getPrice());
+        if (request.getPrice() != null) {
+            MoneyValidation.requireValidScale(request.getPrice(), merchant.getCurrency(), "Price");
+            product.setPrice(request.getPrice());
+        }
         // Category sentinel: null = unchanged, 0 = clear to none, >0 = set.
         if (request.getCategoryId() != null) {
             product.setCategory(request.getCategoryId() == 0L
@@ -110,11 +115,30 @@ public class ProductService {
         }
         if (request.getStock() != null) product.setStock(request.getStock());
         if (request.getSku() != null) product.setSku(request.getSku());
-        if (request.getPreOrder() != null) product.setPreOrder(request.getPreOrder());
-        if (request.getPreOrderReadyDate() != null) product.setPreOrderReadyDate(request.getPreOrderReadyDate());
-        if (request.getPreOrderReadyTimeStart() != null) product.setPreOrderReadyTimeStart(request.getPreOrderReadyTimeStart());
-        if (request.getPreOrderReadyTimeEnd() != null) product.setPreOrderReadyTimeEnd(request.getPreOrderReadyTimeEnd());
-        if (request.getPreOrderNote() != null) product.setPreOrderNote(request.getPreOrderNote());
+
+        // The pre-order schedule is owned by the preOrder flag, so it's applied
+        // as a unit: when the request carries the flag (the edit form always
+        // sends it, alongside every sub-field), the date/time/note are set
+        // ABSOLUTELY — a null/omitted sub-field clears it, instead of the old
+        // "null = leave unchanged" that made a cleared time impossible to save.
+        // Turning pre-order off wipes the schedule so no stale ready-info lingers.
+        // A partial PATCH that omits preOrder (e.g. the photo-only save) leaves
+        // all of this untouched.
+        if (request.getPreOrder() != null) {
+            boolean preOrder = request.getPreOrder();
+            product.setPreOrder(preOrder);
+            if (preOrder) {
+                product.setPreOrderReadyDate(request.getPreOrderReadyDate());
+                product.setPreOrderReadyTimeStart(request.getPreOrderReadyTimeStart());
+                product.setPreOrderReadyTimeEnd(request.getPreOrderReadyTimeEnd());
+                product.setPreOrderNote(request.getPreOrderNote());
+            } else {
+                product.setPreOrderReadyDate(null);
+                product.setPreOrderReadyTimeStart(null);
+                product.setPreOrderReadyTimeEnd(null);
+                product.setPreOrderNote(null);
+            }
+        }
 
         // Photo: empty string clears, null leaves unchanged. Remember the old URL
         // to delete after commit when it's replaced or removed (mirrors the logo).

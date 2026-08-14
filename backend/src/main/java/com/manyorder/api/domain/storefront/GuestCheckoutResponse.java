@@ -24,6 +24,8 @@ public class GuestCheckoutResponse {
     // Combined across all orders in this checkout (equals the single order when not split).
     private BigDecimal subtotal;
     private BigDecimal deliveryFee;
+    /** True when the delivery fee is unresolved → the total shown is an estimate. */
+    private boolean deliveryFeePending;
     private BigDecimal discountAmount;
     private String discountCode;
     private BigDecimal totalAmount;
@@ -37,8 +39,9 @@ public class GuestCheckoutResponse {
                                   String customerName, String fulfilmentMethod,
                                   String deliveryAddress, String notes, String orderStatus,
                                   String paymentStatus, BigDecimal subtotal, BigDecimal deliveryFee,
-                                  BigDecimal discountAmount, String discountCode, BigDecimal totalAmount,
-                                  LocalDateTime createdAt, List<ItemSummary> items, List<OrderSummary> orders) {
+                                  boolean deliveryFeePending, BigDecimal discountAmount, String discountCode,
+                                  BigDecimal totalAmount, LocalDateTime createdAt,
+                                  List<ItemSummary> items, List<OrderSummary> orders) {
         this.orderGroupId = orderGroupId;
         this.orderId = orderId;
         this.storeName = storeName;
@@ -53,6 +56,7 @@ public class GuestCheckoutResponse {
         this.paymentStatus = paymentStatus;
         this.subtotal = subtotal;
         this.deliveryFee = deliveryFee;
+        this.deliveryFeePending = deliveryFeePending;
         this.discountAmount = discountAmount;
         this.discountCode = discountCode;
         this.totalAmount = totalAmount;
@@ -75,6 +79,7 @@ public class GuestCheckoutResponse {
     public String getPaymentStatus() { return paymentStatus; }
     public BigDecimal getSubtotal() { return subtotal; }
     public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public boolean isDeliveryFeePending() { return deliveryFeePending; }
     public BigDecimal getDiscountAmount() { return discountAmount; }
     public String getDiscountCode() { return discountCode; }
     public BigDecimal getTotalAmount() { return totalAmount; }

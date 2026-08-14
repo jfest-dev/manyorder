@@ -86,12 +86,12 @@ class ChangePasswordIntegrationTest extends IntegrationTestBase {
     @Test
     void changePassword_unauthenticated_isRejected() throws Exception {
         // No token: Spring Security blocks the anonymous request at the filter
-        // chain (403) before it can reach the controller.
+        // chain with 401 (not authenticated) before it can reach the controller.
         mockMvc.perform(post("/account/change-password")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "currentPassword", "password123",
                                 "newPassword", "newpass456"))))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 }

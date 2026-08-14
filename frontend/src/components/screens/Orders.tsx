@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Download, Plus, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, Download, Plus, Search, MessageCircle } from 'lucide-react';
 import { Button } from '../Button';
-import { ordersApi, OrderResponse, OrderStatus, PaymentStatus } from '../../lib/api';
+import { ordersApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { orderSummaryLines, waLink, type WaOrderSection } from '../../lib/whatsapp';
 import type { Store } from '../../App';
 
 interface OrdersProps {
@@ -64,34 +65,45 @@ function Badge({ text, bg, fg }: { text: string; bg: string; fg: string }) {
   );
 }
 
+/** A money line in the order breakdown (subtotal / delivery / discount). */
+function BreakdownRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="text-small" style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <span style={{ color: accent || 'var(--text-secondary)' }}>{label}</span>
+      <span style={{ color: accent || 'var(--text-primary)', fontWeight: 500 }}>{value}</span>
+    </div>
+  );
+}
+
+/** A labeled detail row (Contact / Fulfilment / Payment / Notes) with a fixed-
+ *  width label column, so values line up and read clearly. */
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+      <span className="text-xs" style={{ width: '84px', flexShrink: 0, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.02em', paddingTop: '1px' }}>{label}</span>
+      <div className="text-small" style={{ color: 'var(--text-primary)', minWidth: 0 }}>{value}</div>
+    </div>
+  );
+}
+
 export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = false, onEditOrder }: OrdersProps) {
   const storeId = Number(store.id);
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<OrderStatus | 'ALL'>(initialStatus);
   const [query, setQuery] = useState('');
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  // Each row toggles its OWN expand/collapse; several can stay open at once, and
+  // clicking elsewhere never closes them (same model as the sidebar submenus).
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
 
-  // Collapse the expanded order row when clicking anywhere outside it. Same
-  // always-on, ref-guarded listener the sidebar uses, so it can't miss a row
-  // that's already open. expandedRowRef tracks the currently-open row's element.
-  const expandedIdRef = useRef(expandedId);
-  expandedIdRef.current = expandedId;
-  const expandedRowRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const onDocPointerDown = (e: MouseEvent) => {
-      if (
-        expandedIdRef.current !== null &&
-        expandedRowRef.current &&
-        !expandedRowRef.current.contains(e.target as Node)
-      ) {
-        setExpandedId(null);
-      }
-    };
-    document.addEventListener('mousedown', onDocPointerDown);
-    return () => document.removeEventListener('mousedown', onDocPointerDown);
-  }, []);
+  const toggleExpanded = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const load = async () => {
     setLoading(true);
@@ -183,6 +195,42 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
 
   const fmtDate = (iso: string) => new Date(iso).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' });
 
+  const fulfilmentLabel = (t: OrderType) => (t === 'DELIVERY' ? 'Delivery' : 'Pickup');
+
+  // One combined WhatsApp message to the customer covering every order in the
+  // group. A split checkout is two linked orders sharing an orderGroupId, so a
+  // grouped order messages all its siblings as one summary (reusing the shared
+  // "one message, sections + combined totals" builder).
+  const messageCustomerUrl = (order: OrderResponse): string | null => {
+    const group = order.orderGroupId
+      ? orders.filter((o) => o.orderGroupId === order.orderGroupId).sort((a, b) => a.id - b.id)
+      : [order];
+    const sections: WaOrderSection[] = group.map((o) => ({
+      orderId: o.id,
+      label: null,
+      items: o.items.map((it) => ({ quantity: it.quantity, productName: it.productName, subtotal: it.price * it.quantity })),
+      subtotal: o.subtotal,
+      deliveryFee: o.deliveryFee,
+      discountAmount: o.discountAmount,
+      totalAmount: o.totalAmount,
+    }));
+    const combined = {
+      subtotal: group.reduce((n, o) => n + o.subtotal, 0),
+      deliveryFee: group.reduce((n, o) => n + o.deliveryFee, 0),
+      deliveryFeePending: group.some((o) => o.deliveryFeePending),
+      discountAmount: group.reduce((n, o) => n + o.discountAmount, 0),
+      discountCode: group.find((o) => o.discountCode)?.discountCode ?? null,
+      totalAmount: group.reduce((n, o) => n + o.totalAmount, 0),
+    };
+    const name = order.contactName || order.customerName || '';
+    const lines = [name ? `Hi ${name}! Here's your order with ${store.name}:` : `Your order with ${store.name}:`, ''];
+    lines.push(...orderSummaryLines(sections, store.currency, combined));
+    lines.push('');
+    lines.push(`Fulfilment: ${fulfilmentLabel(order.orderType)}`);
+    if (order.orderType === 'DELIVERY' && order.deliveryAddress) lines.push(`Address: ${order.deliveryAddress}`);
+    return waLink(order.contactPhone, lines.join('\n'));
+  };
+
   return (
     <div>
       {/* Header */}
@@ -268,16 +316,15 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
           </p>
         ) : (
           filtered.map((o) => {
-            const expanded = expandedId === o.id;
+            const expanded = expandedIds.has(o.id);
             const busy = busyOrderId === o.id;
             return (
               <div
                 key={o.id}
-                ref={expanded ? expandedRowRef : undefined}
                 style={{ borderTop: '1px solid var(--border-subtle)' }}
               >
                 <div
-                  onClick={() => setExpandedId(expanded ? null : o.id)}
+                  onClick={() => toggleExpanded(o.id)}
                   className="orders-row"
                   style={{
                     display: 'grid', gridTemplateColumns: '90px 1.4fr 110px 130px 70px 150px 1fr 40px',
@@ -288,7 +335,12 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                   <span className="order-id text-small" style={{ fontWeight: 600 }}>#{o.id}</span>
                   <span className="text-small"><span className="m-label">Customer</span>{o.contactName || o.customerName || '—'}</span>
                   <span className="text-small" style={{ fontWeight: 600 }}><span className="m-label">Total</span>{formatMoney(o.totalAmount, store.currency)}</span>
-                  <span><span className="m-label">Payment</span><Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} /></span>
+                  <span><span className="m-label">Payment</span>
+                    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
+                      <Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} />
+                      {o.paymentMethod && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{o.paymentMethod}</span>}
+                    </span>
+                  </span>
                   <span className="text-small"><span className="m-label">Items</span>{o.items.reduce((n, i) => n + i.quantity, 0)}</span>
                   <span><span className="m-label">Status</span><Badge text={STATUS_LABEL[o.status]} {...STATUS_STYLE[o.status]} /></span>
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}><span className="m-label">Date</span>{fmtDate(o.createdAt)}</span>
@@ -305,34 +357,78 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
 
                 {expanded && (
                   <div className="orders-detail" style={{ padding: '0 20px 20px', display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px' }}>
-                    {/* Items + contact */}
+                    {/* Items, money breakdown + labeled details */}
                     <div style={{ background: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-medium)', padding: '16px' }}>
-                      <p className="text-xs" style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>ITEMS</p>
+                      <p className="text-xs" style={{ fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.03em', marginBottom: '10px' }}>ITEMS</p>
                       {o.items.length === 0 && <p className="text-small" style={{ color: 'var(--text-muted)' }}>No line items recorded.</p>}
                       {o.items.map((i) => (
                         <div key={i.productId} className="text-small" style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                          <span>{i.productName} × {i.quantity}</span>
-                          <span>{formatMoney(i.price * i.quantity, store.currency)}</span>
+                          <span style={{ color: 'var(--text-primary)' }}>{i.productName} × {i.quantity}</span>
+                          <span style={{ color: 'var(--text-primary)' }}>{formatMoney(i.price * i.quantity, store.currency)}</span>
                         </div>
                       ))}
-                      <div className="text-small" style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', marginTop: '8px', paddingTop: '8px', fontWeight: 600 }}>
-                        <span>Total</span>
-                        <span>{formatMoney(o.totalAmount, store.currency)}</span>
+
+                      <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '10px', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <BreakdownRow label="Subtotal" value={formatMoney(o.subtotal, store.currency)} />
+                        {o.deliveryFeePending
+                          ? <BreakdownRow label="Delivery fee" value="To be confirmed" accent="#B45309" />
+                          : o.deliveryFee > 0 && <BreakdownRow label="Delivery fee" value={formatMoney(o.deliveryFee, store.currency)} />}
+                        {o.discountAmount > 0 && (
+                          <BreakdownRow label={`Discount${o.discountCode ? ` (${o.discountCode})` : ''}`} value={`− ${formatMoney(o.discountAmount, store.currency)}`} accent="#047857" />
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '4px', fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                          <span>{o.deliveryFeePending ? 'Estimated total' : 'Total'}</span>
+                          <span>{formatMoney(o.totalAmount, store.currency)}</span>
+                        </div>
                       </div>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '12px' }}>
-                        {o.contactPhone || 'no phone'} · {o.contactEmail || 'no email'} · {o.orderType}
-                        {o.deliveryAddress ? ` · ${o.deliveryAddress}` : ''}
-                      </p>
-                      {(o.paymentMethod || o.paymentReference) && (
-                        <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px' }}>
-                          Payment: {o.paymentMethod || '—'}{o.paymentReference ? ` · Ref ${o.paymentReference}` : ''}
-                        </p>
-                      )}
-                      {o.notes && <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px' }}>Notes: {o.notes}</p>}
+
+                      <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '14px', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <InfoRow label="Contact" value={
+                          <>
+                            <div>{o.contactName || o.customerName || '—'}</div>
+                            <div style={{ color: 'var(--text-secondary)' }}>{o.contactPhone || 'No phone'}</div>
+                            {o.contactEmail && <div style={{ color: 'var(--text-secondary)' }}>{o.contactEmail}</div>}
+                          </>
+                        } />
+                        <InfoRow label="Fulfilment" value={
+                          <>
+                            <div>{fulfilmentLabel(o.orderType)}</div>
+                            {o.orderType === 'DELIVERY' && <div style={{ color: 'var(--text-secondary)' }}>{o.deliveryAddress || 'No address given'}</div>}
+                          </>
+                        } />
+                        <InfoRow label="Payment" value={
+                          <>
+                            <div>{o.paymentMethod || '—'}</div>
+                            {o.paymentReference && <div style={{ color: 'var(--text-secondary)' }}>Ref {o.paymentReference}</div>}
+                          </>
+                        } />
+                        {o.notes && <InfoRow label="Notes" value={<span style={{ whiteSpace: 'pre-wrap' }}>{o.notes}</span>} />}
+                      </div>
                     </div>
 
                     {/* Actions */}
                     <div style={{ background: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-medium)', padding: '16px' }}>
+                      {(() => {
+                        const waUrl = messageCustomerUrl(o);
+                        return waUrl ? (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                              height: '40px', borderRadius: 'var(--radius-field)', background: '#25D366', color: 'white',
+                              fontSize: '13px', fontWeight: 600, textDecoration: 'none', marginBottom: '16px',
+                            }}
+                          >
+                            <MessageCircle size={16} /> Message customer on WhatsApp
+                          </a>
+                        ) : (
+                          <p className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>
+                            No phone on file — can't message this customer.
+                          </p>
+                        );
+                      })()}
                       {canEdit && onEditOrder && (
                         <div style={{ marginBottom: '16px' }}>
                           <Button variant="secondary" onClick={() => onEditOrder(o.id)}>

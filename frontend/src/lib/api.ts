@@ -21,6 +21,29 @@ export function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
+// Kept in sync with AuthContext's USER_KEY — cleared alongside the token when a
+// session is rejected, so a stale user object can't keep the app "logged in".
+const USER_KEY = 'manyorder_user';
+
+/**
+ * An authenticated request came back 401 → the stored session is invalid
+ * (expired/revoked token, or a rotated signing secret). Clear it and bounce to
+ * sign-in, rather than leaving the app rendering an authed shell it can't load.
+ * Guarded against a redirect loop when already on /signin.
+ */
+function handleInvalidSession() {
+  clearToken();
+  try {
+    localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(USER_KEY);
+  } catch {
+    /* storage unavailable — nothing to clear */
+  }
+  if (typeof window !== 'undefined' && window.location.pathname !== '/signin') {
+    window.location.href = '/signin';
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -52,6 +75,11 @@ async function request<T>(
       if (data?.message) message = data.message;
     } catch {
       /* non-JSON error body */
+    }
+    // An authed call rejected as unauthenticated → the session is dead; sign out
+    // and redirect (public calls, auth:false, never trigger this).
+    if (response.status === 401 && auth) {
+      handleInvalidSession();
     }
     throw new ApiError(response.status, message);
   }
@@ -103,6 +131,12 @@ export interface OrderResponse {
   deliveryAddress: string | null;
   notes: string | null;
   createdAt: string;
+  subtotal: number;
+  deliveryFee: number;
+  deliveryFeePending: boolean;
+  discountAmount: number;
+  discountCode: string | null;
+  orderGroupId: string | null;
   totalAmount: number;
   items: OrderItemResponse[];
 }
@@ -169,8 +203,11 @@ export interface StoreResponse {
   themeColor: string | null;
   logoUrl: string | null;
   storeDescription: string | null;
+  operatingHours: string | null;
   paymentInstruction: string | null;
   deliveryFee: number | null;
+  freeDeliveryThreshold: number | null;
+  deliveryToBeConfirmedMessage: string | null;
   whatsappVerified: boolean;
   streetAddress: string | null;
   city: string | null;
@@ -198,6 +235,10 @@ export interface CreateStorePayload {
   themeColor?: string;
   logoUrl?: string;
   storeDescription?: string;
+  operatingHours?: string;
+  streetAddress?: string;
+  city?: string;
+  postalCode?: string;
   paymentInstruction?: string;
 }
 
@@ -212,6 +253,7 @@ export interface UpdateStorePayload {
   /** Absolute logo URL from uploadsApi.logo; empty string clears the logo, undefined leaves it unchanged. */
   logoUrl?: string;
   storeDescription?: string;
+  operatingHours?: string;
   paymentInstruction?: string;
   streetAddress?: string;
   city?: string;
@@ -286,6 +328,12 @@ export const storesApi = {
     request<StoreResponse>('/merchant/stores', { method: 'POST', body: payload }),
   update: (storeId: number, payload: UpdateStorePayload) =>
     request<StoreResponse>(`/merchant/stores/${storeId}`, { method: 'PATCH', body: payload }),
+  /**
+   * Delivery config (dedicated Delivery screen), absolute semantics: deliveryFee
+   * null = "to be confirmed by seller", 0 = free; freeDeliveryThreshold null = none.
+   */
+  updateDelivery: (storeId: number, payload: { deliveryFee: number | null; freeDeliveryThreshold: number | null; deliveryToBeConfirmedMessage?: string | null }) =>
+    request<StoreResponse>(`/merchant/stores/${storeId}/delivery`, { method: 'PATCH', body: payload }),
   /**
    * Soft-delete: archives the store (owner-only). The owner re-enters their
    * password, which is verified server-side in the same request. Data is
@@ -466,12 +514,21 @@ export interface PublicStoreResponse {
   name: string;
   slug: string;
   storeDescription: string | null;
+  /** Composed public address (street, city, postal), or null when unset. */
+  address: string | null;
+  /** Free-text opening hours, e.g. "Mon–Sat, 9am–6pm", or null. */
+  operatingHours: string | null;
   currency: string;
   themeColor: string | null;
   logoUrl: string | null;
   phoneNumber: string | null;
   paymentInstruction: string | null;
   deliveryFee: number | null;
+  /** False when no fee is set → checkout shows an estimated total + "to be confirmed". */
+  deliveryFeeConfigured: boolean;
+  freeDeliveryThreshold: number | null;
+  /** Merchant's custom wording for the to-be-confirmed delivery case, or null → use default. */
+  deliveryToBeConfirmedMessage: string | null;
   totalItemsSold: number;
 }
 
@@ -517,6 +574,8 @@ export interface GuestCheckoutOrderSummary {
 }
 
 export interface GuestCheckoutResult {
+  /** True when the delivery fee is unresolved → the shown total is an estimate. */
+  deliveryFeePending: boolean;
   /** Shared id when the checkout was split into two orders; null for a single order. */
   orderGroupId: string | null;
   /** Primary order id — the single order, or the "ready now" order of a split. */
@@ -560,4 +619,8 @@ export const storefrontApi = {
 
   validateDiscount: (payload: { merchantId: number; code: string; subtotal: number }) =>
     request<DiscountValidationResult>(`/public/discounts/validate`, { method: 'POST', body: payload, auth: false }),
+
+  /** Re-open a saved order (and its split siblings) by number + phone. */
+  lookupOrder: (slug: string, payload: { orderId: number; phone: string }) =>
+    request<GuestCheckoutResult>(`/public/stores/${encodeURIComponent(slug)}/orders/lookup`, { method: 'POST', body: payload, auth: false }),
 };

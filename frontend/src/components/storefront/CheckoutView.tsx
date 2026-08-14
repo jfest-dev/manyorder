@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Tag, Clock } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
+import { saveRecentOrder } from '../../lib/orderRecall';
+import { DEFAULT_DELIVERY_TBC_MESSAGE } from '../../lib/delivery';
 import {
   storefrontApi, ApiError,
   type PublicStoreResponse, type GuestCheckoutResult, type FulfilmentMethod,
@@ -22,13 +24,25 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
   const accent = 'var(--primary-solid)';
   const currency = store.currency;
 
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [fulfilment, setFulfilment] = useState<FulfilmentMethod>('PICKUP');
-  const [address, setAddress] = useState('');
-  const [notes, setNotes] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0]);
+  // Persist the in-progress form so navigating back to the cart and returning
+  // doesn't wipe what the customer typed. Per store, cleared once the order is placed.
+  const formKey = `manyorder_checkout_${store.id}`;
+  const saved = useMemo(() => {
+    try { return JSON.parse(sessionStorage.getItem(formKey) || '{}'); } catch { return {}; }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formKey]);
+
+  const [name, setName] = useState<string>(saved.name ?? '');
+  const [phone, setPhone] = useState<string>(saved.phone ?? '');
+  const [email, setEmail] = useState<string>(saved.email ?? '');
+  const [fulfilment, setFulfilment] = useState<FulfilmentMethod>(saved.fulfilment ?? 'PICKUP');
+  const [address, setAddress] = useState<string>(saved.address ?? '');
+  const [notes, setNotes] = useState<string>(saved.notes ?? '');
+  const [paymentMethod, setPaymentMethod] = useState<string>(saved.paymentMethod ?? PAYMENT_METHODS[0]);
+
+  useEffect(() => {
+    sessionStorage.setItem(formKey, JSON.stringify({ name, phone, email, fulfilment, address, notes, paymentMethod }));
+  }, [formKey, name, phone, email, fulfilment, address, notes, paymentMethod]);
 
   const [code, setCode] = useState('');
   const [applied, setApplied] = useState<{ code: string; amount: number } | null>(null);
@@ -44,8 +58,16 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
   const readyLines = useMemo(() => items.filter((l) => !l.product.preOrder), [items]);
   const preorderLines = useMemo(() => items.filter((l) => l.product.preOrder), [items]);
   const willSplit = readyLines.length > 0 && preorderLines.length > 0;
-  const deliveryFee = fulfilment === 'DELIVERY' && store.deliveryFee ? store.deliveryFee : 0;
   const discount = applied?.amount ?? 0;
+
+  // Delivery fee: unset (not configured) → "to be confirmed" (estimate); a set
+  // fee is waived at/above the free-delivery threshold; explicit 0 = free.
+  const isDelivery = fulfilment === 'DELIVERY';
+  const deliveryPending = isDelivery && !store.deliveryFeeConfigured;
+  const freeByThreshold = isDelivery && store.deliveryFeeConfigured
+    && store.freeDeliveryThreshold != null && subtotal >= store.freeDeliveryThreshold;
+  const deliveryFee = (isDelivery && store.deliveryFeeConfigured && !freeByThreshold)
+    ? (store.deliveryFee ?? 0) : 0;
   const total = Math.max(0, subtotal + deliveryFee - discount);
 
   const applyCode = async () => {
@@ -85,6 +107,8 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
         discountCode: applied?.code,
         items: items.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
       });
+      sessionStorage.removeItem(formKey); // order placed — don't restore the stale form
+      saveRecentOrder(store.id, { orderId: result.orderId, phone: phone.trim() }); // device-local recall
       onPlaced(result);
     } catch (e) {
       // A code can go stale between apply and submit; surface it and let them retry.
@@ -200,11 +224,22 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
         {/* Summary */}
         <section style={{ background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px' }}>
           <Row label="Subtotal" value={formatMoney(subtotal, currency)} />
-          {deliveryFee > 0 && <Row label="Delivery fee" value={formatMoney(deliveryFee, currency)} />}
+          {isDelivery && (
+            deliveryPending
+              ? <Row label="Delivery fee" value="To be confirmed" accent="#92400E" />
+              : freeByThreshold
+                ? <Row label="Delivery fee" value="Free" accent="#065F46" />
+                : deliveryFee > 0 && <Row label="Delivery fee" value={formatMoney(deliveryFee, currency)} />
+          )}
           {discount > 0 && <Row label={`Discount (${applied?.code})`} value={`− ${formatMoney(discount, currency)}`} accent="#065F46" />}
           <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '8px', paddingTop: '8px' }}>
-            <Row label="Total" value={formatMoney(total, currency)} bold />
+            <Row label={deliveryPending ? 'Estimated total' : 'Total'} value={formatMoney(total, currency)} bold />
           </div>
+          {deliveryPending && (
+            <p style={{ fontSize: '11px', color: '#92400E', margin: '6px 0 0' }}>
+              {store.deliveryToBeConfirmedMessage?.trim() || DEFAULT_DELIVERY_TBC_MESSAGE}
+            </p>
+          )}
         </section>
 
         {error && <p style={{ fontSize: '13px', color: '#B91C1C' }}>{error}</p>}
@@ -213,7 +248,7 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
       <div style={{ position: 'sticky', bottom: 0, padding: '16px', background: 'white', borderTop: '1px solid var(--border-subtle)' }}>
         <button onClick={submit} disabled={submitting}
           style={{ width: '100%', height: '48px', borderRadius: '12px', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', background: accent, color: 'white', fontSize: '15px', fontWeight: 700, opacity: submitting ? 0.7 : 1 }}>
-          {submitting ? 'Placing order…' : `Place order · ${formatMoney(total, currency)}`}
+          {submitting ? 'Placing order…' : `Place order · ${formatMoney(total, currency)}${deliveryPending ? ' (est.)' : ''}`}
         </button>
       </div>
     </div>

@@ -60,11 +60,28 @@ public class Merchant {
     @Column(columnDefinition = "TEXT")
     private String storeDescription;
 
+    /** Free-text opening hours shown on the storefront, e.g. "Mon–Sat, 9am–6pm". Null/blank = not shown. */
+    @Column(columnDefinition = "TEXT")
+    private String operatingHours;
+
     @Column(columnDefinition = "TEXT")
     private String paymentInstruction;
 
-    /** Optional flat delivery fee, applied to DELIVERY storefront orders. Null = none. */
+    /**
+     * Flat delivery fee for DELIVERY storefront orders. Null = not configured →
+     * the fee is "to be confirmed by seller" (resolved off-platform); 0 = free.
+     */
     private BigDecimal deliveryFee;
+
+    /** Waive the delivery fee when the order subtotal reaches this amount. Null = no free-delivery threshold. */
+    private BigDecimal freeDeliveryThreshold;
+
+    /**
+     * Merchant's own customer-facing wording for the "to be confirmed" delivery
+     * case (deliveryFee == null). Null/blank → the storefront uses a default line.
+     */
+    @Column(columnDefinition = "TEXT")
+    private String deliveryToBeConfirmedMessage;
 
     /**
      * Whether the store's WhatsApp number has been verified as belonging to the
@@ -130,10 +147,16 @@ public class Merchant {
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     public String getStoreDescription() { return storeDescription; }
     public void setStoreDescription(String storeDescription) { this.storeDescription = storeDescription; }
+    public String getOperatingHours() { return operatingHours; }
+    public void setOperatingHours(String operatingHours) { this.operatingHours = operatingHours; }
+    public String getDeliveryToBeConfirmedMessage() { return deliveryToBeConfirmedMessage; }
+    public void setDeliveryToBeConfirmedMessage(String deliveryToBeConfirmedMessage) { this.deliveryToBeConfirmedMessage = deliveryToBeConfirmedMessage; }
     public String getPaymentInstruction() { return paymentInstruction; }
     public void setPaymentInstruction(String paymentInstruction) { this.paymentInstruction = paymentInstruction; }
     public BigDecimal getDeliveryFee() { return deliveryFee; }
     public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
+    public BigDecimal getFreeDeliveryThreshold() { return freeDeliveryThreshold; }
+    public void setFreeDeliveryThreshold(BigDecimal freeDeliveryThreshold) { this.freeDeliveryThreshold = freeDeliveryThreshold; }
     public boolean isWhatsappVerified() { return whatsappVerified; }
     public void setWhatsappVerified(boolean whatsappVerified) { this.whatsappVerified = whatsappVerified; }
     public String getStreetAddress() { return streetAddress; }

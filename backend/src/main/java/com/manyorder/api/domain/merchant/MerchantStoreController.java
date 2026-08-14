@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.manyorder.api.common.MoneyValidation;
 import com.manyorder.api.domain.upload.CloudinaryImageService;
 import com.manyorder.api.domain.user.User;
 import com.manyorder.api.domain.user.UserRole;
@@ -91,8 +92,13 @@ public class MerchantStoreController {
         merchant.setThemeColor(request.getThemeColor());
         merchant.setLogoUrl(request.getLogoUrl());
         merchant.setStoreDescription(request.getStoreDescription());
+        merchant.setOperatingHours(request.getOperatingHours());
+        merchant.setStreetAddress(request.getStreetAddress());
+        merchant.setCity(request.getCity());
+        merchant.setPostalCode(request.getPostalCode());
         merchant.setPaymentInstruction(request.getPaymentInstruction());
         merchant.setDeliveryFee(request.getDeliveryFee());
+        merchant.setFreeDeliveryThreshold(request.getFreeDeliveryThreshold());
 
         merchantRepository.save(merchant);
         return new StoreResponse(merchant);
@@ -136,6 +142,7 @@ public class MerchantStoreController {
             }
         }
         if (request.getStoreDescription() != null) merchant.setStoreDescription(request.getStoreDescription());
+        if (request.getOperatingHours() != null) merchant.setOperatingHours(request.getOperatingHours());
         if (request.getPaymentInstruction() != null) merchant.setPaymentInstruction(request.getPaymentInstruction());
         if (request.getDeliveryFee() != null) merchant.setDeliveryFee(request.getDeliveryFee());
         if (request.getStreetAddress() != null) merchant.setStreetAddress(request.getStreetAddress());
@@ -179,6 +186,27 @@ public class MerchantStoreController {
 
         merchant.setArchivedAt(LocalDateTime.now());
         merchantRepository.save(merchant);
+    }
+
+    /**
+     * Delivery configuration (dedicated Delivery screen). Owner-only, absolute
+     * semantics: a null deliveryFee means "to be confirmed by seller"; a null
+     * threshold means no free-delivery threshold.
+     */
+    @PatchMapping("/{storeId}/delivery")
+    public StoreResponse updateDelivery(@PathVariable Long storeId,
+                                        @Valid @RequestBody DeliverySettingsRequest request,
+                                        Authentication authentication) {
+        User user = requireMerchant(authentication);
+        Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+        MoneyValidation.requireValidScale(request.getDeliveryFee(), merchant.getCurrency(), "Delivery fee");
+        MoneyValidation.requireValidScale(request.getFreeDeliveryThreshold(), merchant.getCurrency(), "Free-delivery amount");
+        merchant.setDeliveryFee(request.getDeliveryFee());
+        merchant.setFreeDeliveryThreshold(request.getFreeDeliveryThreshold());
+        String tbcMessage = request.getDeliveryToBeConfirmedMessage();
+        merchant.setDeliveryToBeConfirmedMessage(tbcMessage != null && tbcMessage.isBlank() ? null : tbcMessage);
+        merchantRepository.save(merchant);
+        return new StoreResponse(merchant);
     }
 
     /** Owner or assigned staff may read a store's details. */

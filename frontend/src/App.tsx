@@ -15,6 +15,7 @@ import { Categories } from './components/screens/Categories';
 import { Inventory } from './components/screens/Inventory';
 import { Customers } from './components/screens/Customers';
 import { Marketing } from './components/screens/Marketing';
+import { Delivery } from './components/screens/Delivery';
 import { Settings } from './components/screens/Settings';
 import { OnboardingStep1 } from './components/screens/OnboardingStep1';
 import { OnboardingStep2 } from './components/screens/OnboardingStep2';
@@ -45,6 +46,7 @@ type Screen =
   | 'products-inventory'
   | 'customers'
   | 'marketing'
+  | 'delivery'
   | 'settings';
 
 export interface Store {
@@ -80,6 +82,7 @@ const DRAFT_KEY = 'manyorder_draft_v1';
 const STAFF_BLOCKED_SCREENS: Screen[] = [
   'stores-create',
   'settings',
+  'delivery',
   'marketing',
   'customers',
   'products-add',
@@ -299,8 +302,13 @@ function MerchantApp() {
         );
       }
     } catch (e: any) {
-      console.error('LOAD STORES ERROR:', e);
-      alert(e?.message || 'Could not load your stores.');
+      // A 401 already triggered a sign-out redirect in the API layer. For any
+      // other failure, surface it as an inline state instead of a native alert()
+      // and don't leave a half-rendered shell with no stores.
+      if (!(e instanceof ApiError && e.status === 401)) {
+        console.error('LOAD STORES ERROR:', e);
+        setStoreUnavailable(true);
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -583,7 +591,18 @@ function MerchantApp() {
       case 'customers':
         return <Customers />;
       case 'marketing':
-        return <Marketing />;
+        return <Marketing currency={activeStore?.currency} />;
+
+      case 'delivery':
+        return activeStore ? (
+          <Delivery
+            storeId={Number(activeStore.id)}
+            currency={activeStore.currency}
+            onSaved={() => refreshStores(true)}
+          />
+        ) : (
+          <Dashboard />
+        );
 
       case 'settings':
         return activeStore ? (

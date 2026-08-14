@@ -70,7 +70,7 @@ export function ProductDetailView({ product, currency, onAddToCart, onBack, prev
           </div>
         ) : !orderable ? (
           <div style={{ fontSize: '12px', color: '#B91C1C', background: '#FEE2E2', padding: '8px 10px', borderRadius: '8px' }}>
-            Currently out of stock
+            Currently sold out
           </div>
         ) : null}
 

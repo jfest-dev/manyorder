@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Package, ShoppingBag, Plus } from 'lucide-react';
+import { Package, ShoppingBag, Plus, MessageCircle, MapPin, Clock } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import type { ProductResponse } from '../../lib/api';
@@ -16,6 +16,11 @@ interface StorefrontViewProps {
   onSetQuantity?: (productId: number, quantity: number) => void;
   cartCount?: number;
   onViewCart?: () => void;
+  /** "Find my order" — re-open a past order's confirmation. Omitted in preview. */
+  onTrackOrder?: () => void;
+  /** A device-local last order, if any — drives the "view your recent order" banner. */
+  recentOrder?: { orderId: number } | null;
+  onViewRecentOrder?: () => void;
   /** Preview mode (onboarding/edit): render read-only, no cart bar. */
   preview?: boolean;
 }
@@ -39,10 +44,18 @@ export function StorefrontView({
   onSetQuantity,
   cartCount = 0,
   onViewCart,
+  onTrackOrder,
+  recentOrder,
+  onViewRecentOrder,
   preview = false,
 }: StorefrontViewProps) {
   const headerColor = store.themeColor || '#000000';
   const currency = store.currency;
+
+  const cartTotal = useMemo(
+    () => products.reduce((sum, p) => sum + p.price * (quantities[p.id] ?? 0), 0),
+    [products, quantities],
+  );
 
   const categories = useMemo(() => {
     const names = new Set<string>();
@@ -83,12 +96,38 @@ export function StorefrontView({
             {store.storeDescription}
           </p>
         )}
-        {(store.totalItemsSold ?? 0) > 0 && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '10px', fontSize: '12px', opacity: 0.95 }}>
-            <ShoppingBag size={13} /> {store.totalItemsSold!.toLocaleString()} sold
-          </div>
-        )}
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '14px', marginTop: '10px', fontSize: '12px', opacity: 0.95 }}>
+          {(store.totalItemsSold ?? 0) > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <ShoppingBag size={13} /> {store.totalItemsSold!.toLocaleString()} sold
+            </span>
+          )}
+          {store.phoneNumber && (
+            <a href={`https://wa.me/${store.phoneNumber.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'inherit', textDecoration: 'none' }}>
+              <MessageCircle size={13} /> {store.phoneNumber}
+            </a>
+          )}
+          {store.operatingHours && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <Clock size={13} /> {store.operatingHours}
+            </span>
+          )}
+          {store.address && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <MapPin size={13} /> {store.address}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Recent-order recall — one tap back to the order placed on this device. */}
+      {!preview && recentOrder && onViewRecentOrder && (
+        <button onClick={onViewRecentOrder}
+          style={{ width: '100%', padding: '10px 12px', background: 'white', borderBottom: '1px solid var(--border-subtle)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>
+          <ShoppingBag size={14} /> View your recent order #{recentOrder.orderId} →
+        </button>
+      )}
 
       {/* Category chips (selected = brand-black) */}
       {categories.length > 0 && (
@@ -149,7 +188,7 @@ export function StorefrontView({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{formatMoney(p.price, currency)}</span>
                     {p.preOrder && <span style={{ fontSize: '9px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', padding: '2px 6px', borderRadius: '4px' }}>Pre-order</span>}
-                    {!orderable && <span style={{ fontSize: '9px', fontWeight: 600, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: '4px' }}>Out of stock</span>}
+                    {!orderable && <span style={{ fontSize: '9px', fontWeight: 600, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: '4px' }}>Sold Out</span>}
                   </div>
                   {readyLine && (
                     <div style={{ fontSize: '10px', color: '#92400E', marginTop: '3px' }}>Ready {readyLine}</div>
@@ -180,9 +219,21 @@ export function StorefrontView({
             );
           })
         )}
+
+        {!preview && onTrackOrder && (
+          <button
+            onClick={onTrackOrder}
+            style={{
+              alignSelf: 'center', marginTop: '8px', padding: '8px 4px', background: 'none', border: 'none',
+              cursor: 'pointer', fontSize: '12.5px', fontWeight: 500, color: 'var(--text-secondary)', textDecoration: 'underline',
+            }}
+          >
+            Already ordered? Find my order
+          </button>
+        )}
       </div>
 
-      {/* Cart bar (brand-black) */}
+      {/* Cart bar (brand-black) — shows the running total + item count */}
       {!preview && cartCount > 0 && onViewCart && (
         <div style={{ position: 'sticky', bottom: 0, padding: '12px', background: 'white', borderTop: '1px solid var(--border-subtle)' }}>
           <button
@@ -193,7 +244,7 @@ export function StorefrontView({
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             }}
           >
-            <ShoppingBag size={17} /> View cart ({cartCount})
+            <ShoppingBag size={17} /> View cart · {formatMoney(cartTotal, currency)} ({cartCount})
           </button>
         </div>
       )}
