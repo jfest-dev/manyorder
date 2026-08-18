@@ -4,6 +4,7 @@ import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { saveRecentOrder } from '../../lib/orderRecall';
 import { DEFAULT_DELIVERY_TBC_MESSAGE } from '../../lib/delivery';
+import { NoteBlock } from '../NoteBlock';
 import {
   storefrontApi, ApiError,
   type PublicStoreResponse, type GuestCheckoutResult, type FulfilmentMethod,
@@ -35,7 +36,21 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
   const [name, setName] = useState<string>(saved.name ?? '');
   const [phone, setPhone] = useState<string>(saved.phone ?? '');
   const [email, setEmail] = useState<string>(saved.email ?? '');
-  const [fulfilment, setFulfilment] = useState<FulfilmentMethod>(saved.fulfilment ?? 'PICKUP');
+  // The store may offer only pickup or only delivery — restrict the choice
+  // accordingly, and default to the sole option when there's just one.
+  const allowedFulfilment: FulfilmentMethod[] =
+    store.fulfilmentMode === 'PICKUP_ONLY' ? ['PICKUP']
+    : store.fulfilmentMode === 'DELIVERY_ONLY' ? ['DELIVERY']
+    : ['PICKUP', 'DELIVERY'];
+  const [fulfilment, setFulfilment] = useState<FulfilmentMethod>(() => {
+    const initial = saved.fulfilment ?? (allowedFulfilment[0]);
+    return allowedFulfilment.includes(initial) ? initial : allowedFulfilment[0];
+  });
+  // Coerce a persisted choice that's no longer allowed (e.g. store switched to delivery-only).
+  useEffect(() => {
+    if (!allowedFulfilment.includes(fulfilment)) setFulfilment(allowedFulfilment[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store.fulfilmentMode]);
   const [address, setAddress] = useState<string>(saved.address ?? '');
   const [notes, setNotes] = useState<string>(saved.notes ?? '');
   const [paymentMethod, setPaymentMethod] = useState<string>(saved.paymentMethod ?? PAYMENT_METHODS[0]);
@@ -138,18 +153,24 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
         {/* Fulfilment */}
         <section>
           <label style={labelStyle}>How would you like to get it?</label>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {(['PICKUP', 'DELIVERY'] as FulfilmentMethod[]).map((m) => {
-              const on = fulfilment === m;
-              return (
-                <button key={m} onClick={() => setFulfilment(m)}
-                  style={{ flex: 1, height: '42px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: on ? 600 : 500,
-                    border: on ? `1px solid ${accent}` : '1px solid var(--border-subtle)', background: on ? accent : 'white', color: on ? 'white' : 'var(--text-secondary)' }}>
-                  {m === 'PICKUP' ? 'Pickup' : 'Delivery'}
-                </button>
-              );
-            })}
-          </div>
+          {allowedFulfilment.length > 1 ? (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {allowedFulfilment.map((m) => {
+                const on = fulfilment === m;
+                return (
+                  <button key={m} onClick={() => setFulfilment(m)}
+                    style={{ flex: 1, height: '42px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: on ? 600 : 500,
+                      border: on ? `1px solid ${accent}` : '1px solid var(--border-subtle)', background: on ? accent : 'white', color: on ? 'white' : 'var(--text-secondary)' }}>
+                    {m === 'PICKUP' ? 'Pickup' : 'Delivery'}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ height: '42px', borderRadius: '10px', border: `1px solid ${accent}`, background: accent, color: 'white', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {fulfilment === 'PICKUP' ? 'Pickup only' : 'Delivery only'}
+            </div>
+          )}
           {fulfilment === 'DELIVERY' && (
             <div style={{ marginTop: '10px' }}>
               <label style={labelStyle}>Delivery address *</label>
@@ -161,7 +182,7 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
         {/* Notes */}
         <section>
           <label style={labelStyle}>Notes (optional)</label>
-          <textarea style={{ ...inputStyle, height: '56px', padding: '10px 12px', resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special requests?" />
+          <textarea style={{ ...inputStyle, height: '72px', padding: '10px 12px', lineHeight: 1.5, resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special requests?" />
         </section>
 
         {/* Payment method */}
@@ -180,9 +201,9 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
             })}
           </div>
           {store.paymentInstruction && (
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '10px 12px', marginTop: '10px', whiteSpace: 'pre-wrap' }}>
-              {store.paymentInstruction}
-            </p>
+            <div style={{ background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '12px', marginTop: '10px' }}>
+              <NoteBlock label="How to pay">{store.paymentInstruction}</NoteBlock>
+            </div>
           )}
         </section>
 
@@ -236,9 +257,11 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
             <Row label={deliveryPending ? 'Estimated total' : 'Total'} value={formatMoney(total, currency)} bold />
           </div>
           {deliveryPending && (
-            <p style={{ fontSize: '11px', color: '#92400E', margin: '6px 0 0' }}>
-              {store.deliveryToBeConfirmedMessage?.trim() || DEFAULT_DELIVERY_TBC_MESSAGE}
-            </p>
+            <div style={{ marginTop: '8px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px' }}>
+              <p style={{ fontSize: '12px', color: '#92400E', margin: 0, lineHeight: 1.45 }}>
+                {store.deliveryToBeConfirmedMessage?.trim() || DEFAULT_DELIVERY_TBC_MESSAGE}
+              </p>
+            </div>
           )}
         </section>
 

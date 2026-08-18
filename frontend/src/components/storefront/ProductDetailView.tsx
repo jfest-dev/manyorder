@@ -63,10 +63,13 @@ export function ProductDetailView({ product, currency, onAddToCart, onBack, prev
 
         {/* Pre-order / stock status */}
         {product.preOrder ? (
-          <div style={{ fontSize: '12px', color: '#92400E', background: '#FEF3C7', padding: '8px 10px', borderRadius: '8px' }}>
-            <strong>Pre-order</strong>
-            {readyLine ? ` · Ready ${readyLine}` : ''}
-            {product.preOrderNote ? ` — ${product.preOrderNote}` : ''}
+          <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', padding: '10px 12px', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#92400E' }}>
+              Pre-order{readyLine ? ` · Ready ${readyLine}` : ''}
+            </div>
+            {product.preOrderNote && (
+              <div style={{ fontSize: '12px', color: '#92400E', opacity: 0.9, marginTop: '4px', lineHeight: 1.45, whiteSpace: 'pre-wrap' }}>{product.preOrderNote}</div>
+            )}
           </div>
         ) : !orderable ? (
           <div style={{ fontSize: '12px', color: '#B91C1C', background: '#FEE2E2', padding: '8px 10px', borderRadius: '8px' }}>

@@ -78,6 +78,16 @@ public class GuestCheckoutController {
                 ? OrderType.DELIVERY
                 : OrderType.PICKUP;
 
+        // Enforce the store's fulfilment mode — a client can't order a method the
+        // merchant doesn't offer (guards against a stale/tampered storefront).
+        String mode = merchant.getFulfilmentMode();
+        if (orderType == OrderType.DELIVERY && "PICKUP_ONLY".equals(mode)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This store offers pickup only.");
+        }
+        if (orderType == OrderType.PICKUP && "DELIVERY_ONLY".equals(mode)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This store offers delivery only.");
+        }
+
         // 1) Resolve + classify each line into ready (in-stock) vs pre-order, and
         //    tally the combined subtotal (discount is computed against the whole cart).
         List<Line> ready = new ArrayList<>();

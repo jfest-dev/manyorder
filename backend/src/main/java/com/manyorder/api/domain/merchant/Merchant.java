@@ -68,6 +68,13 @@ public class Merchant {
     private String paymentInstruction;
 
     /**
+     * Which fulfilment options the storefront offers: "BOTH" (default),
+     * "PICKUP_ONLY", or "DELIVERY_ONLY". Drives which choices appear at checkout.
+     */
+    @Column(nullable = false, columnDefinition = "varchar(20) default 'BOTH' not null")
+    private String fulfilmentMode = "BOTH";
+
+    /**
      * Flat delivery fee for DELIVERY storefront orders. Null = not configured →
      * the fee is "to be confirmed by seller" (resolved off-platform); 0 = free.
      */
@@ -151,6 +158,8 @@ public class Merchant {
     public void setOperatingHours(String operatingHours) { this.operatingHours = operatingHours; }
     public String getDeliveryToBeConfirmedMessage() { return deliveryToBeConfirmedMessage; }
     public void setDeliveryToBeConfirmedMessage(String deliveryToBeConfirmedMessage) { this.deliveryToBeConfirmedMessage = deliveryToBeConfirmedMessage; }
+    public String getFulfilmentMode() { return fulfilmentMode; }
+    public void setFulfilmentMode(String fulfilmentMode) { this.fulfilmentMode = fulfilmentMode; }
     public String getPaymentInstruction() { return paymentInstruction; }
     public void setPaymentInstruction(String paymentInstruction) { this.paymentInstruction = paymentInstruction; }
     public BigDecimal getDeliveryFee() { return deliveryFee; }

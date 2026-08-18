@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
 import { OrderTypeToggle } from '../OrderTypeToggle';
+import { MoneyField } from '../MoneyField';
 import { ordersApi, productsApi, ProductResponse, OrderType, OrderStatus } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import type { Store } from '../../App';
@@ -30,7 +31,7 @@ const sectionCard: React.CSSProperties = {
 const textareaStyle: React.CSSProperties = {
   width: '100%', minHeight: '88px', padding: '10px 14px', resize: 'vertical',
   borderRadius: 'var(--radius-field)', border: '1px solid var(--border-strong)',
-  background: 'var(--bg-card)', fontSize: '14px', fontFamily: 'inherit', outline: 'none',
+  background: 'var(--bg-card)', fontSize: '14px', lineHeight: 1.5, fontFamily: 'inherit', outline: 'none',
 };
 
 /** Line items may only be changed while the order is still Pending or Confirmed. */
@@ -49,6 +50,13 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
   const [orderType, setOrderType] = useState<OrderType>('PICKUP');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [notes, setNotes] = useState('');
+  // Money breakdown carried from the placed order. deliveryFee is null while the
+  // fee is still "to be confirmed" (so the merchant sets it here); discount is
+  // preserved from checkout and shown, not re-derived.
+  const [deliveryFee, setDeliveryFee] = useState<number | null>(null);
+  const [deliveryFeePending, setDeliveryFeePending] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountCode, setDiscountCode] = useState<string | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [qty, setQty] = useState('1');
@@ -70,6 +78,12 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
         setOrderType(order.orderType);
         setDeliveryAddress(order.deliveryAddress || '');
         setNotes(order.notes || '');
+        // A pending fee means "to be confirmed" — start the input empty so the
+        // merchant enters the real amount; otherwise prefill the saved fee.
+        setDeliveryFee(order.deliveryFeePending ? null : order.deliveryFee);
+        setDeliveryFeePending(order.deliveryFeePending);
+        setDiscountAmount(order.discountAmount);
+        setDiscountCode(order.discountCode);
         setLines(
           order.items.map((i) => ({
             productId: i.productId,
@@ -86,10 +100,13 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
     };
   }, [storeId, orderId]);
 
-  const total = useMemo(
+  const subtotal = useMemo(
     () => lines.reduce((sum, l) => sum + l.price * l.quantity, 0),
     [lines],
   );
+  const isDelivery = orderType === 'DELIVERY';
+  const effectiveDeliveryFee = isDelivery ? (deliveryFee ?? 0) : 0;
+  const total = Math.max(0, subtotal + effectiveDeliveryFee - discountAmount);
 
   const addLine = () => {
     const product = products.find((p) => String(p.id) === selectedProductId);
@@ -122,6 +139,9 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
         orderType,
         deliveryAddress:
           orderType === 'DELIVERY' && deliveryAddress.trim() ? deliveryAddress.trim() : undefined,
+        // Confirm/adjust the delivery fee (clears the pending "to be confirmed"
+        // state server-side). Only sent for delivery orders with a value entered.
+        deliveryFee: orderType === 'DELIVERY' && deliveryFee != null ? deliveryFee : undefined,
         notes: notes.trim() || undefined,
         // Omit items entirely when locked so the server leaves them untouched.
         ...(itemsEditable
@@ -272,14 +292,39 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
 
           <div style={sectionCard}>
             <h3 style={{ marginBottom: '20px' }}>Order Summary</h3>
-            <div className="text-small" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Items</span>
-              <span>{lines.reduce((n, l) => n + l.quantity, 0)}</span>
+
+            {/* One clean vertical list — subtotal, delivery fee, then discount as
+                its own line applied to the whole order (never nested under the fee). */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <SummaryRow label={`Items (${lines.reduce((n, l) => n + l.quantity, 0)}) · Subtotal`} value={formatMoney(subtotal, store.currency)} />
+
+              {isDelivery && (
+                <MoneyField
+                  label={deliveryFeePending ? 'Delivery fee · to be confirmed' : 'Delivery fee'}
+                  currency={store.currency}
+                  value={deliveryFee}
+                  onChange={setDeliveryFee}
+                  min={0}
+                  helperText="Enter 0 for free delivery."
+                />
+              )}
+
+              {discountAmount > 0 && (
+                <SummaryRow label={`Discount${discountCode ? ` (${discountCode})` : ''}`} value={`− ${formatMoney(discountAmount, store.currency)}`} accent="#047857" />
+              )}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-subtle)', paddingTop: '12px', marginBottom: '20px' }}>
+
+            {isDelivery && deliveryFeePending && (
+              <p className="text-xs" style={{ color: '#B45309', background: '#FEF3C7', borderRadius: '8px', padding: '8px 10px', marginTop: '12px' }}>
+                This order's delivery fee is unconfirmed. Set it here, then message the customer with the final total.
+              </p>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid var(--border-subtle)', paddingTop: '12px', marginTop: '16px', marginBottom: '20px' }}>
               <h3>Total</h3>
               <h3>{formatMoney(total, store.currency)}</h3>
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <Button variant="primary" fullWidth disabled={busy || !customerName.trim()} onClick={submit}>
                 {busy ? 'Saving…' : 'Save Changes'}
@@ -299,6 +344,15 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
           }
         }
       `}</style>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="text-small" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+      <span style={{ color: accent || 'var(--text-secondary)' }}>{label}</span>
+      <span style={{ color: accent || 'var(--text-primary)', fontWeight: 500 }}>{value}</span>
     </div>
   );
 }

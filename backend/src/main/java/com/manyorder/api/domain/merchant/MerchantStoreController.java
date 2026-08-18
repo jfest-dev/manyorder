@@ -205,6 +205,13 @@ public class MerchantStoreController {
         merchant.setFreeDeliveryThreshold(request.getFreeDeliveryThreshold());
         String tbcMessage = request.getDeliveryToBeConfirmedMessage();
         merchant.setDeliveryToBeConfirmedMessage(tbcMessage != null && tbcMessage.isBlank() ? null : tbcMessage);
+        if (request.getFulfilmentMode() != null) {
+            String mode = request.getFulfilmentMode();
+            if (!mode.equals("BOTH") && !mode.equals("PICKUP_ONLY") && !mode.equals("DELIVERY_ONLY")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid fulfilment mode: " + mode);
+            }
+            merchant.setFulfilmentMode(mode);
+        }
         merchantRepository.save(merchant);
         return new StoreResponse(merchant);
     }

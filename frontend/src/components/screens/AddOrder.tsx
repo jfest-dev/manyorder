@@ -27,7 +27,7 @@ const sectionCard: React.CSSProperties = {
 const textareaStyle: React.CSSProperties = {
   width: '100%', minHeight: '88px', padding: '10px 14px', resize: 'vertical',
   borderRadius: 'var(--radius-field)', border: '1px solid var(--border-strong)',
-  background: 'var(--bg-card)', fontSize: '14px', fontFamily: 'inherit', outline: 'none',
+  background: 'var(--bg-card)', fontSize: '14px', lineHeight: 1.5, fontFamily: 'inherit', outline: 'none',
 };
 
 export function AddOrder({ store, onNavigate }: AddOrderProps) {

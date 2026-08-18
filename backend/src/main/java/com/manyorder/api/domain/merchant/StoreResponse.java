@@ -20,6 +20,7 @@ public class StoreResponse {
     private BigDecimal deliveryFee;
     private BigDecimal freeDeliveryThreshold;
     private String deliveryToBeConfirmedMessage;
+    private String fulfilmentMode;
     private boolean whatsappVerified;
     private String streetAddress;
     private String city;
@@ -46,6 +47,7 @@ public class StoreResponse {
         this.deliveryFee = m.getDeliveryFee();
         this.freeDeliveryThreshold = m.getFreeDeliveryThreshold();
         this.deliveryToBeConfirmedMessage = m.getDeliveryToBeConfirmedMessage();
+        this.fulfilmentMode = m.getFulfilmentMode();
         this.whatsappVerified = m.isWhatsappVerified();
         this.streetAddress = m.getStreetAddress();
         this.city = m.getCity();
@@ -72,6 +74,7 @@ public class StoreResponse {
     public BigDecimal getDeliveryFee() { return deliveryFee; }
     public BigDecimal getFreeDeliveryThreshold() { return freeDeliveryThreshold; }
     public String getDeliveryToBeConfirmedMessage() { return deliveryToBeConfirmedMessage; }
+    public String getFulfilmentMode() { return fulfilmentMode; }
     public boolean isWhatsappVerified() { return whatsappVerified; }
     public String getStreetAddress() { return streetAddress; }
     public String getCity() { return city; }

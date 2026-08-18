@@ -328,6 +328,21 @@ function MerchantApp() {
     [stores, activeStoreId],
   );
 
+  // Switching stores is instant (all stores are already loaded), so it can feel
+  // like nothing happened. A brief toast confirms the switch.
+  const [storeSwitchNotice, setStoreSwitchNotice] = useState<string | null>(null);
+  const storeSwitchTimer = useRef<number | null>(null);
+  const handleStoreChange = (storeId: string) => {
+    if (storeId === activeStoreId) return;
+    setActiveStoreId(storeId);
+    const target = stores.find((s) => s.id === storeId);
+    if (target) {
+      setStoreSwitchNotice(target.name);
+      if (storeSwitchTimer.current) window.clearTimeout(storeSwitchTimer.current);
+      storeSwitchTimer.current = window.setTimeout(() => setStoreSwitchNotice(null), 2200);
+    }
+  };
+
   const createStoreOnServer = async (draft: DraftStore, logoFile?: File | null): Promise<Store> => {
     // Deferred logo upload: the file only reaches the image host now, as part of
     // creating the store, so an abandoned onboarding never leaves an orphan.
@@ -546,7 +561,7 @@ function MerchantApp() {
           <AllStores
             stores={stores}
             activeStoreId={activeStoreId || ''}
-            onStoreChange={setActiveStoreId as any}
+            onStoreChange={handleStoreChange}
             onNavigate={navigateScreen as any}
             storeLimit={storeLimit}
           />
@@ -638,15 +653,35 @@ function MerchantApp() {
   if (isOnboarding) return content;
 
   return (
-    <AppShell
-      activeItem={activeScreen}
-      onNavigate={navigateScreen}
-      stores={stores}
-      activeStoreId={activeStoreId || ''}
-      onStoreChange={setActiveStoreId as any}
-    >
-      {content}
-    </AppShell>
+    <>
+      <AppShell
+        activeItem={activeScreen}
+        onNavigate={navigateScreen}
+        stores={stores}
+        activeStoreId={activeStoreId || ''}
+        onStoreChange={handleStoreChange}
+      >
+        {content}
+      </AppShell>
+
+      {storeSwitchNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed', bottom: '24px', left: '50%', zIndex: 2000,
+            transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px',
+            background: 'var(--text-primary)', color: 'var(--bg-card)',
+            padding: '10px 16px', borderRadius: '10px', boxShadow: '0 8px 28px rgba(0,0,0,0.20)',
+            fontSize: '13px', fontWeight: 600, animation: 'mo-toast-in 0.18s ease-out',
+          }}
+        >
+          <span style={{ width: '16px', height: '16px', borderRadius: '50%', background: '#16a34a', color: 'white', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700 }}>✓</span>
+          Switched to {storeSwitchNotice}
+        </div>
+      )}
+      <style>{`@keyframes mo-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }`}</style>
+    </>
   );
 }
 

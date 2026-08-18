@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Upload, X, ArrowLeft } from 'lucide-react';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
-import { TimeField } from '../TimeField';
+import { PreorderScheduleFields } from '../PreorderScheduleFields';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { CategorySelect } from '../CategorySelect';
@@ -312,34 +312,13 @@ export function EditProduct({
                   description="Sell before it's in stock, with a ready date."
                 />
                 {preOrder && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px', paddingLeft: '28px' }}>
-                    <div>
-                      <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ready date</label>
-                      <input type="date" value={preOrderReadyDate} onChange={(e) => setPreOrderReadyDate(e.target.value)}
-                        style={{ height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none', fontFamily: 'inherit' }} />
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>Ready time (optional)</label>
-                        {(preOrderReadyTimeStart || preOrderReadyTimeEnd) && (
-                          <button type="button" onClick={() => { setPreOrderReadyTimeStart(''); setPreOrderReadyTimeEnd(''); }}
-                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, textDecoration: 'underline' }}>
-                            Clear
-                          </button>
-                        )}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <div>
-                          <div className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>From</div>
-                          <TimeField value={preOrderReadyTimeStart} onChange={setPreOrderReadyTimeStart} ariaLabel="Ready from time" />
-                        </div>
-                        <div>
-                          <div className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>Until</div>
-                          <TimeField value={preOrderReadyTimeEnd} onChange={setPreOrderReadyTimeEnd} ariaLabel="Ready until time" />
-                        </div>
-                      </div>
-                    </div>
-                    <FieldInput label="Pre-order note" placeholder="e.g. Ships early September" value={preOrderNote} onChange={setPreOrderNote} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '14px' }}>
+                    <PreorderScheduleFields
+                      date={preOrderReadyDate} onDateChange={setPreOrderReadyDate}
+                      timeStart={preOrderReadyTimeStart} onTimeStartChange={setPreOrderReadyTimeStart}
+                      timeEnd={preOrderReadyTimeEnd} onTimeEndChange={setPreOrderReadyTimeEnd}
+                    />
+                    <FieldInput label="Pre-order note" placeholder="e.g. Ships early September" value={preOrderNote} onChange={setPreOrderNote} helperText="A short line shown with the pre-order badge." />
                   </div>
                 )}
               </div>

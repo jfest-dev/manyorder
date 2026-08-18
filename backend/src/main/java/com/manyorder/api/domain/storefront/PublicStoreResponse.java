@@ -23,6 +23,8 @@ public class PublicStoreResponse {
     private String paymentInstruction;
     /** Merchant's custom wording for the to-be-confirmed delivery case; null → storefront default. */
     private String deliveryToBeConfirmedMessage;
+    /** BOTH | PICKUP_ONLY | DELIVERY_ONLY — which fulfilment choices checkout offers. */
+    private String fulfilmentMode;
     /** Flat fee; null = to-be-confirmed by seller (see deliveryFeeConfigured), 0 = free. */
     private BigDecimal deliveryFee;
     /** False when no fee is set → checkout shows an estimated total + "to be confirmed". */
@@ -48,6 +50,7 @@ public class PublicStoreResponse {
         this.deliveryFeeConfigured = m.getDeliveryFee() != null;
         this.freeDeliveryThreshold = m.getFreeDeliveryThreshold();
         this.deliveryToBeConfirmedMessage = m.getDeliveryToBeConfirmedMessage();
+        this.fulfilmentMode = m.getFulfilmentMode();
         this.totalItemsSold = totalItemsSold;
     }
 
@@ -79,5 +82,6 @@ public class PublicStoreResponse {
     public boolean isDeliveryFeeConfigured() { return deliveryFeeConfigured; }
     public BigDecimal getFreeDeliveryThreshold() { return freeDeliveryThreshold; }
     public String getDeliveryToBeConfirmedMessage() { return deliveryToBeConfirmedMessage; }
+    public String getFulfilmentMode() { return fulfilmentMode; }
     public long getTotalItemsSold() { return totalItemsSold; }
 }

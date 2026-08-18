@@ -178,8 +178,10 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
         {(result.paymentMethod || result.paymentInstruction) && (
           <section style={{ background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px' }}>
             <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>Payment</div>
-            {result.paymentMethod && <div style={{ fontSize: '14px', fontWeight: 600 }}>{result.paymentMethod}</div>}
-            {result.paymentInstruction && <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px', whiteSpace: 'pre-wrap' }}>{result.paymentInstruction}</p>}
+            {result.paymentMethod && <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{result.paymentMethod}</div>}
+            {result.paymentInstruction && (
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '8px', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{result.paymentInstruction}</p>
+            )}
           </section>
         )}
 

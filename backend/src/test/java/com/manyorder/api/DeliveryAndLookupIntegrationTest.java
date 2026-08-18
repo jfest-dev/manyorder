@@ -194,4 +194,25 @@ class DeliveryAndLookupIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.orders[0].kind").value("READY"))
                 .andExpect(jsonPath("$.orders[1].kind").value("PREORDER"));
     }
+
+    // ---------- fulfilment mode ----------
+
+    @Test
+    void fulfilmentMode_pickupOnly_rejectsDelivery_allowsPickup() throws Exception {
+        String token = registerAndGetToken("dl-mode@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PickupMode", "dl-mode-store");
+        long pid = createProduct(token, storeId, "Kopi", 3.00, false);
+        patchDelivery(token, storeId, Map.of("fulfilmentMode", "PICKUP_ONLY"));
+
+        // Delivery isn't offered → a delivery checkout is rejected (a client can't bypass it).
+        mockMvc.perform(post("/public/checkout")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "merchantId", storeId, "customerName", "Guest", "customerPhone", "+6590005555",
+                                "fulfilmentMethod", "DELIVERY", "deliveryAddress", "1 Rd", "items", item(pid, 1)))))
+                .andExpect(status().isBadRequest());
+
+        // Pickup still works (helper asserts 201).
+        checkout(storeId, "+6590005555", "PICKUP", item(pid, 1), null);
+    }
 }

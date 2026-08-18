@@ -3,7 +3,7 @@ import { Truck, MessageCircle, Check } from 'lucide-react';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
-import { storesApi, StoreResponse, ApiError } from '../../lib/api';
+import { storesApi, StoreResponse, ApiError, type FulfilmentMode } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { DEFAULT_DELIVERY_TBC_MESSAGE } from '../../lib/delivery';
 
@@ -74,6 +74,7 @@ function ChoiceRow({ selected, onSelect, title, desc, children }: {
  */
 export function Delivery({ storeId, currency, onSaved }: DeliveryProps) {
   const [loading, setLoading] = useState(true);
+  const [fulfilmentMode, setFulfilmentMode] = useState<FulfilmentMode>('BOTH');
   const [chargeFee, setChargeFee] = useState(false);
   const [feeAmount, setFeeAmount] = useState<number | null>(null);
   const [freeOverEnabled, setFreeOverEnabled] = useState(false);
@@ -88,6 +89,7 @@ export function Delivery({ storeId, currency, onSaved }: DeliveryProps) {
     setLoading(true);
     try {
       const s: StoreResponse = await storesApi.get(storeId);
+      setFulfilmentMode(s.fulfilmentMode ?? 'BOTH');
       const feeConfigured = s.deliveryFee != null;
       setChargeFee(feeConfigured);
       setFeeAmount(feeConfigured ? s.deliveryFee : null);
@@ -135,6 +137,7 @@ export function Delivery({ storeId, currency, onSaved }: DeliveryProps) {
         freeDeliveryThreshold,
         // Persist the custom wording regardless of mode so it's kept if they toggle back.
         deliveryToBeConfirmedMessage: tbcMessage.trim() || null,
+        fulfilmentMode,
       });
       onSaved?.();
       setSaved(true);
@@ -164,16 +167,43 @@ export function Delivery({ storeId, currency, onSaved }: DeliveryProps) {
     customerPreview = `${formatMoney(feeAmount ?? 0, currency)} delivery`;
   }
 
+  const offersDelivery = fulfilmentMode !== 'PICKUP_ONLY';
+  const fulfilmentOptions: { mode: FulfilmentMode; title: string; desc: string }[] = [
+    { mode: 'BOTH', title: 'Pickup & delivery', desc: 'Customers choose either pickup or delivery at checkout.' },
+    { mode: 'PICKUP_ONLY', title: 'Pickup only', desc: 'Hide delivery — customers can only collect their order.' },
+    { mode: 'DELIVERY_ONLY', title: 'Delivery only', desc: 'Hide pickup — every order is delivered.' },
+  ];
+
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ marginBottom: '8px' }}>Delivery</h1>
         <p className="text-small" style={{ color: 'var(--text-secondary)' }}>
-          Choose how delivery is charged when customers check out on your storefront.
+          Choose how customers receive their orders, and how delivery is charged.
         </p>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '640px' }}>
+        {/* Fulfilment options */}
+        <div style={sectionCard}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+            <Truck size={18} style={{ color: 'var(--text-secondary)' }} />
+            <h3 style={{ margin: 0 }}>Fulfilment options</h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {fulfilmentOptions.map((o) => (
+              <ChoiceRow
+                key={o.mode}
+                selected={fulfilmentMode === o.mode}
+                onSelect={() => setFulfilmentMode(o.mode)}
+                title={o.title}
+                desc={o.desc}
+              />
+            ))}
+          </div>
+        </div>
+
+        {offersDelivery && (
         <div style={sectionCard}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
             <Truck size={18} style={{ color: 'var(--text-secondary)' }} />
@@ -244,8 +274,10 @@ export function Delivery({ storeId, currency, onSaved }: DeliveryProps) {
             </ChoiceRow>
           </div>
         </div>
+        )}
 
-        {/* What the customer sees */}
+        {/* What the customer sees (delivery pricing) */}
+        {offersDelivery && (
         <div style={{ ...sectionCard, padding: '18px 24px' }}>
           <div style={sectionLabel}>At checkout, customers see</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -253,6 +285,7 @@ export function Delivery({ storeId, currency, onSaved }: DeliveryProps) {
             <span className="text-small" style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{customerPreview}</span>
           </div>
         </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <Button variant="primary" onClick={save} disabled={saving}>

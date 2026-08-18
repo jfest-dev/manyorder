@@ -208,6 +208,7 @@ export interface StoreResponse {
   deliveryFee: number | null;
   freeDeliveryThreshold: number | null;
   deliveryToBeConfirmedMessage: string | null;
+  fulfilmentMode: FulfilmentMode;
   whatsappVerified: boolean;
   streetAddress: string | null;
   city: string | null;
@@ -332,7 +333,7 @@ export const storesApi = {
    * Delivery config (dedicated Delivery screen), absolute semantics: deliveryFee
    * null = "to be confirmed by seller", 0 = free; freeDeliveryThreshold null = none.
    */
-  updateDelivery: (storeId: number, payload: { deliveryFee: number | null; freeDeliveryThreshold: number | null; deliveryToBeConfirmedMessage?: string | null }) =>
+  updateDelivery: (storeId: number, payload: { deliveryFee: number | null; freeDeliveryThreshold: number | null; deliveryToBeConfirmedMessage?: string | null; fulfilmentMode?: FulfilmentMode }) =>
     request<StoreResponse>(`/merchant/stores/${storeId}/delivery`, { method: 'PATCH', body: payload }),
   /**
    * Soft-delete: archives the store (owner-only). The owner re-enters their
@@ -408,6 +409,8 @@ export const ordersApi = {
     orderType?: OrderType;
     deliveryAddress?: string;
     notes?: string;
+    /** Set/confirm the delivery fee (clears the "to be confirmed" pending flag server-side). */
+    deliveryFee?: number;
     items?: { productId: number; quantity: number }[];
   }) => request<OrderResponse>(`/merchant/stores/${storeId}/orders/${orderId}`, { method: 'PATCH', body: payload }),
 
@@ -529,10 +532,14 @@ export interface PublicStoreResponse {
   freeDeliveryThreshold: number | null;
   /** Merchant's custom wording for the to-be-confirmed delivery case, or null → use default. */
   deliveryToBeConfirmedMessage: string | null;
+  /** Which fulfilment choices checkout offers. */
+  fulfilmentMode: FulfilmentMode;
   totalItemsSold: number;
 }
 
 export type FulfilmentMethod = 'PICKUP' | 'DELIVERY';
+/** Which fulfilment options a store offers at checkout. */
+export type FulfilmentMode = 'BOTH' | 'PICKUP_ONLY' | 'DELIVERY_ONLY';
 
 export interface GuestCheckoutItem {
   productId: number;

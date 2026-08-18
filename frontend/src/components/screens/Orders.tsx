@@ -148,6 +148,11 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
     setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
 
   const changeStatus = async (order: OrderResponse, status: OrderStatus) => {
+    // Cancelling is destructive and can't be undone — confirm before it takes effect.
+    if (status === 'CANCELLED' &&
+        !window.confirm(`Cancel order #${order.id}? This can't be undone and the customer's order will be marked cancelled.`)) {
+      return;
+    }
     setBusyOrderId(order.id);
     try {
       applyUpdated(await ordersApi.updateStatus(storeId, order.id, status));
@@ -299,12 +304,12 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
         <div
           className="text-xs orders-head"
           style={{
-            display: 'grid', gridTemplateColumns: '90px 1.4fr 110px 130px 70px 150px 1fr 40px',
+            display: 'grid', gridTemplateColumns: '78px 1.2fr 96px 92px 90px 96px 52px 120px 0.9fr 36px',
             gap: '12px', padding: '14px 20px', background: 'var(--bg-card-subtle)',
             color: 'var(--text-secondary)', fontWeight: 600,
           }}
         >
-          <span>Order</span><span>Customer</span><span>Total</span><span>Payment</span>
+          <span>Order</span><span>Customer</span><span>Fulfilment</span><span>Total</span><span>Payment</span><span>Method</span>
           <span>Items</span><span>Status</span><span>Date</span><span />
         </div>
 
@@ -327,20 +332,28 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                   onClick={() => toggleExpanded(o.id)}
                   className="orders-row"
                   style={{
-                    display: 'grid', gridTemplateColumns: '90px 1.4fr 110px 130px 70px 150px 1fr 40px',
+                    display: 'grid', gridTemplateColumns: '78px 1.2fr 96px 92px 90px 96px 52px 120px 0.9fr 36px',
                     gap: '12px', padding: '16px 20px', alignItems: 'center', cursor: 'pointer',
                     opacity: busy ? 0.6 : 1,
                   }}
                 >
                   <span className="order-id text-small" style={{ fontWeight: 600 }}>#{o.id}</span>
                   <span className="text-small"><span className="m-label">Customer</span>{o.contactName || o.customerName || '—'}</span>
-                  <span className="text-small" style={{ fontWeight: 600 }}><span className="m-label">Total</span>{formatMoney(o.totalAmount, store.currency)}</span>
-                  <span><span className="m-label">Payment</span>
-                    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: '3px', alignItems: 'flex-start' }}>
-                      <Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} />
-                      {o.paymentMethod && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{o.paymentMethod}</span>}
+                  <span><span className="m-label">Fulfilment</span>
+                    <span style={{
+                      display: 'inline-block', fontSize: '11px', fontWeight: 600,
+                      padding: '2px 9px', borderRadius: '999px',
+                      background: o.orderType === 'DELIVERY' ? '#EFF6FF' : '#F3F4F6',
+                      color: o.orderType === 'DELIVERY' ? '#1D4ED8' : '#4B5563',
+                    }}>
+                      {fulfilmentLabel(o.orderType)}
                     </span>
                   </span>
+                  <span className="text-small" style={{ fontWeight: 600 }}><span className="m-label">Total</span>{formatMoney(o.totalAmount, store.currency)}</span>
+                  <span><span className="m-label">Payment</span>
+                    <Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} />
+                  </span>
+                  <span className="text-small" style={{ color: 'var(--text-secondary)' }}><span className="m-label">Method</span>{o.paymentMethod || '—'}</span>
                   <span className="text-small"><span className="m-label">Items</span>{o.items.reduce((n, i) => n + i.quantity, 0)}</span>
                   <span><span className="m-label">Status</span><Badge text={STATUS_LABEL[o.status]} {...STATUS_STYLE[o.status]} /></span>
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}><span className="m-label">Date</span>{fmtDate(o.createdAt)}</span>
@@ -372,7 +385,11 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                         <BreakdownRow label="Subtotal" value={formatMoney(o.subtotal, store.currency)} />
                         {o.deliveryFeePending
                           ? <BreakdownRow label="Delivery fee" value="To be confirmed" accent="#B45309" />
-                          : o.deliveryFee > 0 && <BreakdownRow label="Delivery fee" value={formatMoney(o.deliveryFee, store.currency)} />}
+                          : o.orderType === 'DELIVERY' && (
+                              o.deliveryFee > 0
+                                ? <BreakdownRow label="Delivery fee" value={formatMoney(o.deliveryFee, store.currency)} />
+                                : <BreakdownRow label="Delivery fee" value="Free" accent="#047857" />
+                            )}
                         {o.discountAmount > 0 && (
                           <BreakdownRow label={`Discount${o.discountCode ? ` (${o.discountCode})` : ''}`} value={`− ${formatMoney(o.discountAmount, store.currency)}`} accent="#047857" />
                         )}

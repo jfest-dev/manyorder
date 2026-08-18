@@ -23,6 +23,9 @@ public class DeliverySettingsRequest {
     /** Custom customer-facing wording for the to-be-confirmed case; null/blank → storefront default. */
     private String deliveryToBeConfirmedMessage;
 
+    /** BOTH | PICKUP_ONLY | DELIVERY_ONLY. Null leaves the current mode unchanged. */
+    private String fulfilmentMode;
+
     public DeliverySettingsRequest() {}
 
     public BigDecimal getDeliveryFee() { return deliveryFee; }
@@ -31,4 +34,6 @@ public class DeliverySettingsRequest {
     public void setFreeDeliveryThreshold(BigDecimal freeDeliveryThreshold) { this.freeDeliveryThreshold = freeDeliveryThreshold; }
     public String getDeliveryToBeConfirmedMessage() { return deliveryToBeConfirmedMessage; }
     public void setDeliveryToBeConfirmedMessage(String deliveryToBeConfirmedMessage) { this.deliveryToBeConfirmedMessage = deliveryToBeConfirmedMessage; }
+    public String getFulfilmentMode() { return fulfilmentMode; }
+    public void setFulfilmentMode(String fulfilmentMode) { this.fulfilmentMode = fulfilmentMode; }
 }
