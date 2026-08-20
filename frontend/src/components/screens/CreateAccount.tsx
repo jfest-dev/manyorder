@@ -8,7 +8,7 @@ import { Button } from '../Button';
 import { useAuth } from '../../context/AuthContext';
 import { validatePassword, PASSWORD_RULE_TEXT } from '../../lib/password';
 
-// Simple, permissive email shape check — enough to catch obviously invalid
+// Simple, permissive email shape check - enough to catch obviously invalid
 // input client-side so we show one friendly message instead of the backend's
 // validation text (and never fire both at once).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -59,7 +59,7 @@ export function CreateAccount() {
   return (
     <AuthLayout
       title="Create your account"
-      subtitle="Set up your account first — your store comes next"
+      subtitle="Set up your account first. Your store comes next"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <FieldInput label="Full Name" placeholder="Jane Tan" value={fullName} onChange={setFullName} required />

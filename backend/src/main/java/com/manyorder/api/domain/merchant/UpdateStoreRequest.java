@@ -40,6 +40,7 @@ public class UpdateStoreRequest {
     private Boolean notifyLowStockEmail;
     private Boolean notifyNewOrderWhatsapp;
     private Boolean notifyUrgentWhatsapp;
+    private Boolean itemNotesEnabled;
 
     public UpdateStoreRequest() {}
 
@@ -77,6 +78,8 @@ public class UpdateStoreRequest {
     public void setNotifyNewOrderEmail(Boolean v) { this.notifyNewOrderEmail = v; }
     public Boolean getNotifyLowStockEmail() { return notifyLowStockEmail; }
     public void setNotifyLowStockEmail(Boolean v) { this.notifyLowStockEmail = v; }
+    public Boolean getItemNotesEnabled() { return itemNotesEnabled; }
+    public void setItemNotesEnabled(Boolean v) { this.itemNotesEnabled = v; }
     public Boolean getNotifyNewOrderWhatsapp() { return notifyNewOrderWhatsapp; }
     public void setNotifyNewOrderWhatsapp(Boolean v) { this.notifyNewOrderWhatsapp = v; }
     public Boolean getNotifyUrgentWhatsapp() { return notifyUrgentWhatsapp; }

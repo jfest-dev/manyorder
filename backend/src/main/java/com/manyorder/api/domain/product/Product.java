@@ -4,10 +4,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.manyorder.api.domain.category.Category;
 import com.manyorder.api.domain.merchant.Merchant;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -16,6 +19,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
 @Entity
@@ -68,6 +73,12 @@ public class Product {
     private LocalTime preOrderReadyTimeEnd;
 
     private String preOrderNote;
+
+    /** Add-on/modifier groups (e.g. "Sauce Selection"). Owned by the product and
+     *  replaced wholesale on save. */
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC")
+    private List<ModifierGroup> modifierGroups = new ArrayList<>();
 
     private LocalDateTime createdAt;
 
@@ -153,4 +164,11 @@ public class Product {
 
     public String getPreOrderNote() { return preOrderNote; }
     public void setPreOrderNote(String preOrderNote) { this.preOrderNote = preOrderNote; }
+
+    public List<ModifierGroup> getModifierGroups() { return modifierGroups; }
+    /** Replace the whole modifier set (orphanRemoval deletes the old groups/options). */
+    public void replaceModifierGroups(List<ModifierGroup> groups) {
+        this.modifierGroups.clear();
+        if (groups != null) this.modifierGroups.addAll(groups);
+    }
 }

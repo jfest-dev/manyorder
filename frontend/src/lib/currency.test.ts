@@ -19,7 +19,7 @@ describe('moneyFractionDigits', () => {
   });
 });
 
-describe('parseMoneyInput — SGD', () => {
+describe('parseMoneyInput - SGD', () => {
   it('accepts a plain 2-decimal amount', () => {
     expect(parseMoneyInput('5.50', 'SGD')).toEqual({ value: 5.5 });
     expect(parseMoneyInput('0', 'SGD')).toEqual({ value: 0 });
@@ -59,7 +59,7 @@ describe('parseMoneyInput — SGD', () => {
   });
 });
 
-describe('parseMoneyInput — IDR', () => {
+describe('parseMoneyInput - IDR', () => {
   it('strips . , and spaces as grouping and parses a whole integer', () => {
     // The core guard against a 1000x mis-entry: "25.000" means 25000, not 25.
     expect(parseMoneyInput('25.000', 'IDR')).toEqual({ value: 25000 });

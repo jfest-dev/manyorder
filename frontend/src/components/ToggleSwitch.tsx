@@ -7,7 +7,7 @@ interface ToggleSwitchProps {
 }
 
 /**
- * A labelled on/off switch — the standard control for a binary setting (product
+ * A labelled on/off switch - the standard control for a binary setting (product
  * visibility, pre-order, etc.). The whole row is clickable; the track+knob is a
  * real `role="switch"` button so it stays keyboard- and screen-reader-accessible.
  */

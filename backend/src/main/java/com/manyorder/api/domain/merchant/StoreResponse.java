@@ -29,6 +29,7 @@ public class StoreResponse {
     private boolean notifyLowStockEmail;
     private boolean notifyNewOrderWhatsapp;
     private boolean notifyUrgentWhatsapp;
+    private boolean itemNotesEnabled;
     private LocalDateTime createdAt;
 
     public StoreResponse(Merchant m) {
@@ -56,6 +57,7 @@ public class StoreResponse {
         this.notifyLowStockEmail = m.isNotifyLowStockEmail();
         this.notifyNewOrderWhatsapp = m.isNotifyNewOrderWhatsapp();
         this.notifyUrgentWhatsapp = m.isNotifyUrgentWhatsapp();
+        this.itemNotesEnabled = m.isItemNotesEnabled();
         this.createdAt = m.getCreatedAt();
     }
 
@@ -81,6 +83,7 @@ public class StoreResponse {
     public String getPostalCode() { return postalCode; }
     public boolean isNotifyNewOrderEmail() { return notifyNewOrderEmail; }
     public boolean isNotifyLowStockEmail() { return notifyLowStockEmail; }
+    public boolean isItemNotesEnabled() { return itemNotesEnabled; }
     public boolean isNotifyNewOrderWhatsapp() { return notifyNewOrderWhatsapp; }
     public boolean isNotifyUrgentWhatsapp() { return notifyUrgentWhatsapp; }
     public LocalDateTime getCreatedAt() { return createdAt; }

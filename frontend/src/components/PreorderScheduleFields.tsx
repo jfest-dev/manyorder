@@ -23,7 +23,7 @@ const dateInput: React.CSSProperties = {
 
 /**
  * The pre-order "ready" schedule (date + optional From/Until time range) as one
- * grouped, aligned block — shared by Add and Edit Product so both read the same.
+ * grouped, aligned block - shared by Add and Edit Product so both read the same.
  * Times are 12-hour (TimeField); a single Clear resets both, and the whole group
  * sits in a subtle panel instead of a deep indent.
  */

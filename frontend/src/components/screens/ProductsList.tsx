@@ -1,8 +1,9 @@
 import { Search, Plus, Download, Edit, Package } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
+import { ToggleSwitch } from '../ToggleSwitch';
 import { useEffect, useMemo, useState } from 'react';
-import { productsApi, ProductResponse, ApiError } from '../../lib/api';
+import { productsApi, storesApi, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 
 interface ProductsListProps {
@@ -39,6 +40,11 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Store-level item-customization setting, managed here alongside modifiers
+  // (which live on each product's Add/Edit form). null until loaded.
+  const [itemNotesEnabled, setItemNotesEnabled] = useState<boolean | null>(null);
+  const [notesSaving, setNotesSaving] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -48,8 +54,25 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
       .then((res) => { if (!cancelled) setProducts(res); })
       .catch((e) => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load products'); })
       .finally(() => { if (!cancelled) setLoading(false); });
+    storesApi.get(storeId)
+      .then((s) => { if (!cancelled) setItemNotesEnabled(s.itemNotesEnabled); })
+      .catch(() => { /* leave the toggle hidden if the store fetch fails */ });
     return () => { cancelled = true; };
   }, [storeId]);
+
+  // Optimistic toggle; revert on failure so the switch never lies.
+  const toggleItemNotes = async (next: boolean) => {
+    const prev = itemNotesEnabled;
+    setItemNotesEnabled(next);
+    setNotesSaving(true);
+    try {
+      await storesApi.update(storeId, { itemNotesEnabled: next });
+    } catch {
+      setItemNotesEnabled(prev);
+    } finally {
+      setNotesSaving(false);
+    }
+  };
 
   // Search across every human-visible field: name, category, SKU, and the
   // derived status label (Active / Draft / Out of Stock / Pre-order). The
@@ -130,6 +153,21 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
         </p>
       </div>
 
+      {/* Item customization: store-level notes toggle (add-ons/modifiers are set
+          per product on each Add/Edit Product form). */}
+      {itemNotesEnabled !== null && (
+        <div style={{ marginBottom: '24px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-card)', padding: '16px 20px', opacity: notesSaving ? 0.7 : 1 }}>
+          <p className="text-xs" style={{ fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '12px' }}>Item customization</p>
+          <ToggleSwitch
+            checked={itemNotesEnabled}
+            disabled={notesSaving}
+            onChange={toggleItemNotes}
+            label="Per-item notes"
+            description="Let customers add a note to each item on the product page. Turn off if you don't take special requests. Applies to every product."
+          />
+        </div>
+      )}
+
       {/* Actions Bar */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ flex: 1, minWidth: '250px', position: 'relative' }}>
@@ -192,7 +230,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.categoryName || '—'}</td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.categoryName || '-'}</td>
                       <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{formatMoney(p.price, currency)}</td>
                       <td style={{ padding: '12px 16px', fontSize: '13px' }}>
                         <span style={{ color: p.stock === 0 && !p.preOrder ? '#DC2626' : 'var(--text-primary)' }}>{p.stock} in stock</span>
@@ -222,7 +260,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
 
               {filtered.length === 0 && (
                 <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  {products.length === 0 ? 'No products yet — add your first one.' : 'No products match your search.'}
+                  {products.length === 0 ? 'No products yet. Add your first one.' : 'No products match your search.'}
                 </div>
               )}
             </div>
@@ -236,7 +274,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
                     <div style={{ flex: 1 }}>
                       <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>{p.name}</div>
                       <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        {p.categoryName || '—'}{p.sku ? ` · SKU: ${p.sku}` : ''}
+                        {p.categoryName || '-'}{p.sku ? ` · SKU: ${p.sku}` : ''}
                       </div>
                     </div>
                   </div>

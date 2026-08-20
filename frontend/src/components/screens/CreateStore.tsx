@@ -14,7 +14,7 @@ interface CreateStoreProps {
     category: string;
     color: string;
     // The chosen logo file, if any. Uploaded to the image host by the caller
-    // only when the store is actually created — never on select — so an
+    // only when the store is actually created - never on select - so an
     // abandoned or replaced pick never leaves an orphan behind.
     logoFile?: File | null;
 
@@ -32,12 +32,12 @@ interface CreateStoreProps {
   onNavigate?: (screen: string) => void;
 
   // Onboarding (first store) passes this so the header shows a "Sign out"
-  // button — a brand-new merchant with no store yet always has a way out.
+  // button - a brand-new merchant with no store yet always has a way out.
   onSignOut?: () => void;
 
   // The logo pick held by the caller across onboarding steps, so a Back to
   // step 1 restores the preview. (A File can't live in the localStorage draft,
-  // so a full refresh still clears it — an accepted trade-off.)
+  // so a full refresh still clears it - an accepted trade-off.)
   initialLogoFile?: File | null;
 
   // Prefill the form when returning to this step (e.g. onboarding "Back"),
@@ -109,7 +109,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
   const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [storeLink, setStoreLink] = useState(initialData?.storeLink || '');
   // Only a direct edit to the link field stops auto-follow. We persist this
-  // flag into the draft so it survives a Back round-trip — an auto-derived
+  // flag into the draft so it survives a Back round-trip - an auto-derived
   // link must NOT be mistaken for a user-customized one.
   const [storeLinkTouched, setStoreLinkTouched] = useState(!!initialData?.storeLinkTouched);
   const [streetAddress, setStreetAddress] = useState(initialData?.streetAddress || '');
@@ -118,7 +118,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
   const [operatingHours, setOperatingHours] = useState(initialData?.operatingHours || '');
 
   // Logo: held locally as a File and previewed via an object URL. Nothing is
-  // uploaded here — the caller uploads it only when the store is created, so a
+  // uploaded here - the caller uploads it only when the store is created, so a
   // discarded or replaced pick never reaches the image host.
   const [logoFile, setLogoFile] = useState<File | null>(initialLogoFile ?? null);
   const [logoPreview, setLogoPreview] = useState<string>('');
@@ -128,7 +128,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
   // Business Name is the one required field (matches the backend's @NotBlank).
   const [nameError, setNameError] = useState<string | null>(null);
 
-  // Submit state — the logo re-encode + upload happens during this, so we show a
+  // Submit state - the logo re-encode + upload happens during this, so we show a
   // clear "Uploading…" cue rather than letting it feel stuck.
   const [submitting, setSubmitting] = useState(false);
   const mountedRef = useRef(true);
@@ -226,7 +226,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                   Store logo
                 </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  {/* Avatar preview — the picked logo when set, else initials/colour. */}
+                  {/* Avatar preview - the picked logo when set, else initials/colour. */}
                   <div
                     style={{
                       position: 'relative',
@@ -412,7 +412,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                 helperText="Auto-selects from country, but you can change it anytime"
               />
 
-              {/* Address & hours — shown on the storefront; editable later in Settings. */}
+              {/* Address & hours - shown on the storefront; editable later in Settings. */}
               <FieldInput
                 label="Street address"
                 placeholder="123 Main Street"
@@ -429,7 +429,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                 placeholder="e.g. Mon–Sat, 9am–6pm · Closed Sun"
                 value={operatingHours}
                 onChange={setOperatingHours}
-                helperText="Free text — shown on your storefront (optional)."
+                helperText="Free text, shown on your storefront (optional)."
               />
 
               <div>

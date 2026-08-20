@@ -10,7 +10,7 @@ interface NavItemProps {
   activeSubItem?: string;
   onSubItemClick?: (id: string) => void;
   // Expansion is controlled by the Sidebar so multiple submenus can stay open
-  // independently (each toggles only via its own header — no click-outside close).
+  // independently (each toggles only via its own header - no click-outside close).
   isExpanded?: boolean;
   onToggleExpand?: () => void;
 }
@@ -88,7 +88,7 @@ export function NavItem({
         )}
       </button>
 
-      {/* Sub Items — indented past a vertical guide line so the nesting reads
+      {/* Sub Items - indented past a vertical guide line so the nesting reads
           at a glance; children use smaller, lighter text than the parent. */}
       {subItems && isExpanded && (
         <div

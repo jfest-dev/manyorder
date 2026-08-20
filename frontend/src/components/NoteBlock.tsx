@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 interface NoteBlockProps {
   label: string;
   children: ReactNode;
-  /** Muted/secondary body — use for supplementary instructions. */
+  /** Muted/secondary body - use for supplementary instructions. */
   muted?: boolean;
   style?: React.CSSProperties;
 }
@@ -11,7 +11,7 @@ interface NoteBlockProps {
 /**
  * Consistent way to DISPLAY a note or message anywhere on the platform (order
  * notes, payment instructions, delivery message, etc.): a small label above
- * readable, wrapping body text — never cramped grey run-on text.
+ * readable, wrapping body text - never cramped grey run-on text.
  */
 export function NoteBlock({ label, children, muted, style }: NoteBlockProps) {
   return (

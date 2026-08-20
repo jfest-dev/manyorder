@@ -152,6 +152,7 @@ public class MerchantStoreController {
         if (request.getNotifyLowStockEmail() != null) merchant.setNotifyLowStockEmail(request.getNotifyLowStockEmail());
         if (request.getNotifyNewOrderWhatsapp() != null) merchant.setNotifyNewOrderWhatsapp(request.getNotifyNewOrderWhatsapp());
         if (request.getNotifyUrgentWhatsapp() != null) merchant.setNotifyUrgentWhatsapp(request.getNotifyUrgentWhatsapp());
+        if (request.getItemNotesEnabled() != null) merchant.setItemNotesEnabled(request.getItemNotesEnabled());
 
         merchantRepository.save(merchant);
 

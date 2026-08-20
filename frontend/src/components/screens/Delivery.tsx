@@ -28,7 +28,7 @@ const sectionLabel: React.CSSProperties = {
   color: 'var(--text-muted)', marginBottom: '14px',
 };
 
-/** A framed choice row with a leading radio dot — used for the two delivery modes. */
+/** A framed choice row with a leading radio dot - used for the two delivery modes. */
 function ChoiceRow({ selected, onSelect, title, desc, children }: {
   selected: boolean; onSelect: () => void; title: string; desc: string; children?: React.ReactNode;
 }) {
@@ -170,8 +170,8 @@ export function Delivery({ storeId, currency, onSaved }: DeliveryProps) {
   const offersDelivery = fulfilmentMode !== 'PICKUP_ONLY';
   const fulfilmentOptions: { mode: FulfilmentMode; title: string; desc: string }[] = [
     { mode: 'BOTH', title: 'Pickup & delivery', desc: 'Customers choose either pickup or delivery at checkout.' },
-    { mode: 'PICKUP_ONLY', title: 'Pickup only', desc: 'Hide delivery — customers can only collect their order.' },
-    { mode: 'DELIVERY_ONLY', title: 'Delivery only', desc: 'Hide pickup — every order is delivered.' },
+    { mode: 'PICKUP_ONLY', title: 'Pickup only', desc: 'Hide delivery. Customers can only collect their order.' },
+    { mode: 'DELIVERY_ONLY', title: 'Delivery only', desc: 'Hide pickup. Every order is delivered.' },
   ];
 
   return (
@@ -269,7 +269,7 @@ export function Delivery({ storeId, currency, onSaved }: DeliveryProps) {
                 value={tbcMessage}
                 onChange={setTbcMessage}
                 placeholder={DEFAULT_DELIVERY_TBC_MESSAGE}
-                helperText="Optional — leave blank to use the default wording. e.g. “Delivery fee depends on your location; we’ll confirm on WhatsApp.”"
+                helperText="Optional. Leave blank to use the default wording. e.g. “Delivery fee depends on your location; we’ll confirm on WhatsApp.”"
               />
             </ChoiceRow>
           </div>

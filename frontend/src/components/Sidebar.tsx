@@ -36,7 +36,7 @@ export function Sidebar({
   const activeStore = stores.find(s => s.id === activeStoreId) || stores[0];
 
   // Which submenu sections are expanded. A set so multiple can stay open at
-  // once — each toggles only via its own header (no click-outside close).
+  // once - each toggles only via its own header (no click-outside close).
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const toggleSection = (key: string) => {
     setOpenSections((prev) => {

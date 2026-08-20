@@ -10,6 +10,7 @@ import {
   type PublicStoreResponse, type GuestCheckoutResult, type FulfilmentMethod,
 } from '../../lib/api';
 import type { CartLine } from './storefrontTypes';
+import { cartLineToCheckoutItem } from '../../lib/cart';
 
 interface CheckoutViewProps {
   store: PublicStoreResponse;
@@ -36,7 +37,7 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
   const [name, setName] = useState<string>(saved.name ?? '');
   const [phone, setPhone] = useState<string>(saved.phone ?? '');
   const [email, setEmail] = useState<string>(saved.email ?? '');
-  // The store may offer only pickup or only delivery — restrict the choice
+  // The store may offer only pickup or only delivery - restrict the choice
   // accordingly, and default to the sole option when there's just one.
   const allowedFulfilment: FulfilmentMethod[] =
     store.fulfilmentMode === 'PICKUP_ONLY' ? ['PICKUP']
@@ -67,7 +68,7 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const subtotal = useMemo(() => items.reduce((s, l) => s + l.product.price * l.quantity, 0), [items]);
+  const subtotal = useMemo(() => items.reduce((s, l) => s + l.lineSubtotal, 0), [items]);
   // Preview the split: ready (in-stock) vs pre-order lines. Two non-empty groups
   // means the checkout will produce two separate orders.
   const readyLines = useMemo(() => items.filter((l) => !l.product.preOrder), [items]);
@@ -120,9 +121,9 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
         notes: notes.trim() || undefined,
         paymentMethod,
         discountCode: applied?.code,
-        items: items.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
+        items: items.map(cartLineToCheckoutItem),
       });
-      sessionStorage.removeItem(formKey); // order placed — don't restore the stale form
+      sessionStorage.removeItem(formKey); // order placed - don't restore the stale form
       saveRecentOrder(store.id, { orderId: result.orderId, phone: phone.trim() }); // device-local recall
       onPlaced(result);
     } catch (e) {
@@ -137,7 +138,7 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: '#F3F4F6' }}>
-      <div style={{ padding: '12px 16px', background: 'white', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, padding: '12px 16px', background: 'white', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '10px' }}>
         <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex' }}><ArrowLeft size={20} /></button>
         <h1 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>Checkout</h1>
       </div>
@@ -229,12 +230,12 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
           {discountError && <p style={{ fontSize: '12px', color: '#B91C1C', marginTop: '6px' }}>{discountError}</p>}
         </section>
 
-        {/* Split preview — a mixed cart becomes two orders. */}
+        {/* Split preview - a mixed cart becomes two orders. */}
         {willSplit && (
           <section style={{ background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px' }}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', fontSize: '12px', color: '#92400E', background: '#FEF3C7', borderRadius: '8px', padding: '8px 10px', marginBottom: '12px' }}>
               <Clock size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
-              <span>This checkout will be placed as <strong>2 separate orders</strong> — your ready items and your pre-order items are fulfilled at different times.</span>
+              <span>This checkout will be placed as <strong>2 separate orders</strong>. Your ready items and your pre-order items are fulfilled at different times.</span>
             </div>
             <SplitGroup title="Ready now" lines={readyLines} currency={currency} />
             <div style={{ height: '10px' }} />
@@ -287,12 +288,16 @@ function SplitGroup({ title, lines, currency, showReady }: { title: string; line
           ? formatPreorderReady(l.product.preOrderReadyDate, l.product.preOrderReadyTimeStart, l.product.preOrderReadyTimeEnd)
           : null;
         return (
-          <div key={l.product.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>
+          <div key={l.signature} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px', gap: '10px' }}>
+            <span style={{ color: 'var(--text-secondary)', minWidth: 0 }}>
               {l.quantity} × {l.product.name}
               {ready && <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}> · ready {ready}</span>}
+              {l.selectedOptions.length > 0 && (
+                <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}> · {l.selectedOptions.map((o) => o.optionName).join(', ')}</span>
+              )}
+              {l.notes && <span style={{ color: 'var(--text-muted)', fontSize: '11px', fontStyle: 'italic' }}> · “{l.notes}”</span>}
             </span>
-            <span>{formatMoney(l.product.price * l.quantity, currency)}</span>
+            <span style={{ whiteSpace: 'nowrap' }}>{formatMoney(l.lineSubtotal, currency)}</span>
           </div>
         );
       })}

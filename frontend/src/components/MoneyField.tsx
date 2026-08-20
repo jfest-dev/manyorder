@@ -39,7 +39,7 @@ function defaultPlaceholder(currency: string | undefined): string {
  * digits + separators, and parses through the shared {@link parseMoneyInput} so
  * "5,50" and "5.50" always mean the same amount. On blur it re-displays the
  * normalised, grouped value (e.g. you type 25000 for an IDR store and it shows
- * "Rp 25.000") — the visible normalisation is the guard against a merchant
+ * "Rp 25.000") - the visible normalisation is the guard against a merchant
  * entering a price off by 1000×.
  */
 export function MoneyField({
@@ -50,7 +50,7 @@ export function MoneyField({
   const [focused, setFocused] = useState(false);
 
   // Keep the displayed text in sync when the value or currency changes from the
-  // outside (initial load, currency switch) — but never fight the user mid-edit.
+  // outside (initial load, currency switch) - but never fight the user mid-edit.
   useEffect(() => {
     if (!focused) setText(formatMoneyInput(value, currency));
     // eslint-disable-next-line react-hooks/exhaustive-deps

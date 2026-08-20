@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
 import { OrderTypeToggle } from '../OrderTypeToggle';
+import { ManualLineComposer, type ComposedLine } from '../ManualLineComposer';
 import { ordersApi, productsApi, ProductResponse, PaymentStatus, OrderType } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { lineSignature } from '../../lib/cart';
+import { resolveSelectedOptions, type ResolvedOption } from '../../lib/modifiers';
 import type { Store } from '../../App';
 
 interface AddOrderProps {
@@ -13,8 +16,13 @@ interface AddOrderProps {
 }
 
 interface Line {
+  key: string; // signature: product + chosen options + note
   product: ProductResponse;
   quantity: number;
+  modifierOptionIds: number[];
+  notes?: string;
+  selectedOptions: ResolvedOption[];
+  unitPrice: number;
 }
 
 const sectionCard: React.CSSProperties = {
@@ -40,8 +48,6 @@ export function AddOrder({ store, onNavigate }: AddOrderProps) {
   const [orderType, setOrderType] = useState<OrderType>('PICKUP');
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [lines, setLines] = useState<Line[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState('');
-  const [qty, setQty] = useState('1');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('UNPAID');
@@ -56,25 +62,20 @@ export function AddOrder({ store, onNavigate }: AddOrderProps) {
   }, [storeId]);
 
   const total = useMemo(
-    () => lines.reduce((sum, l) => sum + l.product.price * l.quantity, 0),
+    () => lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0),
     [lines],
   );
 
-  const addLine = () => {
-    const product = products.find((p) => String(p.id) === selectedProductId);
-    const quantity = Math.max(1, parseInt(qty || '1', 10) || 1);
-    if (!product) return;
+  // Same product with different modifiers / note is a separate line (by signature).
+  const addComposedLine = (c: ComposedLine) => {
+    const key = lineSignature({ productId: c.product.id, modifierOptionIds: c.modifierOptionIds, notes: c.notes });
+    const { selectedOptions, modifiersTotal } = resolveSelectedOptions(c.product, c.modifierOptionIds);
+    const unitPrice = c.product.price + modifiersTotal;
     setLines((prev) => {
-      const existing = prev.find((l) => l.product.id === product.id);
-      if (existing) {
-        return prev.map((l) =>
-          l.product.id === product.id ? { ...l, quantity: l.quantity + quantity } : l,
-        );
-      }
-      return [...prev, { product, quantity }];
+      const existing = prev.find((l) => l.key === key);
+      if (existing) return prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + c.quantity } : l));
+      return [...prev, { key, product: c.product, quantity: c.quantity, modifierOptionIds: c.modifierOptionIds, notes: c.notes, selectedOptions, unitPrice }];
     });
-    setSelectedProductId('');
-    setQty('1');
   };
 
   const submit = async () => {
@@ -91,7 +92,12 @@ export function AddOrder({ store, onNavigate }: AddOrderProps) {
         orderType,
         deliveryAddress:
           orderType === 'DELIVERY' && deliveryAddress.trim() ? deliveryAddress.trim() : undefined,
-        items: lines.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
+        items: lines.map((l) => ({
+          productId: l.product.id,
+          quantity: l.quantity,
+          modifierOptionIds: l.modifierOptionIds.length ? l.modifierOptionIds : undefined,
+          notes: l.notes,
+        })),
         paymentStatus,
         paymentMethod: paymentMethod || undefined,
         paymentReference: paymentReference.trim() || undefined,
@@ -135,7 +141,7 @@ export function AddOrder({ store, onNavigate }: AddOrderProps) {
                     onChange={(e) => setDeliveryAddress(e.target.value)}
                   />
                   <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Optional — you can fill this in later via Edit Order.
+                    Optional. You can fill this in later via Edit Order.
                   </p>
                 </div>
               )}
@@ -144,24 +150,7 @@ export function AddOrder({ store, onNavigate }: AddOrderProps) {
 
           <div style={sectionCard}>
             <h3 style={{ marginBottom: '20px' }}>Order Items</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px', gap: '10px', alignItems: 'end', marginBottom: '16px' }}>
-              <FieldSelect
-                label="Product"
-                placeholder={products.length ? 'Select a product' : 'No active products yet'}
-                options={products.map((p) => ({
-                  value: String(p.id),
-                  label: `${p.name} — ${formatMoney(p.price, store.currency)}`,
-                }))}
-                value={selectedProductId}
-                onChange={setSelectedProductId}
-              />
-              <FieldInput label="Qty" type="number" value={qty} onChange={setQty} />
-              <Button variant="secondary" onClick={addLine} disabled={!selectedProductId}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-                  <Plus size={15} /> Add
-                </div>
-              </Button>
-            </div>
+            <ManualLineComposer products={products} currency={store.currency} onAdd={addComposedLine} />
 
             {lines.length === 0 ? (
               <div
@@ -177,17 +166,25 @@ export function AddOrder({ store, onNavigate }: AddOrderProps) {
               <div>
                 {lines.map((l) => (
                   <div
-                    key={l.product.id}
+                    key={l.key}
                     className="text-small"
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}
                   >
-                    <span style={{ flex: 1 }}>{l.product.name}</span>
-                    <span style={{ width: '70px' }}>× {l.quantity}</span>
-                    <span style={{ width: '110px', fontWeight: 600 }}>
-                      {formatMoney(l.product.price * l.quantity, store.currency)}
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      {l.product.name}
+                      {l.selectedOptions.length > 0 && (
+                        <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '12px' }}>
+                          {l.selectedOptions.map((o) => o.optionName).join(', ')}
+                        </span>
+                      )}
+                      {l.notes && <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>“{l.notes}”</span>}
+                    </span>
+                    <span style={{ width: '60px', textAlign: 'right' }}>× {l.quantity}</span>
+                    <span style={{ width: '100px', textAlign: 'right', fontWeight: 600 }}>
+                      {formatMoney(l.unitPrice * l.quantity, store.currency)}
                     </span>
                     <button
-                      onClick={() => setLines((prev) => prev.filter((x) => x.product.id !== l.product.id))}
+                      onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error-color)', padding: '4px' }}
                     >
                       <Trash2 size={15} />
@@ -234,7 +231,7 @@ export function AddOrder({ store, onNavigate }: AddOrderProps) {
               <div>
                 <p className="text-small" style={{ fontWeight: 500, marginBottom: '6px' }}>Order Status</p>
                 <p className="text-small" style={{ color: 'var(--text-secondary)' }}>
-                  New orders start as <strong>Pending</strong> — move them forward from the Orders page.
+                  New orders start as <strong>Pending</strong>. Move them forward from the Orders page.
                 </p>
               </div>
               <div>

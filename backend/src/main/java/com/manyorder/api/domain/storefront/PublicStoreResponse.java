@@ -33,6 +33,8 @@ public class PublicStoreResponse {
     private BigDecimal freeDeliveryThreshold;
     /** Total units sold across the whole shop (all products). */
     private long totalItemsSold;
+    /** When false, the storefront hides the per-item note field on the product page. */
+    private boolean itemNotesEnabled;
 
     public PublicStoreResponse(Merchant m, long totalItemsSold) {
         this.id = m.getId();
@@ -51,6 +53,7 @@ public class PublicStoreResponse {
         this.freeDeliveryThreshold = m.getFreeDeliveryThreshold();
         this.deliveryToBeConfirmedMessage = m.getDeliveryToBeConfirmedMessage();
         this.fulfilmentMode = m.getFulfilmentMode();
+        this.itemNotesEnabled = m.isItemNotesEnabled();
         this.totalItemsSold = totalItemsSold;
     }
 
@@ -83,5 +86,6 @@ public class PublicStoreResponse {
     public BigDecimal getFreeDeliveryThreshold() { return freeDeliveryThreshold; }
     public String getDeliveryToBeConfirmedMessage() { return deliveryToBeConfirmedMessage; }
     public String getFulfilmentMode() { return fulfilmentMode; }
+    public boolean isItemNotesEnabled() { return itemNotesEnabled; }
     public long getTotalItemsSold() { return totalItemsSold; }
 }

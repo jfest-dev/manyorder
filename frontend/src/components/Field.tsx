@@ -14,6 +14,7 @@ interface FieldInputProps {
 
   // ✅ add these
   required?: boolean;
+  disabled?: boolean;
   maxLength?: number;
   min?: number;
   max?: number;
@@ -39,6 +40,7 @@ export function FieldInput({
 
   // ✅ receive here
   required,
+  disabled,
   maxLength,
   min,
   max,
@@ -96,6 +98,7 @@ export function FieldInput({
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             required={required}
+            disabled={disabled}
             maxLength={maxLength}
             rows={rows}
             onFocus={() => setIsFocused(true)}
@@ -123,6 +126,7 @@ export function FieldInput({
             placeholder={placeholder}
             // ✅ apply here
             required={required}
+            disabled={disabled}
             maxLength={maxLength}
             min={min}
             max={max}

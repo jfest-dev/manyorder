@@ -69,10 +69,20 @@ public class GuestCheckoutRequest {
         @Min(1)
         private Integer quantity;
 
+        /** Ids of the chosen modifier options; prices are re-derived server-side. */
+        private List<Long> modifierOptionIds;
+
+        /** Per-line note for this cart line, e.g. "less sugar". */
+        private String notes;
+
         public ItemRequest() {}
         public Long getProductId() { return productId; }
         public void setProductId(Long productId) { this.productId = productId; }
         public Integer getQuantity() { return quantity; }
         public void setQuantity(Integer quantity) { this.quantity = quantity; }
+        public List<Long> getModifierOptionIds() { return modifierOptionIds; }
+        public void setModifierOptionIds(List<Long> modifierOptionIds) { this.modifierOptionIds = modifierOptionIds; }
+        public String getNotes() { return notes; }
+        public void setNotes(String notes) { this.notes = notes; }
     }
 }

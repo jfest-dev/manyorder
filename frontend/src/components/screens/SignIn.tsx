@@ -8,7 +8,7 @@ import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
 import { useAuth } from '../../context/AuthContext';
 
-// Simple, permissive email shape check — enough to catch obviously invalid
+// Simple, permissive email shape check - enough to catch obviously invalid
 // input client-side so we show one friendly message instead of the backend's
 // validation text (and never fire both at once).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

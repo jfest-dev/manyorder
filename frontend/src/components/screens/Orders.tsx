@@ -148,7 +148,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
     setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
 
   const changeStatus = async (order: OrderResponse, status: OrderStatus) => {
-    // Cancelling is destructive and can't be undone — confirm before it takes effect.
+    // Cancelling is destructive and can't be undone - confirm before it takes effect.
     if (status === 'CANCELLED' &&
         !window.confirm(`Cancel order #${order.id}? This can't be undone and the customer's order will be marked cancelled.`)) {
       return;
@@ -213,7 +213,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
     const sections: WaOrderSection[] = group.map((o) => ({
       orderId: o.id,
       label: null,
-      items: o.items.map((it) => ({ quantity: it.quantity, productName: it.productName, subtotal: it.price * it.quantity })),
+      items: o.items.map((it) => ({ quantity: it.quantity, productName: it.productName, subtotal: it.lineSubtotal, modifiers: it.modifiers, notes: it.notes })),
       subtotal: o.subtotal,
       deliveryFee: o.deliveryFee,
       discountAmount: o.discountAmount,
@@ -338,7 +338,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                   }}
                 >
                   <span className="order-id text-small" style={{ fontWeight: 600 }}>#{o.id}</span>
-                  <span className="text-small"><span className="m-label">Customer</span>{o.contactName || o.customerName || '—'}</span>
+                  <span className="text-small"><span className="m-label">Customer</span>{o.contactName || o.customerName || '-'}</span>
                   <span><span className="m-label">Fulfilment</span>
                     <span style={{
                       display: 'inline-block', fontSize: '11px', fontWeight: 600,
@@ -353,7 +353,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                   <span><span className="m-label">Payment</span>
                     <Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} />
                   </span>
-                  <span className="text-small" style={{ color: 'var(--text-secondary)' }}><span className="m-label">Method</span>{o.paymentMethod || '—'}</span>
+                  <span className="text-small" style={{ color: 'var(--text-secondary)' }}><span className="m-label">Method</span>{o.paymentMethod || '-'}</span>
                   <span className="text-small"><span className="m-label">Items</span>{o.items.reduce((n, i) => n + i.quantity, 0)}</span>
                   <span><span className="m-label">Status</span><Badge text={STATUS_LABEL[o.status]} {...STATUS_STYLE[o.status]} /></span>
                   <span className="text-xs" style={{ color: 'var(--text-muted)' }}><span className="m-label">Date</span>{fmtDate(o.createdAt)}</span>
@@ -374,10 +374,20 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                     <div style={{ background: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-medium)', padding: '16px' }}>
                       <p className="text-xs" style={{ fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.03em', marginBottom: '10px' }}>ITEMS</p>
                       {o.items.length === 0 && <p className="text-small" style={{ color: 'var(--text-muted)' }}>No line items recorded.</p>}
-                      {o.items.map((i) => (
-                        <div key={i.productId} className="text-small" style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                          <span style={{ color: 'var(--text-primary)' }}>{i.productName} × {i.quantity}</span>
-                          <span style={{ color: 'var(--text-primary)' }}>{formatMoney(i.price * i.quantity, store.currency)}</span>
+                      {o.items.map((i, idx) => (
+                        <div key={idx} className="text-small" style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', padding: '4px 0' }}>
+                          <span style={{ color: 'var(--text-primary)', minWidth: 0 }}>
+                            {i.productName} × {i.quantity}
+                            {i.modifiers.length > 0 && (
+                              <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '11px', marginTop: '1px' }}>
+                                {i.modifiers.map((m) => m.optionName).join(', ')}
+                              </span>
+                            )}
+                            {i.notes && (
+                              <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '11px', fontStyle: 'italic', marginTop: '1px' }}>“{i.notes}”</span>
+                            )}
+                          </span>
+                          <span style={{ color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{formatMoney(i.lineSubtotal, store.currency)}</span>
                         </div>
                       ))}
 
@@ -402,7 +412,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                       <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '14px', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <InfoRow label="Contact" value={
                           <>
-                            <div>{o.contactName || o.customerName || '—'}</div>
+                            <div>{o.contactName || o.customerName || '-'}</div>
                             <div style={{ color: 'var(--text-secondary)' }}>{o.contactPhone || 'No phone'}</div>
                             {o.contactEmail && <div style={{ color: 'var(--text-secondary)' }}>{o.contactEmail}</div>}
                           </>
@@ -415,7 +425,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                         } />
                         <InfoRow label="Payment" value={
                           <>
-                            <div>{o.paymentMethod || '—'}</div>
+                            <div>{o.paymentMethod || '-'}</div>
                             {o.paymentReference && <div style={{ color: 'var(--text-secondary)' }}>Ref {o.paymentReference}</div>}
                           </>
                         } />
@@ -442,7 +452,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                           </a>
                         ) : (
                           <p className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>
-                            No phone on file — can't message this customer.
+                            No phone on file, so we can't message this customer.
                           </p>
                         );
                       })()}
@@ -456,7 +466,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                       <p className="text-xs" style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>UPDATE STATUS</p>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
                         {NEXT_STATUS[o.status].length === 0 && (
-                          <p className="text-small" style={{ color: 'var(--text-muted)' }}>Order is {STATUS_LABEL[o.status].toLowerCase()} — no further steps.</p>
+                          <p className="text-small" style={{ color: 'var(--text-muted)' }}>Order is {STATUS_LABEL[o.status].toLowerCase()}. No further steps.</p>
                         )}
                         {NEXT_STATUS[o.status].map((s) => (
                           <Button

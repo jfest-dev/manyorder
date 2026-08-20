@@ -88,11 +88,7 @@ public class OrderService {
         BigDecimal subtotal = BigDecimal.ZERO;
         if (request.getItems() != null) {
             for (CreateMerchantOrderRequest.ItemRequest itemReq : request.getItems()) {
-                Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Product not found in this store: " + itemReq.getProductId()));
-                orderItemRepository.save(new OrderItem(order, product, itemReq.getQuantity(), product.getPrice()));
-                subtotal = subtotal.add(product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())));
+                subtotal = subtotal.add(persistOrderItem(merchant, order, itemReq));
             }
         }
         BigDecimal fee = request.getDeliveryFee() != null ? request.getDeliveryFee() : BigDecimal.ZERO;
@@ -141,11 +137,7 @@ public class OrderService {
 
             BigDecimal subtotal = BigDecimal.ZERO;
             for (CreateMerchantOrderRequest.ItemRequest itemReq : request.getItems()) {
-                Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
-                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                "Product not found in this store: " + itemReq.getProductId()));
-                orderItemRepository.save(new OrderItem(order, product, itemReq.getQuantity(), product.getPrice()));
-                subtotal = subtotal.add(product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())));
+                subtotal = subtotal.add(persistOrderItem(merchant, order, itemReq));
             }
             order.setSubtotal(subtotal);
         }
@@ -168,6 +160,32 @@ public class OrderService {
                 .max(BigDecimal.ZERO));
 
         return toResponse(orderRepository.save(order));
+    }
+
+    /**
+     * Resolve one manual-order line, persist it (base price snapshot + validated
+     * modifier snapshots + per-line note), and return its line subtotal. Modifiers
+     * go through the same {@link ModifierResolver} trust boundary as guest
+     * checkout, so manual orders enforce the same min/max/required rules and
+     * re-derive prices from the product rather than trusting the client.
+     */
+    private BigDecimal persistOrderItem(Merchant merchant, Order order,
+                                        CreateMerchantOrderRequest.ItemRequest itemReq) {
+        Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Product not found in this store: " + itemReq.getProductId()));
+        ModifierResolver.Resolution resolution =
+                ModifierResolver.resolve(product, itemReq.getModifierOptionIds());
+        OrderItem item = new OrderItem(order, product, itemReq.getQuantity(), product.getPrice());
+        if (itemReq.getNotes() != null && !itemReq.getNotes().isBlank()) {
+            item.setNotes(itemReq.getNotes().trim());
+        }
+        for (ModifierResolver.Selection s : resolution.selections()) {
+            item.addModifier(new OrderItemModifier(
+                    item, s.groupName(), s.optionName(), s.priceDelta(), s.sourceOptionId()));
+        }
+        orderItemRepository.save(item); // cascades the modifier snapshots
+        return item.getLineSubtotal();
     }
 
     @Transactional
@@ -270,7 +288,14 @@ public class OrderService {
                         item.getProduct().getId(),
                         item.getProduct().getName(),
                         item.getQuantity(),
-                        item.getPrice()))
+                        item.getPrice(),
+                        item.getUnitPrice(),
+                        item.getLineSubtotal(),
+                        item.getModifiers().stream()
+                                .map(m -> new OrderItemResponse.ModifierLine(
+                                        m.getGroupName(), m.getOptionName(), m.getPriceDelta(), m.getSourceOptionId()))
+                                .toList(),
+                        item.getNotes()))
                 .toList();
 
         Long customerId = order.getCustomer() != null ? order.getCustomer().getId() : null;

@@ -6,12 +6,12 @@ import { FieldInput } from '../Field';
 import { Button } from '../Button';
 import { authApi } from '../../lib/api';
 
-// Simple, permissive email shape check — enough to catch obviously invalid
+// Simple, permissive email shape check - enough to catch obviously invalid
 // input client-side so we show one friendly message instead of the backend's
 // validation text (and never fire both at once).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// The server returns this same message whether or not the account exists — we
+// The server returns this same message whether or not the account exists - we
 // mirror it here so the confirmation screen reads identically regardless.
 const GENERIC_MESSAGE = "If an account exists with that email, we've sent a reset link.";
 

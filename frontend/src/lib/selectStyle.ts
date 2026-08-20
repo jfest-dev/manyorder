@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 
 /**
- * Canonical styled-dropdown look — the same treatment used by the Currency
+ * Canonical styled-dropdown look - the same treatment used by the Currency
  * field. Every native <select> in the app should spread this so they match:
  * a suppressed native chrome (across WebKit/Firefox/standard), a custom chevron,
  * a consistent border, and room on the right for the chevron.

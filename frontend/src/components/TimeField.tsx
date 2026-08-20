@@ -15,7 +15,7 @@ function label12(h24: number, m: number): string {
   return `${h}:${String(m).padStart(2, '0')} ${period}`;
 }
 
-// One option every 15 minutes across the day — plenty for a shop's ready time,
+// One option every 15 minutes across the day - plenty for a shop's ready time,
 // and a single quick pick instead of three fiddly hour/minute/AM-PM dropdowns.
 const OPTIONS: { value: string; label: string }[] = [];
 for (let h = 0; h < 24; h++) {
@@ -26,7 +26,7 @@ for (let h = 0; h < 24; h++) {
 
 /**
  * A single, clean time picker: one styled dropdown of 12-hour times (AM/PM),
- * emitting 24-hour "HH:mm". Replaces the old three-dropdown control — one tap to
+ * emitting 24-hour "HH:mm". Replaces the old three-dropdown control - one tap to
  * set a time, and the display is always 12-hour regardless of browser locale.
  */
 export function TimeField({ value, onChange, ariaLabel }: TimeFieldProps) {

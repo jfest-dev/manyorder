@@ -21,7 +21,7 @@ export function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
-// Kept in sync with AuthContext's USER_KEY — cleared alongside the token when a
+// Kept in sync with AuthContext's USER_KEY - cleared alongside the token when a
 // session is rejected, so a stale user object can't keep the app "logged in".
 const USER_KEY = 'manyorder_user';
 
@@ -37,7 +37,7 @@ function handleInvalidSession() {
     localStorage.removeItem(USER_KEY);
     sessionStorage.removeItem(USER_KEY);
   } catch {
-    /* storage unavailable — nothing to clear */
+    /* storage unavailable - nothing to clear */
   }
   if (typeof window !== 'undefined' && window.location.pathname !== '/signin') {
     window.location.href = '/signin';
@@ -107,11 +107,36 @@ export type OrderType = 'PICKUP' | 'DELIVERY';
 
 export type PaymentStatus = 'UNPAID' | 'PAID' | 'REFUNDED';
 
+/** A line item in a manual create/update order payload. Prices re-derived server-side. */
+export interface MerchantOrderItemInput {
+  productId: number;
+  quantity: number;
+  modifierOptionIds?: number[];
+  notes?: string;
+}
+
+/** One chosen modifier on an ordered/checked-out line (snapshots). */
+export interface ModifierLineView {
+  groupName: string;
+  optionName: string;
+  priceDelta: number;
+  /** Merchant OrderItemResponse only: source option id for edit round-trip
+   *  (null if since-deleted; absent on the customer-facing checkout summary). */
+  sourceOptionId?: number | null;
+}
+
 export interface OrderItemResponse {
   productId: number;
   productName: string;
   quantity: number;
+  /** Base per-unit price (excludes modifiers). */
   price: number;
+  /** Effective per-unit price = base + chosen modifier deltas. */
+  unitPrice: number;
+  /** Effective unit price * quantity. */
+  lineSubtotal: number;
+  modifiers: ModifierLineView[];
+  notes: string | null;
 }
 
 export interface OrderResponse {
@@ -141,6 +166,25 @@ export interface OrderResponse {
   items: OrderItemResponse[];
 }
 
+/** A choosable modifier option in a product response. */
+export interface ModifierOptionView {
+  id: number;
+  name: string;
+  priceDelta: number;
+  sortOrder: number;
+}
+
+/** A modifier group in a product response. `required` mirrors minSelect >= 1. */
+export interface ModifierGroupView {
+  id: number;
+  name: string;
+  minSelect: number;
+  maxSelect: number | null; // null = unlimited
+  required: boolean;
+  sortOrder: number;
+  options: ModifierOptionView[];
+}
+
 export interface ProductResponse {
   id: number;
   merchantId: number;
@@ -158,8 +202,26 @@ export interface ProductResponse {
   preOrderReadyTimeStart: string | null; // ISO HH:mm[:ss]
   preOrderReadyTimeEnd: string | null;
   preOrderNote: string | null;
+  modifierGroups: ModifierGroupView[];
   unitsSold: number;
   createdAt: string;
+}
+
+/** A modifier option in a create/update product payload (no id - server assigns). */
+export interface ModifierOptionInput {
+  name: string;
+  priceDelta: number;
+  sortOrder?: number;
+}
+
+/** A modifier group in a create/update product payload. The whole set replaces
+ *  the product's existing groups on save. */
+export interface ModifierGroupInput {
+  name: string;
+  minSelect: number;
+  maxSelect?: number | null; // null/omitted = unlimited
+  sortOrder?: number;
+  options: ModifierOptionInput[];
 }
 
 export interface CreateProductPayload {
@@ -175,6 +237,7 @@ export interface CreateProductPayload {
   preOrderReadyTimeStart?: string; // 'HH:mm'
   preOrderReadyTimeEnd?: string;
   preOrderNote?: string;
+  modifierGroups?: ModifierGroupInput[];
 }
 
 export interface UpdateProductPayload {
@@ -190,6 +253,8 @@ export interface UpdateProductPayload {
   preOrderReadyTimeStart?: string;
   preOrderReadyTimeEnd?: string;
   preOrderNote?: string;
+  /** Null/omitted = leave modifiers unchanged; an array (incl. empty) replaces them. */
+  modifierGroups?: ModifierGroupInput[];
 }
 
 export interface StoreResponse {
@@ -217,6 +282,7 @@ export interface StoreResponse {
   notifyLowStockEmail: boolean;
   notifyNewOrderWhatsapp: boolean;
   notifyUrgentWhatsapp: boolean;
+  itemNotesEnabled: boolean;
   createdAt: string;
 }
 
@@ -263,6 +329,7 @@ export interface UpdateStorePayload {
   notifyLowStockEmail?: boolean;
   notifyNewOrderWhatsapp?: boolean;
   notifyUrgentWhatsapp?: boolean;
+  itemNotesEnabled?: boolean;
 }
 
 // ---------- Endpoints ----------
@@ -286,7 +353,7 @@ export const authApi = {
 
   /**
    * Request a password-reset link. Always resolves with the same generic
-   * message regardless of whether the email exists — the server never reveals
+   * message regardless of whether the email exists - the server never reveals
    * account existence.
    */
   forgotPassword: (email: string) =>
@@ -313,7 +380,7 @@ export const accountApi = {
    * Change the signed-in user's password. The server re-verifies the current
    * password (403 "Incorrect password" on mismatch) and enforces the same
    * minimum length as registration. Returns 204; the current session stays
-   * valid (stateless JWT — no server-side revocation).
+   * valid (stateless JWT - no server-side revocation).
    */
   changePassword: (currentPassword: string, newPassword: string) =>
     request<void>('/account/change-password', {
@@ -395,7 +462,7 @@ export const ordersApi = {
     phoneNumber?: string;
     orderType?: OrderType;
     deliveryAddress?: string;
-    items?: { productId: number; quantity: number }[];
+    items?: MerchantOrderItemInput[];
     paymentStatus?: PaymentStatus;
     paymentMethod?: string;
     paymentReference?: string;
@@ -411,7 +478,7 @@ export const ordersApi = {
     notes?: string;
     /** Set/confirm the delivery fee (clears the "to be confirmed" pending flag server-side). */
     deliveryFee?: number;
-    items?: { productId: number; quantity: number }[];
+    items?: MerchantOrderItemInput[];
   }) => request<OrderResponse>(`/merchant/stores/${storeId}/orders/${orderId}`, { method: 'PATCH', body: payload }),
 
   updateStatus: (storeId: number, orderId: number, status: OrderStatus) =>
@@ -445,7 +512,7 @@ export const productsApi = {
 
   /**
    * Upload a photo for an existing product and get back its hosted URL. Multipart
-   * (browser sets the boundary — no manual Content-Type). Server validates and
+   * (browser sets the boundary - no manual Content-Type). Server validates and
    * stores it under the product's folder; the caller then PATCHes photoUrl.
    */
   uploadPhoto: async (storeId: number, productId: number, file: File): Promise<{ url: string }> => {
@@ -534,6 +601,8 @@ export interface PublicStoreResponse {
   deliveryToBeConfirmedMessage: string | null;
   /** Which fulfilment choices checkout offers. */
   fulfilmentMode: FulfilmentMode;
+  /** When false, the storefront hides the per-item note field on the product page. */
+  itemNotesEnabled: boolean;
   totalItemsSold: number;
 }
 
@@ -544,6 +613,10 @@ export type FulfilmentMode = 'BOTH' | 'PICKUP_ONLY' | 'DELIVERY_ONLY';
 export interface GuestCheckoutItem {
   productId: number;
   quantity: number;
+  /** Ids of chosen modifier options; prices are re-derived server-side. */
+  modifierOptionIds?: number[];
+  /** Per-line note, e.g. "less sugar". */
+  notes?: string;
 }
 
 export interface GuestCheckoutPayload {
@@ -562,8 +635,11 @@ export interface GuestCheckoutPayload {
 export interface GuestCheckoutItemSummary {
   productName: string;
   quantity: number;
+  /** Effective per-unit price = base + chosen modifier deltas. */
   unitPrice: number;
   subtotal: number;
+  modifiers: ModifierLineView[];
+  notes: string | null;
 }
 
 /** One order's own breakdown. A checkout that mixes ready + pre-order items
@@ -585,7 +661,7 @@ export interface GuestCheckoutResult {
   deliveryFeePending: boolean;
   /** Shared id when the checkout was split into two orders; null for a single order. */
   orderGroupId: string | null;
-  /** Primary order id — the single order, or the "ready now" order of a split. */
+  /** Primary order id - the single order, or the "ready now" order of a split. */
   orderId: number;
   storeName: string;
   storePhone: string | null;

@@ -14,7 +14,7 @@ interface OrderLookupViewProps {
 const BRAND = 'var(--primary-solid)';
 
 /**
- * "Find my order" — a customer who navigated away re-opens their confirmation
+ * "Find my order" - a customer who navigated away re-opens their confirmation
  * (and the WhatsApp hand-off) with their order number + phone. On success this
  * renders the shared OrderConfirmationView, so a split order looks identical to
  * the post-checkout screen.
@@ -51,7 +51,7 @@ export function OrderLookupView({ store, onBack, onBackToShop, initial }: OrderL
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: '#F3F4F6' }}>
-      <div style={{ padding: '12px 16px', background: 'white', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, padding: '12px 16px', background: 'white', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '10px' }}>
         <button onClick={onBack} aria-label="Back" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex' }}><ArrowLeft size={20} /></button>
         <h1 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>Find my order</h1>
       </div>

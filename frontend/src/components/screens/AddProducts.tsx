@@ -7,9 +7,11 @@ import { ToggleSwitch } from '../ToggleSwitch';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { CategorySelect } from '../CategorySelect';
+import { ModifierGroupsEditor } from '../ModifierGroupsEditor';
 import { formatMoney, priceLimits } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
+import { editorGroupsToInputs, validateEditorGroups, type EditorGroup } from '../../lib/modifiers';
 import { productsApi, CreateProductPayload, ApiError } from '../../lib/api';
 
 interface Product {
@@ -25,6 +27,7 @@ interface Product {
   readyTimeStart: string;
   readyTimeEnd: string;
   note: string;
+  modifierGroups: EditorGroup[];
   photoFile?: File;
   photoPreview?: string;
 }
@@ -32,7 +35,7 @@ interface Product {
 type FieldErrors = { name?: string; price?: string; quantity?: string };
 
 interface AddProductsProps {
-  /** The store products are created against. Always present now — onboarding
+  /** The store products are created against. Always present now - onboarding
    *  step 2 creates the store up front, so it uses the same backend flow as the
    *  dashboard rather than a separate local-draft path. */
   storeId: number;
@@ -49,7 +52,8 @@ interface AddProductsProps {
 
 const blank = (id: string): Product => ({
   id, name: '', price: null, description: '', categoryId: '', quantity: '',
-  sku: '', preOrder: false, readyDate: '', readyTimeStart: '', readyTimeEnd: '', note: '', photoFile: undefined, photoPreview: undefined,
+  sku: '', preOrder: false, readyDate: '', readyTimeStart: '', readyTimeEnd: '', note: '', modifierGroups: [],
+  photoFile: undefined, photoPreview: undefined,
 });
 
 export function AddProducts({
@@ -143,6 +147,9 @@ export function AddProducts({
     setErrors((prev) => ({ ...prev, [product.id]: errs }));
     if (hasErrors(errs)) return;
 
+    const modifierError = validateEditorGroups(product.modifierGroups);
+    if (modifierError) { setFormError((s) => ({ ...s, [product.id]: modifierError })); return; }
+
     setSavingId(product.id);
     setFormError((s) => { const n = { ...s }; delete n[product.id]; return n; });
     try {
@@ -158,6 +165,7 @@ export function AddProducts({
         preOrderReadyTimeStart: product.preOrder && product.readyTimeStart ? product.readyTimeStart : undefined,
         preOrderReadyTimeEnd: product.preOrder && product.readyTimeEnd ? product.readyTimeEnd : undefined,
         preOrderNote: product.preOrder && product.note.trim() ? product.note.trim() : undefined,
+        modifierGroups: product.modifierGroups.length ? editorGroupsToInputs(product.modifierGroups) : undefined,
       };
       const created = await productsApi.create(storeId, payload);
 
@@ -179,14 +187,14 @@ export function AddProducts({
     try {
       const persistable = products.map(({ photoFile, photoPreview, ...rest }) => rest);
       sessionStorage.setItem(draftKey, JSON.stringify({ products: persistable, saved }));
-    } catch { /* storage full — draft is best-effort */ }
+    } catch { /* storage full - draft is best-effort */ }
   }, [draftKey, products, saved]);
 
   const clearDraft = () => { try { sessionStorage.removeItem(draftKey); } catch { /* ignore */ } };
 
   const savedList = useMemo(() => products.filter((p) => saved[p.id]), [products, saved]);
   // The preview mirrors what you're typing: every row with any content, saved or
-  // not — so pre-order times, price, name etc. update live, not only after Save.
+  // not - so pre-order times, price, name etc. update live, not only after Save.
   const previewList = useMemo(
     () => products.filter((p) => p.name.trim() !== '' || p.price !== null),
     [products],
@@ -278,6 +286,14 @@ export function AddProducts({
                         </div>
                       )}
                     </div>
+
+                    {/* Add-ons / modifiers */}
+                    <ModifierGroupsEditor
+                      groups={product.modifierGroups}
+                      onChange={(g) => patch(product.id, { modifierGroups: g })}
+                      currency={currency}
+                      disabled={isSaved}
+                    />
 
                     {formError[product.id] && <p className="text-small" style={{ color: 'var(--error-color)' }}>{formError[product.id]}</p>}
 

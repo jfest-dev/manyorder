@@ -11,14 +11,17 @@ interface StorefrontViewProps {
   products: ProductResponse[];
   onProductClick?: (productId: number) => void;
   onAddToCart?: (productId: number) => void;
-  /** Per-product quantities already in the cart (drives the inline stepper). */
+  /** Per-product quantities of the PLAIN line already in the cart (drives the inline stepper). */
   quantities?: Record<number, number>;
   onSetQuantity?: (productId: number, quantity: number) => void;
   cartCount?: number;
+  /** Running cart subtotal incl. modifiers (from the hydrated cart). Falls back
+   *  to a plain products×qty estimate when omitted (e.g. preview). */
+  cartTotal?: number;
   onViewCart?: () => void;
-  /** "Find my order" — re-open a past order's confirmation. Omitted in preview. */
+  /** "Find my order" - re-open a past order's confirmation. Omitted in preview. */
   onTrackOrder?: () => void;
-  /** A device-local last order, if any — drives the "view your recent order" banner. */
+  /** A device-local last order, if any - drives the "view your recent order" banner. */
   recentOrder?: { orderId: number } | null;
   onViewRecentOrder?: () => void;
   /** Preview mode (onboarding/edit): render read-only, no cart bar. */
@@ -29,8 +32,16 @@ const ALL = '__all__';
 // Buttons/selection controls use a fixed brand colour, never the store theme.
 const BRAND = 'var(--primary-solid)';
 
+/** The round brand "+" on a product row (add, or open the PDP to choose options). */
+const plusButtonStyle = (enabled: boolean): React.CSSProperties => ({
+  width: '36px', height: '36px', borderRadius: '10px', border: 'none',
+  background: enabled ? BRAND : '#E5E7EB', color: 'white',
+  cursor: enabled ? 'pointer' : 'not-allowed',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+});
+
 /**
- * The public shop view — store header, category filter, product list. Purely
+ * The public shop view - store header, category filter, product list. Purely
  * presentational and width-fluid, so it renders identically full-page and inside
  * a phone-frame preview. Interactions are no-ops unless handlers are provided.
  * Only the header uses the store's theme colour; all buttons are brand-black.
@@ -43,6 +54,7 @@ export function StorefrontView({
   quantities = {},
   onSetQuantity,
   cartCount = 0,
+  cartTotal,
   onViewCart,
   onTrackOrder,
   recentOrder,
@@ -52,10 +64,9 @@ export function StorefrontView({
   const headerColor = store.themeColor || '#000000';
   const currency = store.currency;
 
-  const cartTotal = useMemo(
-    () => products.reduce((sum, p) => sum + p.price * (quantities[p.id] ?? 0), 0),
-    [products, quantities],
-  );
+  // Prefer the true subtotal (incl. modifiers) from the hydrated cart; fall back
+  // to a plain estimate for preview surfaces that don't pass one.
+  const barTotal = cartTotal ?? products.reduce((sum, p) => sum + p.price * (quantities[p.id] ?? 0), 0);
 
   const categories = useMemo(() => {
     const names = new Set<string>();
@@ -121,7 +132,7 @@ export function StorefrontView({
         </div>
       </div>
 
-      {/* Recent-order recall — one tap back to the order placed on this device. */}
+      {/* Recent-order recall - one tap back to the order placed on this device. */}
       {!preview && recentOrder && onViewRecentOrder && (
         <button onClick={onViewRecentOrder}
           style={{ width: '100%', padding: '10px 12px', background: 'white', borderBottom: '1px solid var(--border-subtle)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>
@@ -129,9 +140,10 @@ export function StorefrontView({
         </button>
       )}
 
-      {/* Category chips (selected = brand-black) */}
+      {/* Category chips (selected = brand-black) - pinned so they stay reachable
+          while scrolling a long product list. */}
       {categories.length > 0 && (
-        <div style={{ display: 'flex', gap: '8px', padding: '12px', overflowX: 'auto', background: 'white', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 15, display: 'flex', gap: '8px', padding: '12px', overflowX: 'auto', background: 'white', borderBottom: '1px solid var(--border-subtle)' }}>
           {[{ key: ALL, label: 'All' }, ...categories.map((c) => ({ key: c, label: c }))].map((chip) => {
             const on = activeCategory === chip.key;
             return (
@@ -163,6 +175,10 @@ export function StorefrontView({
           visible.map((p) => {
             const orderable = isOrderable(p);
             const inCart = quantities[p.id] ?? 0;
+            // A product with ANY modifier group can't be blind quick-added - its "+"
+            // opens the PDP so the customer sees and chooses its options first. Only
+            // truly plain products get the inline quick-add / stepper.
+            const hasModifiers = (p.modifierGroups ?? []).length > 0;
             const readyLine = p.preOrder ? formatPreorderReady(p.preOrderReadyDate, p.preOrderReadyTimeStart, p.preOrderReadyTimeEnd) : null;
             return (
               <div
@@ -195,21 +211,26 @@ export function StorefrontView({
                   )}
                 </div>
 
-                {/* Add "+" until it's in the cart, then an inline stepper. */}
+                {/* Products with options: a "+" that opens the PDP to choose (never a
+                    blind add). Plain products: "+" quick-add until in cart, then a stepper. */}
                 <div onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
-                  {inCart > 0 && onSetQuantity ? (
+                  {hasModifiers ? (
+                    <button
+                      aria-label={`Choose options for ${p.name}`}
+                      disabled={!orderable || !onProductClick}
+                      onClick={() => onProductClick?.(p.id)}
+                      style={plusButtonStyle(orderable && !!onProductClick)}
+                    >
+                      <Plus size={18} />
+                    </button>
+                  ) : inCart > 0 && onSetQuantity ? (
                     <QuantityStepper quantity={inCart} onChange={(q) => onSetQuantity(p.id, q)} min={0} size="sm" />
                   ) : (
                     <button
                       aria-label={`Add ${p.name}`}
                       disabled={!orderable || !onAddToCart}
                       onClick={() => onAddToCart?.(p.id)}
-                      style={{
-                        width: '36px', height: '36px', borderRadius: '10px', border: 'none',
-                        background: orderable ? BRAND : '#E5E7EB', color: 'white',
-                        cursor: orderable && onAddToCart ? 'pointer' : 'not-allowed',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
+                      style={plusButtonStyle(orderable && !!onAddToCart)}
                     >
                       <Plus size={18} />
                     </button>
@@ -233,7 +254,7 @@ export function StorefrontView({
         )}
       </div>
 
-      {/* Cart bar (brand-black) — shows the running total + item count */}
+      {/* Cart bar (brand-black) - shows the running total + item count */}
       {!preview && cartCount > 0 && onViewCart && (
         <div style={{ position: 'sticky', bottom: 0, padding: '12px', background: 'white', borderTop: '1px solid var(--border-subtle)' }}>
           <button
@@ -244,7 +265,7 @@ export function StorefrontView({
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             }}
           >
-            <ShoppingBag size={17} /> View cart · {formatMoney(cartTotal, currency)} ({cartCount})
+            <ShoppingBag size={17} /> View cart · {formatMoney(barTotal, currency)} ({cartCount})
           </button>
         </div>
       )}

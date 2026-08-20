@@ -20,7 +20,9 @@ import com.manyorder.api.domain.discount.DiscountService;
 import com.manyorder.api.domain.merchant.Merchant;
 import com.manyorder.api.domain.merchant.MerchantRepository;
 import com.manyorder.api.domain.order.Order;
+import com.manyorder.api.domain.order.ModifierResolver;
 import com.manyorder.api.domain.order.OrderItem;
+import com.manyorder.api.domain.order.OrderItemModifier;
 import com.manyorder.api.domain.order.OrderItemRepository;
 import com.manyorder.api.domain.order.OrderRepository;
 import com.manyorder.api.domain.order.OrderService;
@@ -97,8 +99,17 @@ public class GuestCheckoutController {
             Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Product not found in this store: " + itemReq.getProductId()));
-            BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity()));
-            (product.isPreOrder() ? preorder : ready).add(new Line(product, itemReq.getQuantity(), lineTotal));
+            // Re-derive the modifiers server-side: validates the ids against THIS
+            // product's groups (min/max/required) and prices them — the client sends
+            // only ids, never prices.
+            ModifierResolver.Resolution resolution =
+                    ModifierResolver.resolve(product, itemReq.getModifierOptionIds());
+            BigDecimal effectiveUnit = product.getPrice().add(resolution.totalPerUnit());
+            BigDecimal lineTotal = effectiveUnit.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
+            String lineNotes = itemReq.getNotes() != null && !itemReq.getNotes().isBlank()
+                    ? itemReq.getNotes().trim() : null;
+            (product.isPreOrder() ? preorder : ready)
+                    .add(new Line(product, itemReq.getQuantity(), resolution, lineNotes, lineTotal));
             combinedSubtotal = combinedSubtotal.add(lineTotal);
         }
 
@@ -179,7 +190,13 @@ public class GuestCheckoutController {
         orderRepository.save(order);
 
         for (Line l : lines) {
-            orderItemRepository.save(new OrderItem(order, l.product(), l.quantity(), l.product().getPrice()));
+            OrderItem item = new OrderItem(order, l.product(), l.quantity(), l.product().getPrice());
+            item.setNotes(l.notes());
+            for (ModifierResolver.Selection s : l.resolution().selections()) {
+                item.addModifier(new OrderItemModifier(
+                        item, s.groupName(), s.optionName(), s.priceDelta(), s.sourceOptionId()));
+            }
+            orderItemRepository.save(item); // cascades the modifier snapshots
         }
 
         order.setSubtotal(subtotal);
@@ -211,9 +228,13 @@ public class GuestCheckoutController {
         for (Order o : orders) {
             List<GuestCheckoutResponse.ItemSummary> items = new ArrayList<>();
             for (OrderItem it : orderItemRepository.findByOrder(o)) {
+                List<GuestCheckoutResponse.ModifierLine> mods = it.getModifiers().stream()
+                        .map(m -> new GuestCheckoutResponse.ModifierLine(
+                                m.getGroupName(), m.getOptionName(), m.getPriceDelta()))
+                        .toList();
                 items.add(new GuestCheckoutResponse.ItemSummary(
-                        it.getProduct().getName(), it.getQuantity(), it.getPrice(),
-                        it.getPrice().multiply(BigDecimal.valueOf(it.getQuantity()))));
+                        it.getProduct().getName(), it.getQuantity(), it.getUnitPrice(),
+                        it.getLineSubtotal(), mods, it.getNotes()));
             }
             allItems.addAll(items);
             String kind = o.getOrderGroupId() == null ? "STANDARD" : (isPreorderOrder(o) ? "PREORDER" : "READY");
@@ -251,8 +272,9 @@ public class GuestCheckoutController {
         return sum;
     }
 
-    /** A resolved cart line (product + quantity + its line total). */
-    private record Line(Product product, int quantity, BigDecimal lineTotal) {}
+    /** A resolved cart line (product + quantity + validated modifiers + note + line total). */
+    private record Line(Product product, int quantity, ModifierResolver.Resolution resolution,
+                        String notes, BigDecimal lineTotal) {}
 
     /** Live check of a voucher code before submit; 400 with a reason when not valid. */
     @PostMapping("/discounts/validate")

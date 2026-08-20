@@ -1,6 +1,6 @@
 export type StoreCurrency = 'SGD' | 'IDR';
 
-/** Single source of truth for currency symbols — both formatMoney and
+/** Single source of truth for currency symbols - both formatMoney and
  *  currencySymbol read from here so they can never drift apart. */
 const CURRENCY_SYMBOLS: Record<StoreCurrency, string> = {
   SGD: 'S$',
@@ -66,7 +66,7 @@ export interface MoneyParseResult {
  *        the decimal point ("5,50" -> 5.50). Anything leaving >2 decimals (e.g.
  *        the ambiguous "5,500") is rejected rather than silently mis-read.
  *
- * Range is intentionally NOT enforced here — callers apply their own bounds
+ * Range is intentionally NOT enforced here - callers apply their own bounds
  * (a product price floor differs from a delivery fee that may be 0).
  */
 export function parseMoneyInput(raw: string, currency: string | undefined): MoneyParseResult {
@@ -107,7 +107,7 @@ export function parseMoneyInput(raw: string, currency: string | undefined): Mone
 
 /**
  * Render a numeric value as the normalised text shown INSIDE a money input (no
- * currency symbol — that's a separate prefix). SGD keeps 2 decimals with comma
+ * currency symbol - that's a separate prefix). SGD keeps 2 decimals with comma
  * grouping ("1,000.00"); IDR is a whole number with dot grouping ("25.000").
  * Feeding this back through {@link parseMoneyInput} round-trips exactly.
  */

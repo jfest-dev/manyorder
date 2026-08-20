@@ -1,9 +1,12 @@
 package com.manyorder.api.domain.order;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.manyorder.api.domain.product.Product;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -12,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
 @Entity
@@ -33,8 +37,17 @@ public class OrderItem {
     @Column(nullable = false)
     private Integer quantity;
 
+    /** Base per-unit product price at order time (a snapshot). The effective unit
+     *  price adds the chosen modifiers — see {@link #getLineSubtotal()}. */
     @Column(nullable = false)
     private BigDecimal price;
+
+    /** Per-line customer note (e.g. "less sugar"), separate from the order-wide notes. */
+    @Column(columnDefinition = "TEXT")
+    private String notes;
+
+    @OneToMany(mappedBy = "orderItem", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderItemModifier> modifiers = new ArrayList<>();
 
     protected OrderItem() {
         // JPA only
@@ -45,6 +58,23 @@ public class OrderItem {
         this.product = product;
         this.quantity = quantity;
         this.price = price;
+    }
+
+    public void addModifier(OrderItemModifier modifier) { this.modifiers.add(modifier); }
+
+    /** Sum of the chosen modifier deltas for one unit. */
+    public BigDecimal getModifiersTotal() {
+        return modifiers.stream().map(OrderItemModifier::getPriceDelta).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Effective per-unit price = base price + modifiers. */
+    public BigDecimal getUnitPrice() {
+        return price.add(getModifiersTotal());
+    }
+
+    /** Line subtotal = effective unit price * quantity — the single source for all subtotal math. */
+    public BigDecimal getLineSubtotal() {
+        return getUnitPrice().multiply(BigDecimal.valueOf(quantity));
     }
 
     public Long getId() {
@@ -66,4 +96,9 @@ public class OrderItem {
     public BigDecimal getPrice() {
         return price;
     }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+
+    public List<OrderItemModifier> getModifiers() { return modifiers; }
 }

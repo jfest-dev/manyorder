@@ -65,7 +65,7 @@ function SaveRow({ label, active, saved, error, disabled, onSave }: {
   );
 }
 
-// Fields each card owns — used for per-card dirty tracking.
+// Fields each card owns - used for per-card dirty tracking.
 const STORE_KEYS: (keyof UpdateStorePayload)[] =
   ['storeName', 'slug', 'storeEmail', 'storePhone', 'businessType', 'currency', 'themeColor', 'logoUrl', 'storeDescription'];
 const PAYMENT_KEYS: (keyof UpdateStorePayload)[] = ['paymentInstruction'];
@@ -81,7 +81,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const [savedCurrency, setSavedCurrency] = useState('');
   const [savedName, setSavedName] = useState('');
 
-  // Per-card save status — one card saving/confirming at a time.
+  // Per-card save status - one card saving/confirming at a time.
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<{ key: string; msg: string } | null>(null);
@@ -185,7 +185,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
     }
     if (form.currency && form.currency !== savedCurrency) {
       const proceed = confirm(
-        'Changing currency does not convert your existing product prices — you\'ll need to update them manually. Continue?',
+        'Changing currency does not convert your existing product prices. You\'ll need to update them manually. Continue?',
       );
       if (!proceed) return;
     }
@@ -271,7 +271,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const removeLogo = () => {
     setLogoError(null);
     if (pendingLogoFile) {
-      // Discard an unsaved pick — nothing was uploaded, so revert to the saved logo.
+      // Discard an unsaved pick - nothing was uploaded, so revert to the saved logo.
       setPendingLogoFile(null);
     } else {
       // Stage removal of the saved logo; Save persists '' and the server deletes the file.
@@ -458,8 +458,8 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               onChange={(v) => set('slug', v)}
               helperText={
                 slugChanged
-                  ? `manyorder.app/${form.slug || 'your-store'} — changing your store link breaks links you've already shared`
-                  : `manyorder.app/${form.slug || 'your-store'} — the link you share with customers`
+                  ? `manyorder.app/${form.slug || 'your-store'} · changing your store link breaks links you've already shared`
+                  : `manyorder.app/${form.slug || 'your-store'} · the link you share with customers`
               }
             />
             <FieldSelect
@@ -543,7 +543,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               <FieldInput label="City" placeholder="Singapore" value={form.city || ''} onChange={(v) => set('city', v)} />
               <FieldInput label="Postal Code" placeholder="123456" value={form.postalCode || ''} onChange={(v) => set('postalCode', v)} />
             </div>
-            <FieldInput label="Operating hours" placeholder="e.g. Mon–Sat, 9am–6pm · Closed Sun" value={form.operatingHours || ''} onChange={(v) => set('operatingHours', v)} helperText="Free text — shown on your storefront." />
+            <FieldInput label="Operating hours" placeholder="e.g. Mon to Sat, 9am to 6pm · Closed Sun" value={form.operatingHours || ''} onChange={(v) => set('operatingHours', v)} helperText="Free text, shown on your storefront." />
           </div>
           <SaveRow
             label="Save"
@@ -590,7 +590,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
           />
         </div>
 
-        {/* Account — account-level actions that apply to you, not a specific store */}
+        {/* Account - account-level actions that apply to you, not a specific store */}
         <div style={sectionCard}>
           <h3 style={{ marginBottom: '4px' }}>Account</h3>
           <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>

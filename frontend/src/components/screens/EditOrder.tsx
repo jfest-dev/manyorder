@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { Button } from '../Button';
-import { FieldInput, FieldSelect } from '../Field';
+import { FieldInput } from '../Field';
 import { OrderTypeToggle } from '../OrderTypeToggle';
 import { MoneyField } from '../MoneyField';
+import { ManualLineComposer, type ComposedLine } from '../ManualLineComposer';
 import { ordersApi, productsApi, ProductResponse, OrderType, OrderStatus } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { lineSignature } from '../../lib/cart';
+import { resolveSelectedOptions, type ResolvedOption } from '../../lib/modifiers';
 import type { Store } from '../../App';
 
 interface EditOrderProps {
@@ -15,10 +18,15 @@ interface EditOrderProps {
 }
 
 interface Line {
+  key: string; // signature: product + chosen options + note
   productId: number;
   name: string;
-  price: number;
+  /** Effective per-unit price (base + modifier deltas). */
+  unitPrice: number;
   quantity: number;
+  modifierOptionIds: number[];
+  notes?: string;
+  selectedOptions: ResolvedOption[];
 }
 
 const sectionCard: React.CSSProperties = {
@@ -58,8 +66,6 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountCode, setDiscountCode] = useState<string | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState('');
-  const [qty, setQty] = useState('1');
   const [busy, setBusy] = useState(false);
 
   const itemsEditable = ITEMS_EDITABLE.includes(status);
@@ -78,19 +84,28 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
         setOrderType(order.orderType);
         setDeliveryAddress(order.deliveryAddress || '');
         setNotes(order.notes || '');
-        // A pending fee means "to be confirmed" — start the input empty so the
+        // A pending fee means "to be confirmed" - start the input empty so the
         // merchant enters the real amount; otherwise prefill the saved fee.
         setDeliveryFee(order.deliveryFeePending ? null : order.deliveryFee);
         setDeliveryFeePending(order.deliveryFeePending);
         setDiscountAmount(order.discountAmount);
         setDiscountCode(order.discountCode);
         setLines(
-          order.items.map((i) => ({
-            productId: i.productId,
-            name: i.productName,
-            price: i.price,
-            quantity: i.quantity,
-          })),
+          order.items.map((i) => {
+            const modifierOptionIds = i.modifiers
+              .map((m) => m.sourceOptionId)
+              .filter((x): x is number => x != null);
+            return {
+              key: lineSignature({ productId: i.productId, modifierOptionIds, notes: i.notes ?? undefined }),
+              productId: i.productId,
+              name: i.productName,
+              unitPrice: i.unitPrice,
+              quantity: i.quantity,
+              modifierOptionIds,
+              notes: i.notes ?? undefined,
+              selectedOptions: i.modifiers.map((m) => ({ groupName: m.groupName, optionName: m.optionName, priceDelta: m.priceDelta })),
+            };
+          }),
         );
       })
       .catch((e) => alert(e?.message || 'Could not load order'))
@@ -101,28 +116,23 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
   }, [storeId, orderId]);
 
   const subtotal = useMemo(
-    () => lines.reduce((sum, l) => sum + l.price * l.quantity, 0),
+    () => lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0),
     [lines],
   );
   const isDelivery = orderType === 'DELIVERY';
   const effectiveDeliveryFee = isDelivery ? (deliveryFee ?? 0) : 0;
   const total = Math.max(0, subtotal + effectiveDeliveryFee - discountAmount);
 
-  const addLine = () => {
-    const product = products.find((p) => String(p.id) === selectedProductId);
-    const quantity = Math.max(1, parseInt(qty || '1', 10) || 1);
-    if (!product) return;
+  // Same product with different modifiers / note is a separate line (by signature).
+  const addComposedLine = (c: ComposedLine) => {
+    const key = lineSignature({ productId: c.product.id, modifierOptionIds: c.modifierOptionIds, notes: c.notes });
+    const { selectedOptions, modifiersTotal } = resolveSelectedOptions(c.product, c.modifierOptionIds);
+    const unitPrice = c.product.price + modifiersTotal;
     setLines((prev) => {
-      const existing = prev.find((l) => l.productId === product.id);
-      if (existing) {
-        return prev.map((l) =>
-          l.productId === product.id ? { ...l, quantity: l.quantity + quantity } : l,
-        );
-      }
-      return [...prev, { productId: product.id, name: product.name, price: product.price, quantity }];
+      const existing = prev.find((l) => l.key === key);
+      if (existing) return prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + c.quantity } : l));
+      return [...prev, { key, productId: c.product.id, name: c.product.name, unitPrice, quantity: c.quantity, modifierOptionIds: c.modifierOptionIds, notes: c.notes, selectedOptions }];
     });
-    setSelectedProductId('');
-    setQty('1');
   };
 
   const submit = async () => {
@@ -145,7 +155,12 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
         notes: notes.trim() || undefined,
         // Omit items entirely when locked so the server leaves them untouched.
         ...(itemsEditable
-          ? { items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })) }
+          ? { items: lines.map((l) => ({
+              productId: l.productId,
+              quantity: l.quantity,
+              modifierOptionIds: l.modifierOptionIds.length ? l.modifierOptionIds : undefined,
+              notes: l.notes,
+            })) }
           : {}),
       });
       alert(`Order #${updated.id} updated`);
@@ -218,24 +233,7 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
             )}
 
             {itemsEditable && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px', gap: '10px', alignItems: 'end', marginBottom: '16px' }}>
-                <FieldSelect
-                  label="Product"
-                  placeholder={products.length ? 'Select a product' : 'No active products yet'}
-                  options={products.map((p) => ({
-                    value: String(p.id),
-                    label: `${p.name} — ${formatMoney(p.price, store.currency)}`,
-                  }))}
-                  value={selectedProductId}
-                  onChange={setSelectedProductId}
-                />
-                <FieldInput label="Qty" type="number" value={qty} onChange={setQty} />
-                <Button variant="secondary" onClick={addLine} disabled={!selectedProductId}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}>
-                    <Plus size={15} /> Add
-                  </div>
-                </Button>
-              </div>
+              <ManualLineComposer products={products} currency={store.currency} onAdd={addComposedLine} />
             )}
 
             {lines.length === 0 ? (
@@ -252,18 +250,26 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
               <div>
                 {lines.map((l) => (
                   <div
-                    key={l.productId}
+                    key={l.key}
                     className="text-small"
-                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}
                   >
-                    <span style={{ flex: 1 }}>{l.name}</span>
-                    <span style={{ width: '70px' }}>× {l.quantity}</span>
-                    <span style={{ width: '110px', fontWeight: 600 }}>
-                      {formatMoney(l.price * l.quantity, store.currency)}
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      {l.name}
+                      {l.selectedOptions.length > 0 && (
+                        <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '12px' }}>
+                          {l.selectedOptions.map((o) => o.optionName).join(', ')}
+                        </span>
+                      )}
+                      {l.notes && <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>“{l.notes}”</span>}
+                    </span>
+                    <span style={{ width: '55px', textAlign: 'right' }}>× {l.quantity}</span>
+                    <span style={{ width: '95px', textAlign: 'right', fontWeight: 600 }}>
+                      {formatMoney(l.unitPrice * l.quantity, store.currency)}
                     </span>
                     {itemsEditable ? (
                       <button
-                        onClick={() => setLines((prev) => prev.filter((x) => x.productId !== l.productId))}
+                        onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error-color)', padding: '4px' }}
                       >
                         <Trash2 size={15} />
@@ -293,7 +299,7 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
           <div style={sectionCard}>
             <h3 style={{ marginBottom: '20px' }}>Order Summary</h3>
 
-            {/* One clean vertical list — subtotal, delivery fee, then discount as
+            {/* One clean vertical list - subtotal, delivery fee, then discount as
                 its own line applied to the whole order (never nested under the fee). */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <SummaryRow label={`Items (${lines.reduce((n, l) => n + l.quantity, 0)}) · Subtotal`} value={formatMoney(subtotal, store.currency)} />

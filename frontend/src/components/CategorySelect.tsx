@@ -14,13 +14,13 @@ interface CategorySelectProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
-  /** Fires with the selected category's name (or null) whenever it resolves —
+  /** Fires with the selected category's name (or null) whenever it resolves -
    *  used by callers that show the name somewhere (e.g. a live-preview badge). */
   onCategoryName?: (name: string | null) => void;
 }
 
 /**
- * Category dropdown with inline "quick-add" — create a new category without
+ * Category dropdown with inline "quick-add" - create a new category without
  * leaving the form. Owns the category list for its store, so every surface that
  * picks a category (Add Product, Edit Product, and onboarding step 2 via
  * AddProducts) shares this one implementation.

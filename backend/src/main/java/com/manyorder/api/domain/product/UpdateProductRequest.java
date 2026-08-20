@@ -36,6 +36,10 @@ public class UpdateProductRequest {
     private LocalTime preOrderReadyTimeEnd;
     private String preOrderNote;
 
+    /** Null = leave the product's modifiers unchanged; non-null = replace them wholesale. */
+    @jakarta.validation.Valid
+    private java.util.List<ModifierGroupRequest> modifierGroups;
+
     public UpdateProductRequest() {}
 
     public String getName() { return name; }
@@ -62,4 +66,6 @@ public class UpdateProductRequest {
     public void setPreOrderReadyTimeEnd(LocalTime preOrderReadyTimeEnd) { this.preOrderReadyTimeEnd = preOrderReadyTimeEnd; }
     public String getPreOrderNote() { return preOrderNote; }
     public void setPreOrderNote(String preOrderNote) { this.preOrderNote = preOrderNote; }
+    public java.util.List<ModifierGroupRequest> getModifierGroups() { return modifierGroups; }
+    public void setModifierGroups(java.util.List<ModifierGroupRequest> modifierGroups) { this.modifierGroups = modifierGroups; }
 }

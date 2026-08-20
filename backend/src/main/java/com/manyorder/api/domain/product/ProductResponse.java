@@ -4,8 +4,17 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 
 public class ProductResponse {
+
+    /** A choosable option in the response (with its id so the client can send it back). */
+    public record ModifierOptionView(Long id, String name, BigDecimal priceDelta, int sortOrder) {}
+
+    /** A modifier group in the response. `required` is a convenience for minSelect >= 1. */
+    public record ModifierGroupView(Long id, String name, int minSelect, Integer maxSelect,
+                                    boolean required, int sortOrder, List<ModifierOptionView> options) {}
+
 
     private final Long id;
     private final Long merchantId;
@@ -23,6 +32,7 @@ public class ProductResponse {
     private final LocalTime preOrderReadyTimeStart;
     private final LocalTime preOrderReadyTimeEnd;
     private final String preOrderNote;
+    private final List<ModifierGroupView> modifierGroups;
     /** Units sold, derived from order history (see ProductService). */
     private final long unitsSold;
     private final LocalDateTime createdAt;
@@ -44,6 +54,13 @@ public class ProductResponse {
         this.preOrderReadyTimeStart = p.getPreOrderReadyTimeStart();
         this.preOrderReadyTimeEnd = p.getPreOrderReadyTimeEnd();
         this.preOrderNote = p.getPreOrderNote();
+        this.modifierGroups = p.getModifierGroups().stream()
+                .map(g -> new ModifierGroupView(
+                        g.getId(), g.getName(), g.getMinSelect(), g.getMaxSelect(), g.isRequired(), g.getSortOrder(),
+                        g.getOptions().stream()
+                                .map(o -> new ModifierOptionView(o.getId(), o.getName(), o.getPriceDelta(), o.getSortOrder()))
+                                .toList()))
+                .toList();
         this.unitsSold = unitsSold;
         this.createdAt = p.getCreatedAt();
     }
@@ -64,6 +81,7 @@ public class ProductResponse {
     public LocalTime getPreOrderReadyTimeStart() { return preOrderReadyTimeStart; }
     public LocalTime getPreOrderReadyTimeEnd() { return preOrderReadyTimeEnd; }
     public String getPreOrderNote() { return preOrderNote; }
+    public List<ModifierGroupView> getModifierGroups() { return modifierGroups; }
     public long getUnitsSold() { return unitsSold; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

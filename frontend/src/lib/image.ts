@@ -1,5 +1,5 @@
 // Shared client-side image validation, mirrored by the server (which re-checks
-// type, size, and the real magic bytes — this check is advisory UX only, never
+// type, size, and the real magic bytes - this check is advisory UX only, never
 // the security boundary). Constants match the backend's ImageValidation.
 
 export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -31,7 +31,7 @@ export async function downscaleImage(file: File, maxDim: number, quality = 0.82)
   try {
     bitmap = await createImageBitmap(file);
   } catch {
-    return file; // decoder unavailable / unsupported — upload as-is
+    return file; // decoder unavailable / unsupported - upload as-is
   }
   try {
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));

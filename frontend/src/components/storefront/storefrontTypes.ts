@@ -1,9 +1,13 @@
 import type { ProductResponse } from '../../lib/api';
 
+// Cart types + logic live in lib/cart.ts (pure + unit-tested). Re-exported here
+// so existing storefront imports keep working.
+export type { CartItem, CartLine, SelectedOption } from '../../lib/cart';
+
 /**
  * Minimal store shape the presentational storefront views render. The public
  * page passes a real PublicStoreResponse; the onboarding/edit previews pass an
- * in-progress draft — both satisfy this, so one component serves every surface.
+ * in-progress draft - both satisfy this, so one component serves every surface.
  */
 export interface StorefrontStore {
   name: string;
@@ -15,22 +19,6 @@ export interface StorefrontStore {
   phoneNumber?: string | null;
   address?: string | null;
   operatingHours?: string | null;
-}
-
-/**
- * What actually persists in the cart: product id + quantity only, never a
- * product snapshot — so price / name / stock / pre-order details are always
- * resolved fresh and can never go stale.
- */
-export interface CartItem {
-  productId: number;
-  quantity: number;
-}
-
-/** A cart item hydrated against the freshly-fetched product, for rendering. */
-export interface CartLine {
-  product: ProductResponse;
-  quantity: number;
 }
 
 /** A product is orderable when it has stock, or is explicitly a pre-order item. */

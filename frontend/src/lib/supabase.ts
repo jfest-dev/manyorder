@@ -1,5 +1,5 @@
 /**
- * DEPRECATED SHIM — Supabase was removed in the ManyOrder consolidation.
+ * DEPRECATED SHIM - Supabase was removed in the ManyOrder consolidation.
  *
  * A few screens (Settings, Sidebar sign-out) still import this module; they
  * are migrated to lib/api.ts in Batches 2–4. Until then this shim keeps the
@@ -17,12 +17,12 @@ export function registerSupabaseSignOut(handler: LogoutHandler) {
 
 const deprecatedResult = {
   data: null,
-  error: { message: 'Supabase was removed — this screen is migrated to the REST API in a later batch.' },
+  error: { message: 'Supabase was removed. This screen is migrated to the REST API in a later batch.' },
 };
 
 function chain(table: string): any {
   const warn = () =>
-    console.warn(`[manyorder] supabase.from('${table}') is deprecated — use lib/api.ts instead.`);
+    console.warn(`[manyorder] supabase.from('${table}') is deprecated - use lib/api.ts instead.`);
   const c: any = {
     select: () => c,
     insert: () => c,

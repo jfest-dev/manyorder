@@ -106,7 +106,7 @@ function paramForScreen(screen: Screen): string | null {
 /**
  * Map a `?screen=` value (from a refresh, deep-link, or Back/Forward) to the
  * screen to actually show. The switch-based screens live under one route, so
- * this restores the current screen from the URL — with a few values deliberately
+ * this restores the current screen from the URL - with a few values deliberately
  * not restored as-is:
  *   - onboarding is driven by store state, not the URL;
  *   - orders-edit / products-edit need a selected record id the URL doesn't
@@ -195,7 +195,7 @@ function MerchantApp() {
 
   // The active screen is mirrored into `?screen=` so a refresh/Back restores it
   // (the two effects below keep URL and state in sync). Restore it here on first
-  // load — editingOrderId is always null at mount, so an orders-edit URL falls
+  // load - editingOrderId is always null at mount, so an orders-edit URL falls
   // back to its list.
   const [activeScreen, setActiveScreen] = useState<Screen>(() =>
     resolveScreen(searchParams.get('screen'), isStaff, null, null),
@@ -208,7 +208,7 @@ function MerchantApp() {
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [storeUnavailable, setStoreUnavailable] = useState(false);
-  // The onboarding logo pick, held here (not in the localStorage draft — a File
+  // The onboarding logo pick, held here (not in the localStorage draft - a File
   // can't be serialized) so it survives the step 1 → step 2 transition and is
   // uploaded only when the store is actually created.
   const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
@@ -714,7 +714,7 @@ export default function App() {
           </RequireAuth>
         }
       />
-      {/* Public storefront — customer-facing, no auth, no dashboard chrome.
+      {/* Public storefront - customer-facing, no auth, no dashboard chrome.
           Matched after the static routes above; a reserved-slug guard keeps
           store links from shadowing them. */}
       <Route path="/:slug/*" element={<StorefrontApp />} />

@@ -6,10 +6,12 @@ import { PreorderScheduleFields } from '../PreorderScheduleFields';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { CategorySelect } from '../CategorySelect';
+import { ModifierGroupsEditor } from '../ModifierGroupsEditor';
 import { formatMoney, priceLimits } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { ToggleSwitch } from '../ToggleSwitch';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
+import { editorGroupsFromViews, editorGroupsToInputs, validateEditorGroups, type EditorGroup } from '../../lib/modifiers';
 import { productsApi, UpdateProductPayload, ApiError } from '../../lib/api';
 
 interface EditProductProps {
@@ -57,12 +59,14 @@ export function EditProduct({
   const [preOrderReadyTimeEnd, setPreOrderReadyTimeEnd] = useState('');
   const [preOrderNote, setPreOrderNote] = useState('');
 
+  const [modifierGroups, setModifierGroups] = useState<EditorGroup[]>([]);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Draft persistence: in-progress edits survive a refresh / accidental nav and
   // restore automatically, cleared once the product saves. Photo (a File) isn't
-  // persisted — only the text/schedule fields. `hydrated` gates the save effect
+  // persisted - only the text/schedule fields. `hydrated` gates the save effect
   // so we don't persist the blank pre-load state over a real draft.
   const draftKey = `manyorder_editdraft_${storeId}_${productId}`;
   const [hydrated, setHydrated] = useState(false);
@@ -90,6 +94,7 @@ export function EditProduct({
         setPreOrderReadyTimeStart((p.preOrderReadyTimeStart ?? '').slice(0, 5)); // HH:mm for <input type=time>
         setPreOrderReadyTimeEnd((p.preOrderReadyTimeEnd ?? '').slice(0, 5));
         setPreOrderNote(p.preOrderNote ?? '');
+        setModifierGroups(editorGroupsFromViews(p.modifierGroups));
 
         // Overlay any unsaved draft on top of the freshly-loaded values.
         try {
@@ -108,6 +113,7 @@ export function EditProduct({
             if (d.preOrderReadyTimeStart !== undefined) setPreOrderReadyTimeStart(d.preOrderReadyTimeStart);
             if (d.preOrderReadyTimeEnd !== undefined) setPreOrderReadyTimeEnd(d.preOrderReadyTimeEnd);
             if (d.preOrderNote !== undefined) setPreOrderNote(d.preOrderNote);
+            if (d.modifierGroups !== undefined) setModifierGroups(d.modifierGroups);
           }
         } catch { /* ignore a malformed draft */ }
         setHydrated(true);
@@ -123,11 +129,11 @@ export function EditProduct({
     try {
       sessionStorage.setItem(draftKey, JSON.stringify({
         name, price, description, categoryId, stock, sku, status,
-        preOrder, preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd, preOrderNote,
+        preOrder, preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd, preOrderNote, modifierGroups,
       }));
-    } catch { /* storage full — draft is best-effort */ }
+    } catch { /* storage full - draft is best-effort */ }
   }, [hydrated, draftKey, name, price, description, categoryId, stock, sku, status,
-      preOrder, preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd, preOrderNote]);
+      preOrder, preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd, preOrderNote, modifierGroups]);
 
   // Live object-URL preview for a newly picked file.
   useEffect(() => {
@@ -161,6 +167,8 @@ export function EditProduct({
     if (priceNum === null || priceNum <= 0) { setError('Enter a valid price.'); return; }
     const stockNum = stock.trim() === '' ? 0 : parseInt(stock, 10);
     if (Number.isNaN(stockNum) || stockNum < 0) { setError('Stock must be 0 or more.'); return; }
+    const modifierError = validateEditorGroups(modifierGroups);
+    if (modifierError) { setError(modifierError); return; }
 
     setSaving(true);
     try {
@@ -183,13 +191,15 @@ export function EditProduct({
         preOrderReadyTimeStart: preOrder && preOrderReadyTimeStart ? preOrderReadyTimeStart : undefined,
         preOrderReadyTimeEnd: preOrder && preOrderReadyTimeEnd ? preOrderReadyTimeEnd : undefined,
         preOrderNote: preOrder ? preOrderNote.trim() : undefined,
+        // Always sent → replace-on-save. An empty array clears the product's modifiers.
+        modifierGroups: editorGroupsToInputs(modifierGroups),
       };
       // Status maps to isActive via a dedicated call when it changes to draft/active.
       await productsApi.update(storeId, productId, payload);
       if (status === 'draft') {
         await productsApi.deactivate(storeId, productId);
       }
-      sessionStorage.removeItem(draftKey); // saved — drop the draft
+      sessionStorage.removeItem(draftKey); // saved - drop the draft
       backToList();
     } catch (e: any) {
       setError(e instanceof ApiError ? e.message : 'Could not save changes');
@@ -203,7 +213,7 @@ export function EditProduct({
     setSaving(true);
     try {
       await productsApi.deactivate(storeId, productId);
-      sessionStorage.removeItem(draftKey); // product hidden — drop the draft
+      sessionStorage.removeItem(draftKey); // product hidden - drop the draft
       backToList();
     } catch (e: any) {
       setError(e instanceof ApiError ? e.message : 'Could not delete product');
@@ -298,7 +308,7 @@ export function EditProduct({
                   checked={status === 'active'}
                   onChange={(c) => setStatus(c ? 'active' : 'draft')}
                   label="Visible to customers"
-                  description={status === 'active' ? 'Active — shown on your storefront.' : 'Draft — hidden from customers.'}
+                  description={status === 'active' ? 'Active. Shown on your storefront.' : 'Draft. Hidden from customers.'}
                 />
                 <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>Out of stock shows automatically when stock reaches 0.</p>
               </div>
@@ -322,6 +332,9 @@ export function EditProduct({
                   </div>
                 )}
               </div>
+
+              {/* Add-ons / modifiers */}
+              <ModifierGroupsEditor groups={modifierGroups} onChange={setModifierGroups} currency={currency} />
 
               {error && <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>}
 
@@ -372,13 +385,13 @@ export function EditProduct({
                   const ready = formatPreorderReady(preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd);
                   return (
                     <div style={{ marginTop: '12px', padding: '10px', background: '#FEF3C7', borderRadius: '6px', fontSize: '11px', color: '#92400E' }}>
-                      🕒 Pre-order{ready ? ` — ready ${ready}` : ''}{preOrderNote ? `. ${preOrderNote}` : ''}
+                      🕒 Pre-order{ready ? ` · ready ${ready}` : ''}{preOrderNote ? `. ${preOrderNote}` : ''}
                     </div>
                   );
                 })()}
                 {!preOrder && status === 'draft' && (
                   <div style={{ marginTop: '12px', padding: '12px', background: '#FEF3C7', borderRadius: '6px', fontSize: '11px', color: '#92400E', textAlign: 'center' }}>
-                    ⚠️ Draft — not visible to customers
+                    ⚠️ Draft. Not visible to customers
                   </div>
                 )}
                 {!preOrder && status === 'active' && (stock.trim() === '0') && (

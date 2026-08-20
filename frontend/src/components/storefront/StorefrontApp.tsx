@@ -1,31 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   storefrontApi, ApiError,
   type PublicStoreResponse, type ProductResponse, type GuestCheckoutResult,
 } from '../../lib/api';
 import { StorefrontView } from './StorefrontView';
 import { ProductDetailView } from './ProductDetailView';
+import { CartDecisionSheet } from './CartDecisionSheet';
 import { CartView } from './CartView';
 import { CheckoutView } from './CheckoutView';
 import { OrderConfirmationView } from './OrderConfirmationView';
 import { OrderLookupView } from './OrderLookupView';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { getRecentOrder, clearRecentOrder, anyOrderStatusActive, type RecentOrder } from '../../lib/orderRecall';
-import type { CartItem, CartLine } from './storefrontTypes';
-
-/** Parse persisted cart, tolerating the old {product, quantity} snapshot shape. */
-function parseCart(raw: string | null): CartItem[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as any[];
-    return parsed
-      .map((l) => ({ productId: Number(l?.productId ?? l?.product?.id), quantity: Number(l?.quantity) || 0 }))
-      .filter((it) => Number.isFinite(it.productId) && it.quantity > 0);
-  } catch {
-    return [];
-  }
-}
+import {
+  parseCart, addLine, setLineQty, removeLine, updateLine, hydrateCart,
+  cartCount as countCart, plainQuantities, plainSignature, lineSignature,
+  type CartItem, type CartLine,
+} from '../../lib/cart';
 
 /**
  * Public storefront container mounted at /:slug/*. Fetches the store + products,
@@ -44,6 +36,8 @@ export function StorefrontApp() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orderResult, setOrderResult] = useState<GuestCheckoutResult | null>(null);
   const [recentOrder, setRecentOrder] = useState<RecentOrder | null>(null);
+  // Product whose "already in cart?" decision sheet is open (shop grid). null = closed.
+  const [decisionProductId, setDecisionProductId] = useState<number | null>(null);
 
   const cartKey = store ? `manyorder_cart_${store.id}` : null;
 
@@ -75,7 +69,7 @@ export function StorefrontApp() {
 
   // Surface the "recent order" recall banner once the store is known and
   // whenever a new order is placed. The banner shows only while the order is
-  // still active — a terminal order (delivered/completed/cancelled) is cleared
+  // still active - a terminal order (delivered/completed/cancelled) is cleared
   // so it stops showing. A newer order overwrites the slot at checkout, so this
   // always reflects the latest order.
   useEffect(() => {
@@ -104,44 +98,77 @@ export function StorefrontApp() {
     return () => { cancelled = true; };
   }, [store, orderResult]);
 
-  // Resolve cart ids against the freshly-fetched products every render, so cart
-  // and checkout always show current price / name / pre-order details. Lines
-  // whose product no longer exists are dropped.
-  const hydratedCart = useMemo<CartLine[]>(
-    () => cart
-      .map((it) => {
-        const product = products.find((p) => p.id === it.productId);
-        return product ? { product, quantity: it.quantity } : null;
-      })
-      .filter((l): l is CartLine => l !== null),
-    [cart, products],
-  );
+  // Resolve cart lines against the freshly-fetched products every render, so
+  // cart and checkout always show current price / name / modifiers / pre-order
+  // details. Lines whose product no longer exists are dropped.
+  const hydratedCart = useMemo<CartLine[]>(() => hydrateCart(cart, products), [cart, products]);
 
-  const cartCount = useMemo(() => cart.reduce((n, it) => n + it.quantity, 0), [cart]);
-  const quantities = useMemo(
-    () => Object.fromEntries(cart.map((it) => [it.productId, it.quantity])) as Record<number, number>,
-    [cart],
-  );
+  const cartCount = useMemo(() => countCart(cart), [cart]);
+  const cartSubtotal = useMemo(() => hydratedCart.reduce((s, l) => s + l.lineSubtotal, 0), [hydratedCart]);
+  // Shop grid stepper reflects the PLAIN line (no modifiers/notes) per product.
+  const quantities = useMemo(() => plainQuantities(cart), [cart]);
 
-  const addToCart = (productId: number, quantity = 1) => {
+  // Add a line - same product with different modifiers/notes is a separate line.
+  const addToCart = (
+    productId: number, quantity = 1, modifierOptionIds: number[] = [], notes?: string,
+  ) => {
+    setCart((prev) => addLine(prev, { productId, quantity, modifierOptionIds, notes }));
+  };
+
+  // The shop grid stepper edits the plain line for a product by its signature.
+  const setPlainQty = (productId: number, quantity: number) =>
+    setCart((prev) => setLineQty(prev, plainSignature(productId), quantity));
+
+  // Cart-page handlers operate on a specific line by its signature.
+  const setLineQtyBySig = (signature: string, quantity: number) =>
+    setCart((prev) => setLineQty(prev, signature, quantity));
+  const removeLineBySig = (signature: string) =>
+    setCart((prev) => removeLine(prev, signature));
+  // Bump an existing line by one (from the shop-grid "already in cart?" sheet).
+  // Stays on the shop; the cart bar reflects the new total.
+  const incrementLineBySig = (signature: string) => {
     setCart((prev) => {
-      const existing = prev.find((it) => it.productId === productId);
-      if (existing) return prev.map((it) => it.productId === productId ? { ...it, quantity: it.quantity + quantity } : it);
-      return [...prev, { productId, quantity }];
+      const line = prev.find((it) => lineSignature(it) === signature);
+      return line ? setLineQty(prev, signature, line.quantity + 1) : prev;
     });
   };
-
-  const setQty = (productId: number, quantity: number) => {
-    if (quantity <= 0) { removeFromCart(productId); return; }
-    setCart((prev) => prev.map((it) => it.productId === productId ? { ...it, quantity } : it));
+  // Replace an edited cart line's choices, then return to the cart.
+  const updateLineBySig = (
+    oldSignature: string, productId: number, quantity: number, modifierOptionIds: number[], notes?: string,
+  ) => {
+    setCart((prev) => updateLine(prev, oldSignature, { productId, quantity, modifierOptionIds, notes }));
+    goCart();
   };
-
-  const removeFromCart = (productId: number) => setCart((prev) => prev.filter((it) => it.productId !== productId));
 
   const goShop = () => navigate(`/${slug}`);
   const goCart = () => navigate(`/${slug}/cart`);
   const goCheckout = () => navigate(`/${slug}/checkout`);
   const goTrack = () => navigate(`/${slug}/track`);
+  const goProduct = (id: number) => navigate(`/${slug}/p/${id}`);
+
+  // A header "Back" returns to the actual previous screen (pops history), so an
+  // edit opened from the cart goes back to the cart, not a fixed default. Falls
+  // back to the shop when there's no in-app history (a direct deep link) so Back
+  // never leaves the store. React Router stamps an incrementing idx on history.
+  const goBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else goShop();
+  };
+
+  // Tapping a product on the shop grid. If it has options AND is already in the
+  // cart, ask up front (bump an existing choice, or go to the PDP for a new one);
+  // otherwise go straight to the PDP.
+  const openProduct = (productId: number) => {
+    const product = products.find((p) => p.id === productId);
+    const hasModifiers = (product?.modifierGroups?.length ?? 0) > 0;
+    const already = hydratedCart.some((l) => l.product.id === productId);
+    if (hasModifiers && already) setDecisionProductId(productId);
+    else goProduct(productId);
+  };
+
+  const decisionProduct = decisionProductId != null ? products.find((p) => p.id === decisionProductId) ?? null : null;
+  const decisionLines = decisionProductId != null ? hydratedCart.filter((l) => l.product.id === decisionProductId) : [];
 
   if (loading) {
     return <Frame><Centered>Loading store…</Centered></Frame>;
@@ -158,11 +185,12 @@ export function StorefrontApp() {
             <StorefrontView
               store={store}
               products={products}
-              onProductClick={(id) => navigate(`/${slug}/p/${id}`)}
+              onProductClick={openProduct}
               onAddToCart={(id) => addToCart(id, 1)}
               quantities={quantities}
-              onSetQuantity={setQty}
+              onSetQuantity={setPlainQty}
               cartCount={cartCount}
+              cartTotal={cartSubtotal}
               onViewCart={goCart}
               onTrackOrder={goTrack}
               recentOrder={recentOrder}
@@ -170,35 +198,49 @@ export function StorefrontApp() {
             />
           } />
           <Route path="p/:productId" element={
-            <PdpRoute products={products} store={store}
-              onAddToCart={(id, qty) => { addToCart(id, qty); goCart(); }}
-              onBack={goShop} />
+            <PdpRoute products={products} store={store} cart={hydratedCart}
+              onAddToCart={(id, qty, optionIds, notes) => { addToCart(id, qty, optionIds, notes); goCart(); }}
+              onUpdateLine={updateLineBySig}
+              onBack={goBack} />
           } />
           <Route path="cart" element={
             <CartView
               items={hydratedCart}
               currency={store.currency}
-              onQtyChange={setQty}
-              onRemove={removeFromCart}
+              onQtyChange={setLineQtyBySig}
+              onRemove={removeLineBySig}
+              onEditLine={(line) => navigate(`/${slug}/p/${line.product.id}`, { state: { editSignature: line.signature } })}
               onCheckout={goCheckout}
-              onBack={goShop}
+              onBack={goBack}
+              onBrowseShop={goShop}
             />
           } />
           <Route path="checkout" element={
             hydratedCart.length === 0
               ? <Navigate to={`/${slug}`} replace />
-              : <CheckoutView store={store} items={hydratedCart} onBack={goCart}
+              : <CheckoutView store={store} items={hydratedCart} onBack={goBack}
                   onPlaced={(result) => { setOrderResult(result); setCart([]); navigate(`/${slug}/confirmation`); }} />
           } />
           <Route path="confirmation" element={
             <ConfirmationRoute store={store} result={orderResult} onBackToShop={goShop} />
           } />
           <Route path="track" element={
-            <OrderLookupView store={store} onBack={goShop} onBackToShop={goShop} initial={recentOrder} />
+            <OrderLookupView store={store} onBack={goBack} onBackToShop={goShop} initial={recentOrder} />
           } />
           <Route path="*" element={<Navigate to={`/${slug}`} replace />} />
         </Routes>
       </StorefrontErrorBoundary>
+
+      {decisionProduct && (
+        <CartDecisionSheet
+          productName={decisionProduct.name}
+          currency={store.currency}
+          lines={decisionLines}
+          onAddOne={(sig) => { incrementLineBySig(sig); setDecisionProductId(null); }}
+          onAddNew={() => { const id = decisionProduct.id; setDecisionProductId(null); goProduct(id); }}
+          onClose={() => setDecisionProductId(null)}
+        />
+      )}
     </Frame>
   );
 }
@@ -206,7 +248,7 @@ export function StorefrontApp() {
 /**
  * The confirmation page. Uses the just-placed order held in memory; failing that
  * (a reload or a reopened tab dropped it), it recalls the device-local last order
- * and re-fetches it fresh via the normal lookup endpoint — so status is current
+ * and re-fetches it fresh via the normal lookup endpoint - so status is current
  * and no order data is cached client-side. With neither, it falls back to shop.
  */
 function ConfirmationRoute({ store, result, onBackToShop }: {
@@ -215,13 +257,13 @@ function ConfirmationRoute({ store, result, onBackToShop }: {
   onBackToShop: () => void;
 }) {
   const [recalled, setRecalled] = useState<GuestCheckoutResult | null>(null);
-  // Start in 'loading' (not 'idle') so the first render — before the recall
-  // fetch has run — shows a loader instead of instantly redirecting to the shop.
+  // Start in 'loading' (not 'idle') so the first render - before the recall
+  // fetch has run - shows a loader instead of instantly redirecting to the shop.
   // Only a genuine "no recent order / lookup failed" sets 'notfound'.
   const [status, setStatus] = useState<'loading' | 'notfound'>('loading');
 
   useEffect(() => {
-    if (result) return; // in-memory result wins — no recall needed
+    if (result) return; // in-memory result wins - no recall needed
     const recent = getRecentOrder(store.id);
     if (!recent) { setStatus('notfound'); return; }
     let cancelled = false;
@@ -238,22 +280,41 @@ function ConfirmationRoute({ store, result, onBackToShop }: {
   return <Centered>Loading your order…</Centered>;
 }
 
-/** Reads :productId from the route and renders the PDP (or falls back to shop). */
-function PdpRoute({ products, store, onAddToCart, onBack }: {
+/**
+ * Reads :productId from the route and renders the PDP (or falls back to shop).
+ * Router state `{ editSignature }` reopens an existing cart line for editing;
+ * otherwise the PDP is in plain add mode (the "already in cart?" decision is made
+ * on the shop grid before reaching here).
+ */
+function PdpRoute({ products, store, cart, onAddToCart, onUpdateLine, onBack }: {
   products: ProductResponse[];
   store: PublicStoreResponse;
-  onAddToCart: (productId: number, quantity: number) => void;
+  cart: CartLine[];
+  onAddToCart: (productId: number, quantity: number, modifierOptionIds: number[], notes?: string) => void;
+  onUpdateLine: (oldSignature: string, productId: number, quantity: number, modifierOptionIds: number[], notes?: string) => void;
   onBack: () => void;
 }) {
   const { productId } = useParams();
+  const location = useLocation();
+  const editSignature = (location.state as { editSignature?: string } | null)?.editSignature;
   const product = products.find((p) => String(p.id) === productId);
   if (!product) return <Navigate to={`/${store.slug}`} replace />;
+
+  const editingLine = editSignature ? cart.find((l) => l.product.id === product.id && l.signature === editSignature) : undefined;
+
   return (
     <ProductDetailView
       product={product}
       currency={store.currency}
       onAddToCart={onAddToCart}
+      onUpdateLine={onUpdateLine}
       onBack={onBack}
+      allowItemNotes={store.itemNotesEnabled}
+      mode={editingLine ? 'edit' : 'add'}
+      editingSignature={editingLine?.signature}
+      initialOptionIds={editingLine?.modifierOptionIds}
+      initialNotes={editingLine?.notes}
+      initialQuantity={editingLine?.quantity}
     />
   );
 }

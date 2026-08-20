@@ -114,6 +114,10 @@ public class Merchant {
     @Column(nullable = false, columnDefinition = "boolean default true not null")
     private boolean notifyUrgentWhatsapp = true;
 
+    /** When false, the storefront hides the per-item note field on the product page. */
+    @Column(nullable = false, columnDefinition = "boolean default true not null")
+    private boolean itemNotesEnabled = true;
+
     private LocalDateTime createdAt;
 
     /**
@@ -182,6 +186,8 @@ public class Merchant {
     public void setNotifyNewOrderWhatsapp(boolean v) { this.notifyNewOrderWhatsapp = v; }
     public boolean isNotifyUrgentWhatsapp() { return notifyUrgentWhatsapp; }
     public void setNotifyUrgentWhatsapp(boolean v) { this.notifyUrgentWhatsapp = v; }
+    public boolean isItemNotesEnabled() { return itemNotesEnabled; }
+    public void setItemNotesEnabled(boolean v) { this.itemNotesEnabled = v; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getArchivedAt() { return archivedAt; }
     public void setArchivedAt(LocalDateTime archivedAt) { this.archivedAt = archivedAt; }

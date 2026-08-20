@@ -61,10 +61,10 @@ function StatCard({ title, value, change, trend, icon }: StatCardProps) {
 export function Dashboard() {
   // v1: no analytics yet → show empty state (no fake numbers)
   const stats = [
-    { title: 'Total Revenue', value: '—', icon: <DollarSign size={18} /> },
-    { title: 'Orders', value: '—', icon: <ShoppingCart size={18} /> },
-    { title: 'Store Views', value: '—', icon: <Eye size={18} /> },
-    { title: 'Conversion Rate', value: '—', icon: <TrendingUp size={18} /> },
+    { title: 'Total Revenue', value: '-', icon: <DollarSign size={18} /> },
+    { title: 'Orders', value: '-', icon: <ShoppingCart size={18} /> },
+    { title: 'Store Views', value: '-', icon: <Eye size={18} /> },
+    { title: 'Conversion Rate', value: '-', icon: <TrendingUp size={18} /> },
   ];
 
   return (

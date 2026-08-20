@@ -127,20 +127,33 @@ public class GuestCheckoutResponse {
     public static class ItemSummary {
         private String productName;
         private Integer quantity;
+        /** Effective per-unit price = base price + chosen modifier deltas. */
         private BigDecimal unitPrice;
+        /** Line subtotal = effective unit price * quantity. */
         private BigDecimal subtotal;
+        /** Chosen modifiers for this line (empty when none). */
+        private List<ModifierLine> modifiers;
+        /** Per-line note (null/blank when none). */
+        private String notes;
 
-        public ItemSummary(String productName, Integer quantity,
-                           BigDecimal unitPrice, BigDecimal subtotal) {
+        public ItemSummary(String productName, Integer quantity, BigDecimal unitPrice,
+                           BigDecimal subtotal, List<ModifierLine> modifiers, String notes) {
             this.productName = productName;
             this.quantity = quantity;
             this.unitPrice = unitPrice;
             this.subtotal = subtotal;
+            this.modifiers = modifiers;
+            this.notes = notes;
         }
 
         public String getProductName() { return productName; }
         public Integer getQuantity() { return quantity; }
         public BigDecimal getUnitPrice() { return unitPrice; }
         public BigDecimal getSubtotal() { return subtotal; }
+        public List<ModifierLine> getModifiers() { return modifiers; }
+        public String getNotes() { return notes; }
     }
+
+    /** One chosen modifier on a line: its group, option, and price delta (snapshots). */
+    public record ModifierLine(String groupName, String optionName, BigDecimal priceDelta) {}
 }

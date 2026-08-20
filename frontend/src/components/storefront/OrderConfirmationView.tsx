@@ -9,7 +9,7 @@ interface OrderConfirmationViewProps {
   result: GuestCheckoutResult;
   store: PublicStoreResponse;
   onBackToShop: () => void;
-  /** Heading over the receipt — "Order placed!" post-checkout, "Your order" on recall/lookup. */
+  /** Heading over the receipt - "Order placed!" post-checkout, "Your order" on recall/lookup. */
   heading?: string;
 }
 
@@ -28,7 +28,7 @@ function kindLabel(kind: GuestCheckoutOrderSummary['kind']): string | null {
 
 /**
  * The per-order list, tolerating a response that omits `orders` (e.g. an older
- * backend) by synthesizing one STANDARD order from the top-level fields — so a
+ * backend) by synthesizing one STANDARD order from the top-level fields - so a
  * shape mismatch degrades gracefully instead of crashing.
  */
 function resolveOrders(result: GuestCheckoutResult): GuestCheckoutOrderSummary[] {
@@ -47,7 +47,7 @@ function resolveOrders(result: GuestCheckoutResult): GuestCheckoutOrderSummary[]
 }
 
 /**
- * Build the wa.me handoff message. The order is already saved — this is a relay.
+ * Build the wa.me handoff message. The order is already saved - this is a relay.
  * A split checkout lists each order as its own section, then one combined total.
  */
 function whatsappUrl(result: GuestCheckoutResult, store: PublicStoreResponse): string | null {
@@ -92,7 +92,7 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
       await navigator.clipboard.writeText(orders.map((o) => o.orderId).join(', '));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
-    } catch { /* clipboard blocked — the number is on screen to copy manually */ }
+    } catch { /* clipboard blocked - the number is on screen to copy manually */ }
   };
 
   return (
@@ -102,7 +102,7 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
         <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>{heading}</h1>
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>{result.storeName}</p>
 
-        {/* Prominent, copyable order number(s) — the one thing a customer must keep. */}
+        {/* Prominent, copyable order number(s) - the one thing a customer must keep. */}
         <div style={{ marginTop: '16px', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: '#F9FAFB', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px 22px' }}>
           <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             {split ? 'Your order numbers' : 'Your order number'}
@@ -117,14 +117,14 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
           {!split && <OrderStatusBadge status={toOrderStatus(orders[0].orderStatus)} />}
         </div>
         <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '10px', maxWidth: '300px', marginInline: 'auto' }}>
-          Save your order number — you’ll need it (with your phone) to look up this order later.
+          Save your order number. You’ll need it (with your phone) to look up this order later.
         </p>
       </div>
 
       <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {split && (
           <p style={{ fontSize: '12px', color: '#92400E', margin: 0, background: '#FEF3C7', borderRadius: '8px', padding: '8px 10px' }}>
-            Your checkout was placed as 2 separate orders — ready items and pre-order items are fulfilled at different times.
+            Your checkout was placed as 2 separate orders. Ready items and pre-order items are fulfilled at different times.
           </p>
         )}
 
@@ -140,9 +140,19 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
                 </div>
               )}
               {o.items.map((it, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>{it.quantity} × {it.productName}</span>
-                  <span>{formatMoney(it.subtotal, currency)}</span>
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', fontSize: '13px', marginBottom: '6px' }}>
+                  <span style={{ color: 'var(--text-secondary)', minWidth: 0 }}>
+                    {it.quantity} × {it.productName}
+                    {it.modifiers && it.modifiers.length > 0 && (
+                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>
+                        {it.modifiers.map((m) => m.optionName).join(', ')}
+                      </span>
+                    )}
+                    {it.notes && (
+                      <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '1px' }}>“{it.notes}”</span>
+                    )}
+                  </span>
+                  <span style={{ whiteSpace: 'nowrap' }}>{formatMoney(it.subtotal, currency)}</span>
                 </div>
               ))}
               {split && (

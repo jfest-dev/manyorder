@@ -38,6 +38,9 @@ public class CreateProductRequest {
     private LocalTime preOrderReadyTimeEnd;
     private String preOrderNote;
 
+    @jakarta.validation.Valid
+    private java.util.List<ModifierGroupRequest> modifierGroups;
+
     public CreateProductRequest() {}
 
     public String getName() { return name; }
@@ -64,4 +67,6 @@ public class CreateProductRequest {
     public void setPreOrderReadyTimeEnd(LocalTime preOrderReadyTimeEnd) { this.preOrderReadyTimeEnd = preOrderReadyTimeEnd; }
     public String getPreOrderNote() { return preOrderNote; }
     public void setPreOrderNote(String preOrderNote) { this.preOrderNote = preOrderNote; }
+    public java.util.List<ModifierGroupRequest> getModifierGroups() { return modifierGroups; }
+    public void setModifierGroups(java.util.List<ModifierGroupRequest> modifierGroups) { this.modifierGroups = modifierGroups; }
 }
