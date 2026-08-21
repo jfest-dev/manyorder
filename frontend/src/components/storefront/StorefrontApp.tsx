@@ -140,12 +140,17 @@ export function StorefrontApp() {
       return line ? setLineQty(prev, signature, line.quantity + 1) : prev;
     });
   };
-  // Replace an edited cart line's choices, then return to the cart.
+  // Replace an edited cart line's choices, then return to the cart. The edit PDP
+  // is a transient step opened from the cart, so pop it off history (rather than
+  // pushing a fresh cart) - Back from the cart then returns to the cart's origin,
+  // not the PDP. Falls back to a plain cart nav if somehow there's no history.
   const updateLineBySig = (
     oldSignature: string, productId: number, quantity: number, modifierOptionIds: number[], notes?: string,
   ) => {
     setCart((prev) => updateLine(prev, oldSignature, { productId, quantity, modifierOptionIds, notes }));
-    goCart();
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (idx > 0) navigate(-1);
+    else goCart();
   };
 
   const goShop = () => navigate(`/${slug}`);
@@ -207,7 +212,12 @@ export function StorefrontApp() {
           } />
           <Route path="p/:productId" element={
             <PdpRoute products={products} store={store} cart={hydratedCart}
-              onAddToCart={(id, qty, optionIds, notes) => { addToCart(id, qty, optionIds, notes); goCart(); }}
+              onAddToCart={(id, qty, optionIds, notes) => {
+                addToCart(id, qty, optionIds, notes);
+                // The PDP is a transient step in the add flow; replace it with the
+                // cart so Back from the cart returns to the shop, not the PDP.
+                navigate(`/${slug}/cart`, { replace: true });
+              }}
               onUpdateLine={updateLineBySig}
               onBack={goBack} />
           } />
