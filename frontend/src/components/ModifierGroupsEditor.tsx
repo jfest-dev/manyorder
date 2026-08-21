@@ -1,6 +1,7 @@
 import { Plus, Trash2, X } from 'lucide-react';
 import { FieldInput } from './Field';
 import { MoneyField } from './MoneyField';
+import { ReorderableList } from './ReorderableList';
 import {
   type EditorGroup, type EditorOption, blankEditorGroup, blankEditorOption,
 } from '../lib/modifiers';
@@ -23,17 +24,21 @@ export function ModifierGroupsEditor({ groups, onChange, currency, disabled }: M
   const patchGroup = (gi: number, changes: Partial<EditorGroup>) =>
     onChange(groups.map((g, i) => (i === gi ? { ...g, ...changes } : g)));
 
-  const patchOption = (gi: number, oi: number, changes: Partial<EditorOption>) =>
+  // Options are addressed by their stable client id so drag-reordering never
+  // mixes up which row an edit or remove applies to.
+  const patchOption = (gi: number, id: string, changes: Partial<EditorOption>) =>
     onChange(groups.map((g, i) => i !== gi ? g : {
-      ...g, options: g.options.map((o, j) => (j === oi ? { ...o, ...changes } : o)),
+      ...g, options: g.options.map((o) => (o.id === id ? { ...o, ...changes } : o)),
     }));
+  const removeOption = (gi: number, id: string) =>
+    onChange(groups.map((g, i) => (i === gi ? { ...g, options: g.options.filter((o) => o.id !== id) } : g)));
+  const reorderOptions = (gi: number, options: EditorOption[]) =>
+    onChange(groups.map((g, i) => (i === gi ? { ...g, options } : g)));
 
   const addGroup = () => onChange([...groups, blankEditorGroup()]);
   const removeGroup = (gi: number) => onChange(groups.filter((_, i) => i !== gi));
   const addOption = (gi: number) =>
     onChange(groups.map((g, i) => (i === gi ? { ...g, options: [...g.options, blankEditorOption()] } : g)));
-  const removeOption = (gi: number, oi: number) =>
-    onChange(groups.map((g, i) => (i === gi ? { ...g, options: g.options.filter((_, j) => j !== oi) } : g)));
 
   return (
     <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
@@ -88,26 +93,36 @@ export function ModifierGroupsEditor({ groups, onChange, currency, disabled }: M
               )}
             </div>
 
-            {/* Options */}
+            {/* Options - drag the grip to reorder; order is saved with the product. */}
             <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {group.options.map((opt, oi) => (
-                <div key={oi} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-                  <div style={{ flex: 1 }}>
-                    <FieldInput label={oi === 0 ? 'Option' : undefined} placeholder="e.g. Large"
-                      value={opt.name} onChange={(v) => patchOption(gi, oi, { name: v })} maxLength={40} disabled={disabled} />
+              <ReorderableList
+                items={group.options}
+                getKey={(o) => o.id ?? o.name}
+                disabled={disabled}
+                onReorder={(options) => reorderOptions(gi, options)}
+                renderRow={(opt, { index, handle, setNodeRef, dragging }) => (
+                  <div
+                    ref={setNodeRef as (el: HTMLDivElement | null) => void}
+                    style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', opacity: dragging ? 0.6 : 1 }}
+                  >
+                    <span style={{ marginBottom: '2px' }}>{handle}</span>
+                    <div style={{ flex: 1 }}>
+                      <FieldInput label={index === 0 ? 'Option' : undefined} placeholder="e.g. Large"
+                        value={opt.name} onChange={(v) => patchOption(gi, opt.id!, { name: v })} maxLength={40} disabled={disabled} />
+                    </div>
+                    <div style={{ width: '130px' }}>
+                      <MoneyField label={index === 0 ? '+ Price' : undefined} currency={currency}
+                        value={opt.priceDelta} onChange={(v) => patchOption(gi, opt.id!, { priceDelta: v })}
+                        min={0} placeholder="0" />
+                    </div>
+                    <button type="button" aria-label="Remove option" disabled={disabled}
+                      onClick={() => removeOption(gi, opt.id!)}
+                      style={{ ...iconBtn, color: 'var(--text-muted)', marginBottom: '2px' }}>
+                      <X size={15} />
+                    </button>
                   </div>
-                  <div style={{ width: '130px' }}>
-                    <MoneyField label={oi === 0 ? '+ Price' : undefined} currency={currency}
-                      value={opt.priceDelta} onChange={(v) => patchOption(gi, oi, { priceDelta: v })}
-                      min={0} placeholder="0" />
-                  </div>
-                  <button type="button" aria-label="Remove option" disabled={disabled}
-                    onClick={() => removeOption(gi, oi)}
-                    style={{ ...iconBtn, color: 'var(--text-muted)', marginBottom: '2px' }}>
-                    <X size={15} />
-                  </button>
-                </div>
-              ))}
+                )}
+              />
               <button type="button" disabled={disabled} onClick={() => addOption(gi)}
                 style={{ ...linkBtn, alignSelf: 'flex-start' }}>
                 <Plus size={14} /> Add option

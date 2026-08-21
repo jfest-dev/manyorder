@@ -12,7 +12,15 @@ import type { ModifierGroupInput, ModifierGroupView, ProductResponse } from './a
  * The server remains the price authority - this is display only.
  */
 
+/** Stable client-side id for React keys / drag identity (never sent to the server). */
+let _editorSeq = 0;
+function editorId(): string {
+  return `eo_${Date.now().toString(36)}_${(_editorSeq++).toString(36)}`;
+}
+
 export interface EditorOption {
+  /** Stable client id for keys/reordering; not persisted. */
+  id?: string;
   /** The server option id when this row came from an existing product; sent back
    *  on save so the backend keeps the id stable. Absent for a newly-added option. */
   serverId?: number;
@@ -35,7 +43,7 @@ export interface EditorGroup {
 }
 
 export function blankEditorOption(): EditorOption {
-  return { name: '', priceDelta: null };
+  return { id: editorId(), name: '', priceDelta: null };
 }
 
 export function blankEditorGroup(): EditorGroup {
@@ -51,7 +59,7 @@ export function editorGroupsFromViews(views: ModifierGroupView[] | undefined | n
     required: v.minSelect >= 1,
     multiple: v.maxSelect !== 1,
     maxSelect: v.maxSelect === 1 ? null : v.maxSelect,
-    options: v.options.map((o) => ({ serverId: o.id, name: o.name, priceDelta: o.priceDelta })),
+    options: v.options.map((o) => ({ id: editorId(), serverId: o.id, name: o.name, priceDelta: o.priceDelta })),
   }));
 }
 
