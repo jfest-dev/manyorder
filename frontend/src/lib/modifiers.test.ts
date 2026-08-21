@@ -26,7 +26,8 @@ describe('editorGroupsFromViews', () => {
   it('maps required choose-one and optional choose-many', () => {
     const g = editorGroupsFromViews(views);
     expect(g[0]).toMatchObject({ name: 'Size', required: true, multiple: false, maxSelect: null });
-    expect(g[0].options).toEqual([{ name: 'Small', priceDelta: 0 }, { name: 'Large', priceDelta: 2 }]);
+    expect(g[0].options.map((o) => ({ name: o.name, priceDelta: o.priceDelta })))
+      .toEqual([{ name: 'Small', priceDelta: 0 }, { name: 'Large', priceDelta: 2 }]);
     expect(g[1]).toMatchObject({ name: 'Add-ons', required: false, multiple: true, maxSelect: null });
   });
   it('is empty for null/undefined', () => {
@@ -59,6 +60,19 @@ describe('editorGroupsToInputs', () => {
     const inputs = editorGroupsToInputs(editorGroupsFromViews(views));
     expect(inputs[0]).toMatchObject({ name: 'Size', minSelect: 1, maxSelect: 1 });
     expect(inputs[1]).toMatchObject({ name: 'Add-ons', minSelect: 0, maxSelect: null });
+  });
+  it('sends group + option server ids back so a save reconciles (keeps ids stable)', () => {
+    const inputs = editorGroupsToInputs(editorGroupsFromViews(views));
+    expect(inputs[0].id).toBe(10);                       // Size group id round-tripped
+    expect(inputs[0].options.map((o) => o.id)).toEqual([100, 101]); // option ids round-tripped
+    expect(inputs[1].id).toBe(11);
+  });
+  it('omits id for a brand-new group/option (no serverId)', () => {
+    const g: EditorGroup = { name: 'New', required: false, multiple: false, maxSelect: null,
+      options: [{ name: 'A', priceDelta: 1 }] };
+    const [inp] = editorGroupsToInputs([g]);
+    expect('id' in inp).toBe(false);
+    expect('id' in inp.options[0]).toBe(false);
   });
 });
 

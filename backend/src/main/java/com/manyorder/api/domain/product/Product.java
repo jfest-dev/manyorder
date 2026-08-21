@@ -166,9 +166,4 @@ public class Product {
     public void setPreOrderNote(String preOrderNote) { this.preOrderNote = preOrderNote; }
 
     public List<ModifierGroup> getModifierGroups() { return modifierGroups; }
-    /** Replace the whole modifier set (orphanRemoval deletes the old groups/options). */
-    public void replaceModifierGroups(List<ModifierGroup> groups) {
-        this.modifierGroups.clear();
-        if (groups != null) this.modifierGroups.addAll(groups);
-    }
 }

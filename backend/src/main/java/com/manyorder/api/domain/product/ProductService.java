@@ -2,6 +2,7 @@ package com.manyorder.api.domain.product;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -169,39 +170,89 @@ public class ProductService {
     }
 
     /**
-     * Builds fresh ModifierGroup/ModifierOption entities from the request and
-     * replaces the product's set wholesale (cascade + orphanRemoval delete the
-     * old ones). Group/option order follows the array order sent. Validates the
-     * min/max sanity rules and each option price's currency scale; the runtime
-     * min/max/required enforcement at order time lives in ModifierResolver.
+     * Reconciles the product's modifier groups/options against the request,
+     * preserving the ids of groups and options that still exist (matched by the
+     * id the client sends back) instead of deleting and recreating them. This
+     * keeps option ids STABLE across an edit or reorder, so a customer's cart
+     * line that references an option id isn't orphaned by a merchant save (and
+     * historical OrderItemModifier.sourceOptionId stays valid). Groups/options
+     * absent from the request are removed (orphanRemoval cascades the delete);
+     * ones with no/unknown id are created. Validates min/max sanity + price scale.
      */
     private void applyModifierGroups(Product product, List<ModifierGroupRequest> groupRequests, String currency) {
-        List<ModifierGroup> groups = new ArrayList<>();
-        if (groupRequests != null) {
-            int groupOrder = 0;
-            for (ModifierGroupRequest gr : groupRequests) {
-                List<ModifierGroupRequest.ModifierOptionRequest> optionRequests =
-                        gr.getOptions() != null ? gr.getOptions() : List.of();
-                if (gr.getMaxSelect() != null && (gr.getMaxSelect() < 1 || gr.getMaxSelect() < gr.getMinSelect())) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "\"" + gr.getName() + "\": max selectable must be at least 1 and no less than min.");
-                }
-                if (gr.getMinSelect() > optionRequests.size()) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                            "\"" + gr.getName() + "\": needs at least " + gr.getMinSelect() + " option(s) to require that many.");
-                }
-                ModifierGroup group = new ModifierGroup(
-                        product, gr.getName().trim(), gr.getMinSelect(), gr.getMaxSelect(), groupOrder++);
-                int optionOrder = 0;
-                for (ModifierGroupRequest.ModifierOptionRequest or : optionRequests) {
-                    BigDecimal delta = or.getPriceDelta() != null ? or.getPriceDelta() : BigDecimal.ZERO;
-                    MoneyValidation.requireValidScale(delta, currency, "Modifier price");
-                    group.addOption(new ModifierOption(group, or.getName().trim(), delta, optionOrder++));
-                }
+        List<ModifierGroup> groups = product.getModifierGroups(); // managed, mutable
+        Map<Long, ModifierGroup> existingById = new HashMap<>();
+        for (ModifierGroup g : groups) {
+            if (g.getId() != null) existingById.put(g.getId(), g);
+        }
+
+        List<ModifierGroup> keep = new ArrayList<>();
+        int groupOrder = 0;
+        for (ModifierGroupRequest gr : groupRequests != null ? groupRequests : List.<ModifierGroupRequest>of()) {
+            List<ModifierGroupRequest.ModifierOptionRequest> optionRequests =
+                    gr.getOptions() != null ? gr.getOptions() : List.of();
+            if (gr.getMaxSelect() != null && (gr.getMaxSelect() < 1 || gr.getMaxSelect() < gr.getMinSelect())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "\"" + gr.getName() + "\": max selectable must be at least 1 and no less than min.");
+            }
+            if (gr.getMinSelect() > optionRequests.size()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "\"" + gr.getName() + "\": needs at least " + gr.getMinSelect() + " option(s) to require that many.");
+            }
+
+            // Reuse the existing group when the client sends a matching id, else create one.
+            ModifierGroup group = gr.getId() != null ? existingById.get(gr.getId()) : null;
+            if (group != null) {
+                group.setName(gr.getName().trim());
+                group.setMinSelect(gr.getMinSelect());
+                group.setMaxSelect(gr.getMaxSelect());
+                group.setSortOrder(groupOrder);
+            } else {
+                group = new ModifierGroup(product, gr.getName().trim(), gr.getMinSelect(), gr.getMaxSelect(), groupOrder);
                 groups.add(group);
             }
+            groupOrder++;
+            reconcileOptions(group, optionRequests, currency);
+            keep.add(group);
         }
-        product.replaceModifierGroups(groups);
+
+        // Delete groups no longer present (orphanRemoval cascades to their options).
+        groups.removeIf(g -> !keep.contains(g));
+        // Keep the in-memory order consistent with sortOrder so the response built
+        // this same transaction matches what a fresh @OrderBy load would return.
+        groups.sort(Comparator.comparingInt(ModifierGroup::getSortOrder));
+    }
+
+    /** Reconcile one group's options in place, preserving ids matched by the client. */
+    private void reconcileOptions(ModifierGroup group,
+                                  List<ModifierGroupRequest.ModifierOptionRequest> optionRequests, String currency) {
+        List<ModifierOption> options = group.getOptions(); // managed, mutable
+        Map<Long, ModifierOption> existingById = new HashMap<>();
+        for (ModifierOption o : options) {
+            if (o.getId() != null) existingById.put(o.getId(), o);
+        }
+
+        List<ModifierOption> keep = new ArrayList<>();
+        int optionOrder = 0;
+        for (ModifierGroupRequest.ModifierOptionRequest or : optionRequests) {
+            BigDecimal delta = or.getPriceDelta() != null ? or.getPriceDelta() : BigDecimal.ZERO;
+            MoneyValidation.requireValidScale(delta, currency, "Modifier price");
+            // Match only within THIS group's options, so a foreign id can't be adopted.
+            ModifierOption option = or.getId() != null ? existingById.get(or.getId()) : null;
+            if (option != null) {
+                option.setName(or.getName().trim());
+                option.setPriceDelta(delta);
+                option.setSortOrder(optionOrder);
+            } else {
+                option = new ModifierOption(group, or.getName().trim(), delta, optionOrder);
+                options.add(option);
+            }
+            optionOrder++;
+            keep.add(option);
+        }
+
+        options.removeIf(o -> !keep.contains(o));
+        options.sort(Comparator.comparingInt(ModifierOption::getSortOrder));
     }
 
     @Transactional

@@ -13,6 +13,10 @@ import jakarta.validation.constraints.PositiveOrZero;
  */
 public class ModifierGroupRequest {
 
+    /** Existing group id, so a save reconciles (updates in place) instead of
+     *  recreating; null/unknown = a new group. */
+    private Long id;
+
     @NotBlank
     private String name;
 
@@ -27,6 +31,8 @@ public class ModifierGroupRequest {
     @Valid
     private List<ModifierOptionRequest> options;
 
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public int getMinSelect() { return minSelect; }
@@ -39,6 +45,9 @@ public class ModifierGroupRequest {
     public void setOptions(List<ModifierOptionRequest> options) { this.options = options; }
 
     public static class ModifierOptionRequest {
+        /** Existing option id, so a save keeps its id stable (see the group id above). */
+        private Long id;
+
         @NotBlank
         private String name;
 
@@ -47,6 +56,8 @@ public class ModifierGroupRequest {
 
         private int sortOrder = 0;
 
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
         public String getName() { return name; }
         public void setName(String name) { this.name = name; }
         public BigDecimal getPriceDelta() { return priceDelta; }

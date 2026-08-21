@@ -322,4 +322,86 @@ class ModifierIntegrationTest extends IntegrationTestBase {
                                 "items", List.of(item)))))
                 .andExpect(status().isBadRequest());
     }
+
+    // ---------- reconcile-on-save: stable ids ----------
+
+    @Test
+    void productUpdate_reconcilesModifiers_preservingStableIds() throws Exception {
+        String token = registerAndGetToken("mod-reconcile@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Mod Reconcile", "mod-reconcile-store");
+
+        // Create with one group "Size" [Small +0, Large +2].
+        Map<String, Object> size = new HashMap<>();
+        size.put("name", "Size"); size.put("minSelect", 1); size.put("maxSelect", 1);
+        size.put("options", List.of(
+                Map.of("name", "Small", "priceDelta", 0.00),
+                Map.of("name", "Large", "priceDelta", 2.00)));
+        MvcResult created = mockMvc.perform(post("/merchant/stores/" + storeId + "/products")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("name", "Boba", "price", 10.00, "modifierGroups", List.of(size)))))
+                .andExpect(status().isCreated()).andReturn();
+        long productId = json(created).get("id").asLong();
+        long groupId = json(created).get("modifierGroups").get(0).get("id").asLong();
+        long smallId = optionId(json(created), "Size", "Small");
+        long largeId = optionId(json(created), "Size", "Large");
+
+        // Update: same group id; reorder to [Large, Small]; rename Small -> Regular;
+        // bump Large's price; add a new "Jumbo" (no id). Send ids back for the kept ones.
+        Map<String, Object> largeOpt = new HashMap<>();
+        largeOpt.put("id", largeId); largeOpt.put("name", "Large"); largeOpt.put("priceDelta", 3.00);
+        Map<String, Object> regularOpt = new HashMap<>();
+        regularOpt.put("id", smallId); regularOpt.put("name", "Regular"); regularOpt.put("priceDelta", 0.00);
+        Map<String, Object> jumboOpt = new HashMap<>(); // no id -> new option
+        jumboOpt.put("name", "Jumbo"); jumboOpt.put("priceDelta", 4.00);
+        Map<String, Object> sizeUpd = new HashMap<>();
+        sizeUpd.put("id", groupId); sizeUpd.put("name", "Size"); sizeUpd.put("minSelect", 1); sizeUpd.put("maxSelect", 1);
+        sizeUpd.put("options", List.of(largeOpt, regularOpt, jumboOpt));
+
+        MvcResult updated = mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + productId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("modifierGroups", List.of(sizeUpd)))))
+                .andExpect(status().isOk()).andReturn();
+
+        JsonNode gu = json(updated).get("modifierGroups").get(0);
+        assertEquals(groupId, gu.get("id").asLong()); // group id preserved
+        JsonNode opts = gu.get("options"); // ordered by sortOrder -> Large, Regular, Jumbo
+        assertEquals(3, opts.size());
+        assertEquals("Large", opts.get(0).get("name").asText());
+        assertEquals(largeId, opts.get(0).get("id").asLong());      // Large id preserved across reorder + price change
+        assertEquals(3.0, opts.get(0).get("priceDelta").asDouble(), 0.001);
+        assertEquals("Regular", opts.get(1).get("name").asText());
+        assertEquals(smallId, opts.get(1).get("id").asLong());      // Small (renamed) id preserved
+        assertEquals("Jumbo", opts.get(2).get("name").asText());
+        assertTrue(opts.get(2).get("id").asLong() != smallId && opts.get(2).get("id").asLong() != largeId); // genuinely new
+    }
+
+    @Test
+    void productUpdate_removesOptionsAbsentFromRequest_keepingKeptId() throws Exception {
+        String token = registerAndGetToken("mod-remove@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Mod Remove", "mod-remove-store");
+        JsonNode product = createProductWithModifiers(token, storeId, "Tea", 5.00); // Size[Small,Large] + Add-ons[Pearls,Grass Jelly]
+        long productId = product.get("id").asLong();
+        long sizeGroupId = product.get("modifierGroups").get(0).get("id").asLong();
+        long largeId = optionId(product, "Size", "Large");
+
+        // Send only the Size group with only Large -> Small removed, Add-ons group removed.
+        Map<String, Object> largeOpt = new HashMap<>();
+        largeOpt.put("id", largeId); largeOpt.put("name", "Large"); largeOpt.put("priceDelta", 2.00);
+        Map<String, Object> sizeUpd = new HashMap<>();
+        sizeUpd.put("id", sizeGroupId); sizeUpd.put("name", "Size"); sizeUpd.put("minSelect", 1); sizeUpd.put("maxSelect", 1);
+        sizeUpd.put("options", List.of(largeOpt));
+
+        MvcResult updated = mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + productId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("modifierGroups", List.of(sizeUpd)))))
+                .andExpect(status().isOk()).andReturn();
+
+        JsonNode groups = json(updated).get("modifierGroups");
+        assertEquals(1, groups.size());                              // Add-ons group removed
+        assertEquals(sizeGroupId, groups.get(0).get("id").asLong()); // Size group id preserved
+        JsonNode opts = groups.get(0).get("options");
+        assertEquals(1, opts.size());                                // Small removed
+        assertEquals("Large", opts.get(0).get("name").asText());
+        assertEquals(largeId, opts.get(0).get("id").asLong());       // Large id preserved
+    }
 }

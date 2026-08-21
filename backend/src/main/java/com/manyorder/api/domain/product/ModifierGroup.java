@@ -72,4 +72,11 @@ public class ModifierGroup {
     public Integer getMaxSelect() { return maxSelect; }
     public int getSortOrder() { return sortOrder; }
     public List<ModifierOption> getOptions() { return options; }
+
+    // Setters for reconcile-on-save: a group matched by id is updated in place,
+    // keeping its id (and its options' ids) stable across an edit/reorder.
+    public void setName(String name) { this.name = name; }
+    public void setMinSelect(int minSelect) { this.minSelect = minSelect; }
+    public void setMaxSelect(Integer maxSelect) { this.maxSelect = maxSelect; }
+    public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
 }

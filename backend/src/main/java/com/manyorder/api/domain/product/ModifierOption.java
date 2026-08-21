@@ -52,4 +52,10 @@ public class ModifierOption {
     public String getName() { return name; }
     public BigDecimal getPriceDelta() { return priceDelta; }
     public int getSortOrder() { return sortOrder; }
+
+    // Setters for reconcile-on-save: an option that still exists (matched by id)
+    // is updated in place, keeping its id stable so cart references survive.
+    public void setName(String name) { this.name = name; }
+    public void setPriceDelta(BigDecimal priceDelta) { this.priceDelta = priceDelta == null ? BigDecimal.ZERO : priceDelta; }
+    public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
 }

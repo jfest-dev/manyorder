@@ -13,12 +13,17 @@ import type { ModifierGroupInput, ModifierGroupView, ProductResponse } from './a
  */
 
 export interface EditorOption {
+  /** The server option id when this row came from an existing product; sent back
+   *  on save so the backend keeps the id stable. Absent for a newly-added option. */
+  serverId?: number;
   name: string;
   /** Add-on price; null while the field is empty. Treated as 0 on save. */
   priceDelta: number | null;
 }
 
 export interface EditorGroup {
+  /** The server group id when loaded from an existing product; sent back on save. */
+  serverId?: number;
   name: string;
   /** minSelect >= 1. For choose-one this makes it a required single choice. */
   required: boolean;
@@ -41,25 +46,31 @@ export function blankEditorGroup(): EditorGroup {
 export function editorGroupsFromViews(views: ModifierGroupView[] | undefined | null): EditorGroup[] {
   if (!views) return [];
   return views.map((v) => ({
+    serverId: v.id,
     name: v.name,
     required: v.minSelect >= 1,
     multiple: v.maxSelect !== 1,
     maxSelect: v.maxSelect === 1 ? null : v.maxSelect,
-    options: v.options.map((o) => ({ name: o.name, priceDelta: o.priceDelta })),
+    options: v.options.map((o) => ({ serverId: o.id, name: o.name, priceDelta: o.priceDelta })),
   }));
 }
 
-/** Editor model → API input. Blank-named option rows are dropped; order is
- *  taken from array position. */
+/** Editor model → API input. Blank-named option rows are dropped; order is taken
+ *  from array position. Existing groups/options send their serverId back so the
+ *  save reconciles (keeps ids stable); new ones omit it. */
 export function editorGroupsToInputs(groups: EditorGroup[]): ModifierGroupInput[] {
   return groups.map((g, gi) => ({
+    ...(g.serverId != null ? { id: g.serverId } : {}),
     name: g.name.trim(),
     minSelect: g.required ? 1 : 0,
     maxSelect: g.multiple ? g.maxSelect : 1,
     sortOrder: gi,
     options: g.options
       .filter((o) => o.name.trim())
-      .map((o, oi) => ({ name: o.name.trim(), priceDelta: o.priceDelta ?? 0, sortOrder: oi })),
+      .map((o, oi) => ({
+        ...(o.serverId != null ? { id: o.serverId } : {}),
+        name: o.name.trim(), priceDelta: o.priceDelta ?? 0, sortOrder: oi,
+      })),
   }));
 }
 

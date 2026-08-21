@@ -154,6 +154,38 @@ export function plainQuantities(cart: CartItem[]): Record<number, number> {
 }
 
 /**
+ * Self-heal a persisted cart against the live products: drop any chosen option id
+ * that no longer exists on its product (e.g. orphaned by a merchant editing that
+ * product's modifiers), and merge lines that become identical as a result so two
+ * "no options" lines collapse into one. Products the client can't currently see
+ * are left untouched. Returns the same reference when nothing changed, so it's a
+ * cheap no-op on a healthy cart.
+ *
+ * Note: with the backend now keeping option ids stable across a save, this only
+ * matters for carts orphaned before the fix (or if an option is genuinely
+ * removed) - a safety net, not the primary fix.
+ */
+export function healCart(cart: CartItem[], products: ProductResponse[]): CartItem[] {
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const healed: CartItem[] = [];
+  let changed = false;
+  for (const it of cart) {
+    const product = productById.get(it.productId);
+    if (!product) { healed.push(it); continue; } // can't see it -> leave as-is
+    const live = new Set<number>();
+    for (const g of product.modifierGroups ?? []) for (const o of g.options) live.add(o.id);
+    const surviving = normalizeOptionIds(it.modifierOptionIds.filter((id) => live.has(id)));
+    if (surviving.length !== it.modifierOptionIds.length) changed = true;
+    const item: CartItem = { ...it, modifierOptionIds: surviving };
+    const sig = lineSignature(item);
+    const existing = healed.find((h) => lineSignature(h) === sig);
+    if (existing) { existing.quantity += item.quantity; changed = true; } // merge duplicates
+    else healed.push(item);
+  }
+  return changed ? healed : cart;
+}
+
+/**
  * Resolve every line against the freshly-fetched products, computing the chosen
  * options + effective unit price + line subtotal. Lines whose product no longer
  * exists are dropped; a chosen option that no longer exists on the product is

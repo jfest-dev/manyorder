@@ -3,7 +3,7 @@ import type { ProductResponse } from './api';
 import {
   lineSignature, plainSignature, normalizeOptionIds, normalizeNotes,
   parseCart, addLine, setLineQty, removeLine, updateLine, cartCount, plainQuantities,
-  hydrateCart, cartLineToCheckoutItem, type CartItem,
+  hydrateCart, healCart, cartLineToCheckoutItem, type CartItem,
 } from './cart';
 
 // --- product factory -------------------------------------------------------
@@ -238,6 +238,33 @@ describe('hydrateCart', () => {
     const [line] = hydrateCart(cart, [product()]);
     expect(line.selectedOptions.map((o) => o.optionName)).toEqual(['Large']);
     expect(line.unitPrice).toBe(12); // only the surviving Large delta
+  });
+});
+
+// --- self-heal orphaned carts ----------------------------------------------
+
+describe('healCart', () => {
+  it('drops an orphaned option id and merges the line into an identical one', () => {
+    // 999 doesn't exist on the product -> line A becomes "no options" and merges with B.
+    const cart: CartItem[] = [
+      { productId: 1, quantity: 2, modifierOptionIds: [999] },
+      { productId: 1, quantity: 1, modifierOptionIds: [] },
+    ];
+    const healed = healCart(cart, [product()]);
+    expect(healed).toHaveLength(1);
+    expect(healed[0]).toMatchObject({ productId: 1, quantity: 3, modifierOptionIds: [] });
+  });
+  it('drops only the dead ids, keeping the ones that still exist', () => {
+    const healed = healCart([{ productId: 1, quantity: 1, modifierOptionIds: [101, 999] }], [product()]);
+    expect(healed[0].modifierOptionIds).toEqual([101]); // Large survives, 999 dropped
+  });
+  it('is a no-op (same reference) for a healthy cart', () => {
+    const cart: CartItem[] = [{ productId: 1, quantity: 1, modifierOptionIds: [101] }];
+    expect(healCart(cart, [product()])).toBe(cart);
+  });
+  it('leaves a line untouched when its product is not currently visible', () => {
+    const cart: CartItem[] = [{ productId: 999, quantity: 1, modifierOptionIds: [42] }];
+    expect(healCart(cart, [product()])).toBe(cart);
   });
 });
 

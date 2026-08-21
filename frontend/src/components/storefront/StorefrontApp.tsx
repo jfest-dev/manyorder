@@ -14,7 +14,7 @@ import { OrderLookupView } from './OrderLookupView';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { getRecentOrder, clearRecentOrder, anyOrderStatusActive, type RecentOrder } from '../../lib/orderRecall';
 import {
-  parseCart, addLine, setLineQty, removeLine, updateLine, hydrateCart,
+  parseCart, addLine, setLineQty, removeLine, updateLine, hydrateCart, healCart,
   cartCount as countCart, plainQuantities, plainSignature, lineSignature,
   type CartItem, type CartLine,
 } from '../../lib/cart';
@@ -66,6 +66,14 @@ export function StorefrontApp() {
   useEffect(() => {
     if (cartKey) localStorage.setItem(cartKey, JSON.stringify(cart));
   }, [cart, cartKey]);
+
+  // Once products are loaded, self-heal any cart lines orphaned by a product edit
+  // (drop dead option ids + merge lines that become identical). healCart returns
+  // the same reference when nothing changed, so this is a no-op on a healthy cart.
+  useEffect(() => {
+    if (products.length === 0) return;
+    setCart((prev) => healCart(prev, products));
+  }, [products]);
 
   // Surface the "recent order" recall banner once the store is known and
   // whenever a new order is placed. The banner shows only while the order is

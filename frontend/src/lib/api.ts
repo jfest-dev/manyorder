@@ -207,16 +207,19 @@ export interface ProductResponse {
   createdAt: string;
 }
 
-/** A modifier option in a create/update product payload (no id - server assigns). */
+/** A modifier option in a create/update product payload. Send back an existing
+ *  option's `id` so the save reconciles (keeps its id stable); omit for a new one. */
 export interface ModifierOptionInput {
+  id?: number;
   name: string;
   priceDelta: number;
   sortOrder?: number;
 }
 
-/** A modifier group in a create/update product payload. The whole set replaces
- *  the product's existing groups on save. */
+/** A modifier group in a create/update product payload. Send back an existing
+ *  group's `id` so the save reconciles instead of recreating; omit for a new one. */
 export interface ModifierGroupInput {
+  id?: number;
   name: string;
   minSelect: number;
   maxSelect?: number | null; // null/omitted = unlimited
