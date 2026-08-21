@@ -217,9 +217,14 @@ export function StorefrontApp() {
             <PdpRoute products={products} store={store} cart={hydratedCart}
               onAddToCart={(id, qty, optionIds, notes) => {
                 addToCart(id, qty, optionIds, notes);
-                // The PDP is a transient step in the add flow; replace it with the
-                // cart so Back from the cart returns to the shop, not the PDP.
-                navigate(`/${slug}/cart`, { replace: true });
+                // GrabFood-style: after adding, stay on the shop so the customer
+                // keeps browsing (the cart bar/badge update live); the cart only
+                // opens when they tap it. The add PDP is a transient step launched
+                // from the shop (first add, or "add a new one" from the sheet), so
+                // pop it back to the shop; fall back to the shop on a deep link.
+                const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+                if (idx > 0) navigate(-1);
+                else goShop();
               }}
               onUpdateLine={updateLineBySig}
               onBack={goBack} />
