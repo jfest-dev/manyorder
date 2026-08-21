@@ -13,6 +13,8 @@ interface StorefrontViewProps {
   onAddToCart?: (productId: number) => void;
   /** Per-product quantities of the PLAIN line already in the cart (drives the inline stepper). */
   quantities?: Record<number, number>;
+  /** Total qty per product across all its cart lines - the count badge on modifier products. */
+  productTotals?: Record<number, number>;
   onSetQuantity?: (productId: number, quantity: number) => void;
   cartCount?: number;
   /** Running cart subtotal incl. modifiers (from the hydrated cart). Falls back
@@ -52,6 +54,7 @@ export function StorefrontView({
   onProductClick,
   onAddToCart,
   quantities = {},
+  productTotals = {},
   onSetQuantity,
   cartCount = 0,
   cartTotal,
@@ -179,6 +182,9 @@ export function StorefrontView({
             // opens the PDP so the customer sees and chooses its options first. Only
             // truly plain products get the inline quick-add / stepper.
             const hasModifiers = (p.modifierGroups ?? []).length > 0;
+            // Modifier products show their total cart quantity (across all option
+            // sets) so the customer can see how many they already have; 0 keeps "+".
+            const modifierTotal = productTotals[p.id] ?? 0;
             const readyLine = p.preOrder ? formatPreorderReady(p.preOrderReadyDate, p.preOrderReadyTimeStart, p.preOrderReadyTimeEnd) : null;
             return (
               <div
@@ -211,17 +217,22 @@ export function StorefrontView({
                   )}
                 </div>
 
-                {/* Products with options: a "+" that opens the PDP to choose (never a
-                    blind add). Plain products: "+" quick-add until in cart, then a stepper. */}
+                {/* Products with options: a button that opens the PDP/decision sheet.
+                    It shows the total already in the cart (across all option sets), or
+                    "+" when none. Plain products: "+" quick-add until in cart, then a stepper. */}
                 <div onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
                   {hasModifiers ? (
                     <button
-                      aria-label={`Choose options for ${p.name}`}
+                      aria-label={modifierTotal > 0 ? `${p.name}, ${modifierTotal} in cart, choose options` : `Choose options for ${p.name}`}
                       disabled={!orderable || !onProductClick}
                       onClick={() => onProductClick?.(p.id)}
                       style={plusButtonStyle(orderable && !!onProductClick)}
                     >
-                      <Plus size={18} />
+                      {modifierTotal > 0 ? (
+                        <span style={{ fontSize: '14px', fontWeight: 700, lineHeight: 1, padding: '0 4px' }}>{modifierTotal}</span>
+                      ) : (
+                        <Plus size={18} />
+                      )}
                     </button>
                   ) : inCart > 0 && onSetQuantity ? (
                     <QuantityStepper quantity={inCart} onChange={(q) => onSetQuantity(p.id, q)} min={0} size="sm" />

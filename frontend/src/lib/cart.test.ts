@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ProductResponse } from './api';
 import {
   lineSignature, plainSignature, normalizeOptionIds, normalizeNotes,
-  parseCart, addLine, setLineQty, removeLine, updateLine, cartCount, plainQuantities,
+  parseCart, addLine, setLineQty, removeLine, updateLine, cartCount, plainQuantities, productTotals,
   hydrateCart, healCart, cartLineToCheckoutItem, type CartItem,
 } from './cart';
 
@@ -184,6 +184,20 @@ describe('plainQuantities', () => {
     cart = addLine(cart, item({ productId: 1, quantity: 4, modifierOptionIds: [101] })); // not plain
     cart = addLine(cart, item({ productId: 2, quantity: 1, notes: 'hot' })); // not plain
     expect(plainQuantities(cart)).toEqual({ 1: 2 });
+  });
+});
+
+describe('productTotals', () => {
+  it('sums every line of a product (all option sets + plain) by product id', () => {
+    let cart: CartItem[] = [];
+    cart = addLine(cart, item({ productId: 1, quantity: 2 }));                            // plain
+    cart = addLine(cart, item({ productId: 1, quantity: 4, modifierOptionIds: [101] }));  // with option
+    cart = addLine(cart, item({ productId: 1, quantity: 1, notes: 'hot' }));              // with note
+    cart = addLine(cart, item({ productId: 2, quantity: 3, modifierOptionIds: [200] }));
+    expect(productTotals(cart)).toEqual({ 1: 7, 2: 3 });
+  });
+  it('is empty for an empty cart', () => {
+    expect(productTotals([])).toEqual({});
   });
 });
 

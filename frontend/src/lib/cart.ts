@@ -154,6 +154,19 @@ export function plainQuantities(cart: CartItem[]): Record<number, number> {
 }
 
 /**
+ * Total quantity per product across ALL of its cart lines (regardless of the
+ * options chosen), keyed by product id. Drives the shop grid's count badge on
+ * modifier products, so a customer can see how many they already have.
+ */
+export function productTotals(cart: CartItem[]): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (const it of cart) {
+    out[it.productId] = (out[it.productId] ?? 0) + it.quantity;
+  }
+  return out;
+}
+
+/**
  * Self-heal a persisted cart against the live products: drop any chosen option id
  * that no longer exists on its product (e.g. orphaned by a merchant editing that
  * product's modifiers), and merge lines that become identical as a result so two

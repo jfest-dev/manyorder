@@ -15,7 +15,7 @@ import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { getRecentOrder, clearRecentOrder, anyOrderStatusActive, type RecentOrder } from '../../lib/orderRecall';
 import {
   parseCart, addLine, setLineQty, removeLine, updateLine, hydrateCart, healCart,
-  cartCount as countCart, plainQuantities, plainSignature, lineSignature,
+  cartCount as countCart, plainQuantities, productTotals, plainSignature, lineSignature,
   type CartItem, type CartLine,
 } from '../../lib/cart';
 
@@ -115,6 +115,8 @@ export function StorefrontApp() {
   const cartSubtotal = useMemo(() => hydratedCart.reduce((s, l) => s + l.lineSubtotal, 0), [hydratedCart]);
   // Shop grid stepper reflects the PLAIN line (no modifiers/notes) per product.
   const quantities = useMemo(() => plainQuantities(cart), [cart]);
+  // Total qty per product across all its lines - the count badge on modifier products.
+  const totalsByProduct = useMemo(() => productTotals(cart), [cart]);
 
   // Add a line - same product with different modifiers/notes is a separate line.
   const addToCart = (
@@ -201,6 +203,7 @@ export function StorefrontApp() {
               onProductClick={openProduct}
               onAddToCart={(id) => addToCart(id, 1)}
               quantities={quantities}
+              productTotals={totalsByProduct}
               onSetQuantity={setPlainQty}
               cartCount={cartCount}
               cartTotal={cartSubtotal}
