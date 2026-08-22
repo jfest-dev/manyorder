@@ -30,6 +30,8 @@ export interface EditorOption {
 }
 
 export interface EditorGroup {
+  /** Stable client id for keys/reordering; not persisted. */
+  id?: string;
   /** The server group id when loaded from an existing product; sent back on save. */
   serverId?: number;
   name: string;
@@ -47,13 +49,14 @@ export function blankEditorOption(): EditorOption {
 }
 
 export function blankEditorGroup(): EditorGroup {
-  return { name: '', required: false, multiple: false, maxSelect: null, options: [blankEditorOption(), blankEditorOption()] };
+  return { id: editorId(), name: '', required: false, multiple: false, maxSelect: null, options: [blankEditorOption(), blankEditorOption()] };
 }
 
 /** Server view → editor model (for Edit Product). */
 export function editorGroupsFromViews(views: ModifierGroupView[] | undefined | null): EditorGroup[] {
   if (!views) return [];
   return views.map((v) => ({
+    id: editorId(),
     serverId: v.id,
     name: v.name,
     required: v.minSelect >= 1,

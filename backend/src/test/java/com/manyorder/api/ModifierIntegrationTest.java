@@ -404,4 +404,41 @@ class ModifierIntegrationTest extends IntegrationTestBase {
         assertEquals("Large", opts.get(0).get("name").asText());
         assertEquals(largeId, opts.get(0).get("id").asLong());       // Large id preserved
     }
+
+    @Test
+    void productUpdate_reordersWholeGroups_preservingIds() throws Exception {
+        String token = registerAndGetToken("mod-group-reorder@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Group Reorder", "mod-group-reorder-store");
+
+        // Created with groups [Size, Add-ons] (in that order).
+        JsonNode product = createProductWithModifiers(token, storeId, "Boba", 10.00);
+        long productId = product.get("id").asLong();
+        JsonNode created = product.get("modifierGroups");
+        assertEquals("Size", created.get(0).get("name").asText());
+        assertEquals("Add-ons", created.get(1).get("name").asText());
+        long sizeId = created.get(0).get("id").asLong();
+        long addonsId = created.get(1).get("id").asLong();
+
+        // Update: send the SAME groups (with ids) but in swapped order [Add-ons, Size].
+        Map<String, Object> addons = new HashMap<>();
+        addons.put("id", addonsId); addons.put("name", "Add-ons"); addons.put("minSelect", 0);
+        addons.put("options", List.of(Map.of("name", "Pearls", "priceDelta", 0.50)));
+        Map<String, Object> size = new HashMap<>();
+        size.put("id", sizeId); size.put("name", "Size"); size.put("minSelect", 1); size.put("maxSelect", 1);
+        size.put("options", List.of(
+                Map.of("name", "Small", "priceDelta", 0.00),
+                Map.of("name", "Large", "priceDelta", 2.00)));
+
+        MvcResult updated = mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + productId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("modifierGroups", List.of(addons, size)))))
+                .andExpect(status().isOk()).andReturn();
+
+        JsonNode groups = json(updated).get("modifierGroups");
+        assertEquals(2, groups.size());
+        assertEquals("Add-ons", groups.get(0).get("name").asText());   // new order persisted
+        assertEquals(addonsId, groups.get(0).get("id").asLong());      // ids preserved across reorder
+        assertEquals("Size", groups.get(1).get("name").asText());
+        assertEquals(sizeId, groups.get(1).get("id").asLong());
+    }
 }

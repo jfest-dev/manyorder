@@ -47,11 +47,20 @@ export function ModifierGroupsEditor({ groups, onChange, currency, disabled }: M
         Let customers customise this item, e.g. a required “Size”, or optional “Add-ons”. Prices add on top of the base price.
       </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {groups.map((group, gi) => (
-          <div key={gi} style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)', padding: '14px', background: 'var(--bg-card-subtle)' }}>
-            {/* Group name + remove */}
+      {/* Whole groups reorder by dragging the card's grip; order is saved with the product. */}
+      <ReorderableList
+        items={groups}
+        getKey={(g) => g.id ?? g.serverId ?? g.name}
+        disabled={disabled}
+        onReorder={onChange}
+        renderRow={(group, { index: gi, handle: groupHandle, setNodeRef: setGroupRef, dragging: groupDragging }) => (
+          <div
+            ref={setGroupRef as (el: HTMLDivElement | null) => void}
+            style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)', padding: '14px', background: 'var(--bg-card-subtle)', marginBottom: '12px', opacity: groupDragging ? 0.6 : 1 }}
+          >
+            {/* Grip + group name + remove */}
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+              <span style={{ marginBottom: '2px' }}>{groupHandle}</span>
               <div style={{ flex: 1 }}>
                 <FieldInput label="Group name" placeholder="e.g. Size, Sauce, Add-ons"
                   value={group.name} onChange={(v) => patchGroup(gi, { name: v })} maxLength={40} disabled={disabled} />
@@ -129,8 +138,8 @@ export function ModifierGroupsEditor({ groups, onChange, currency, disabled }: M
               </button>
             </div>
           </div>
-        ))}
-      </div>
+        )}
+      />
 
       <button type="button" disabled={disabled} onClick={addGroup}
         style={{ ...linkBtn, marginTop: groups.length > 0 ? '12px' : '0' }}>
