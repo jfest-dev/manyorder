@@ -102,7 +102,7 @@ describe('validateEditorGroups', () => {
 function product(): ProductResponse {
   return {
     id: 1, merchantId: 1, name: 'Milk Tea', description: null, price: 10, isActive: true,
-    categoryId: null, categoryName: null, stock: 9, sku: null, photoUrl: null, preOrder: false,
+    categoryId: null, categoryName: null, categoryDisplayOrder: null, stock: 9, sku: null, photoUrl: null, preOrder: false,
     preOrderReadyDate: null, preOrderReadyTimeStart: null, preOrderReadyTimeEnd: null, preOrderNote: null,
     modifierGroups: views, unitsSold: 0, createdAt: '2026-01-01T00:00:00',
   };

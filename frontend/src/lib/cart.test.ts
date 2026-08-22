@@ -11,7 +11,7 @@ import {
 function product(overrides: Partial<ProductResponse> = {}): ProductResponse {
   return {
     id: 1, merchantId: 1, name: 'Milk Tea', description: null, price: 10,
-    isActive: true, categoryId: null, categoryName: null, stock: 50, sku: null,
+    isActive: true, categoryId: null, categoryName: null, categoryDisplayOrder: null, stock: 50, sku: null,
     photoUrl: null, preOrder: false, preOrderReadyDate: null,
     preOrderReadyTimeStart: null, preOrderReadyTimeEnd: null, preOrderNote: null,
     modifierGroups: [

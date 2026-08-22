@@ -194,6 +194,8 @@ export interface ProductResponse {
   isActive: boolean;
   categoryId: number | null;
   categoryName: string | null;
+  /** The category's displayOrder, for ordering storefront category chips. */
+  categoryDisplayOrder: number | null;
   stock: number;
   sku: string | null;
   photoUrl: string | null;
@@ -578,6 +580,13 @@ export const categoriesApi = {
 
   remove: (storeId: number, categoryId: number) =>
     request<void>(`/merchant/stores/${storeId}/categories/${categoryId}`, { method: 'DELETE' }),
+
+  /** Persist a new category order (full list of ids, top to bottom). */
+  reorder: (storeId: number, categoryIds: number[]) =>
+    request<CategoryResponse[]>(`/merchant/stores/${storeId}/categories/reorder`, {
+      method: 'PATCH',
+      body: { categoryIds },
+    }),
 };
 
 // ---------- Public storefront (no auth) ----------

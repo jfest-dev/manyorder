@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Package } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
+import { ReorderableList } from '../ReorderableList';
 import { categoriesApi, ApiError, type CategoryResponse } from '../../lib/api';
 
 const COLORS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#F97316'];
@@ -107,6 +108,18 @@ export function Categories({ storeId }: CategoriesProps) {
     }
   };
 
+  // Persist a drag-reordered list; optimistic, reverting on failure.
+  const handleReorder = async (reordered: CategoryResponse[]) => {
+    const previous = categories;
+    setCategories(reordered);
+    try {
+      await categoriesApi.reorder(storeId, reordered.map((c) => c.id));
+    } catch (err) {
+      setCategories(previous); // revert
+      setLoadError(err instanceof ApiError ? err.message : 'Failed to save the new order.');
+    }
+  };
+
   return (
     <div>
       {/* Header */}
@@ -141,86 +154,70 @@ export function Categories({ storeId }: CategoriesProps) {
           </div>
         </Card>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '16px',
-        }}>
-          {categories.map((category) => {
-            const c = category.color || DEFAULT_COLOR;
-            return (
-              <Card key={category.id}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {/* Color Badge & Name */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div
-                      style={{
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '12px',
-                        background: `${c}20`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Package size={24} style={{ color: c }} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <h3 style={{ marginBottom: '4px' }}>{category.name}</h3>
-                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        {category.productCount} {category.productCount === 1 ? 'product' : 'products'}
-                      </p>
-                    </div>
+        <>
+          <p className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>
+            Drag the grip to reorder. This is the order categories appear on your storefront.
+          </p>
+          <ReorderableList
+            items={categories}
+            getKey={(category) => category.id}
+            onReorder={handleReorder}
+            renderRow={(category, { handle, setNodeRef, dragging }) => {
+              const c = category.color || DEFAULT_COLOR;
+              return (
+                <div
+                  ref={setNodeRef as (el: HTMLDivElement | null) => void}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px',
+                    padding: '12px 14px', background: 'var(--bg-card)',
+                    border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)',
+                    opacity: dragging ? 0.6 : 1,
+                  }}
+                >
+                  {handle}
+                  <div
+                    style={{
+                      width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0,
+                      background: `${c}20`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <Package size={20} style={{ color: c }} />
                   </div>
-
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
-                    <button
-                      onClick={() => openEdit(category)}
-                      style={{
-                        flex: 1,
-                        padding: '8px',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-field)',
-                        background: 'var(--bg-card)',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Edit2 size={14} />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => setDeletingCategory(category)}
-                      style={{
-                        flex: 1,
-                        padding: '8px',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-field)',
-                        background: 'var(--bg-card)',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        color: '#DC2626',
-                      }}
-                    >
-                      <Trash2 size={14} />
-                      Delete
-                    </button>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="text-small" style={{ fontWeight: 600 }}>{category.name}</div>
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {category.productCount} {category.productCount === 1 ? 'product' : 'products'}
+                    </p>
                   </div>
+                  <button
+                    onClick={() => openEdit(category)}
+                    aria-label="Edit category"
+                    style={{
+                      flexShrink: 0, padding: '8px 12px', border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', cursor: 'pointer',
+                      fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px',
+                    }}
+                  >
+                    <Edit2 size={14} />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => setDeletingCategory(category)}
+                    aria-label="Delete category"
+                    style={{
+                      flexShrink: 0, padding: '8px 12px', border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', cursor: 'pointer',
+                      fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#DC2626',
+                    }}
+                  >
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
                 </div>
-              </Card>
-            );
-          })}
-        </div>
+              );
+            }}
+          />
+        </>
       )}
 
       {/* Add / Edit Category Modal */}

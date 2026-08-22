@@ -71,10 +71,22 @@ export function StorefrontView({
   // to a plain estimate for preview surfaces that don't pass one.
   const barTotal = cartTotal ?? products.reduce((sum, p) => sum + p.price * (quantities[p.id] ?? 0), 0);
 
+  // Category chips, ordered by the merchant's displayOrder (then name), not by
+  // the order products happen to load in.
   const categories = useMemo(() => {
-    const names = new Set<string>();
-    products.forEach((p) => { if (p.categoryName) names.add(p.categoryName); });
-    return Array.from(names);
+    const byName = new Map<string, number>();
+    products.forEach((p) => {
+      if (!p.categoryName) return;
+      const order = p.categoryDisplayOrder ?? Number.MAX_SAFE_INTEGER;
+      // keep the smallest order seen for a name (all products in a category share it)
+      if (!byName.has(p.categoryName) || order < (byName.get(p.categoryName) as number)) {
+        byName.set(p.categoryName, order);
+      }
+    });
+    return Array.from(byName.keys()).sort((a, b) => {
+      const d = (byName.get(a) as number) - (byName.get(b) as number);
+      return d !== 0 ? d : a.localeCompare(b);
+    });
   }, [products]);
 
   const [activeCategory, setActiveCategory] = useState<string>(ALL);

@@ -38,8 +38,34 @@ public class CategoryService {
         if (categoryRepository.existsByMerchantAndNameIgnoreCase(merchant, name)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A category with that name already exists.");
         }
-        Category category = new Category(merchant, name, request.getColor(), request.getDisplayOrder());
+        // Default to the end of the list so a new category appends rather than
+        // colliding on displayOrder 0 with everything else.
+        Integer displayOrder = request.getDisplayOrder() != null ? request.getDisplayOrder() : nextDisplayOrder(merchant);
+        Category category = new Category(merchant, name, request.getColor(), displayOrder);
         return new CategoryResponse(categoryRepository.save(category), 0);
+    }
+
+    /**
+     * Persist a new order for the merchant's categories. Every id must belong to
+     * the merchant; displayOrder is set to each id's position in the list.
+     */
+    @Transactional
+    public List<CategoryResponse> reorderCategories(Merchant merchant, List<Long> categoryIds) {
+        int i = 0;
+        for (Long id : categoryIds) {
+            Category category = requireOwned(merchant, id);
+            category.setDisplayOrder(i++);
+        }
+        return getCategories(merchant);
+    }
+
+    private int nextDisplayOrder(Merchant merchant) {
+        return categoryRepository.findByMerchantOrderByDisplayOrderAscNameAsc(merchant).stream()
+                .map(Category::getDisplayOrder)
+                .filter(java.util.Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .max()
+                .orElse(-1) + 1;
     }
 
     @Transactional

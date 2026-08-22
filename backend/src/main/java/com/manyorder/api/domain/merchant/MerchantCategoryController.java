@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.manyorder.api.domain.category.CategoryResponse;
 import com.manyorder.api.domain.category.CategoryService;
 import com.manyorder.api.domain.category.CreateCategoryRequest;
+import com.manyorder.api.domain.category.ReorderCategoriesRequest;
 import com.manyorder.api.domain.category.UpdateCategoryRequest;
 import com.manyorder.api.domain.user.User;
 import com.manyorder.api.security.CurrentUserService;
@@ -56,6 +57,15 @@ public class MerchantCategoryController {
         User user = currentUserService.require(authentication);
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
         return categoryService.createCategory(merchant, request);
+    }
+
+    @PatchMapping("/reorder")
+    public List<CategoryResponse> reorderCategories(@PathVariable Long storeId,
+                                                    @Valid @RequestBody ReorderCategoriesRequest request,
+                                                    Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+        return categoryService.reorderCategories(merchant, request.getCategoryIds());
     }
 
     @PatchMapping("/{categoryId}")

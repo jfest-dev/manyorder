@@ -188,4 +188,68 @@ class CategoryIntegrationTest extends IntegrationTestBase {
                         .content("{\"name\":\"Honey\",\"price\":3.00,\"categoryId\":" + catInB + "}"))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void createCategory_appendsToEndByDefault() throws Exception {
+        String token = registerAndGetToken("cat-append@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Append Store", "cat-append-store");
+
+        // No displayOrder supplied → each appends after the previous.
+        createCategory(token, storeId, "{\"name\":\"First\"}");
+        createCategory(token, storeId, "{\"name\":\"Second\"}");
+
+        mockMvc.perform(get("/merchant/stores/" + storeId + "/categories")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("First"))
+                .andExpect(jsonPath("$[0].displayOrder").value(0))
+                .andExpect(jsonPath("$[1].name").value("Second"))
+                .andExpect(jsonPath("$[1].displayOrder").value(1));
+    }
+
+    @Test
+    void reorderCategories_persistsNewOrder() throws Exception {
+        String token = registerAndGetToken("cat-reorder@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Reorder Store", "cat-reorder-store");
+
+        long a = createCategory(token, storeId, "{\"name\":\"Alpha\"}");
+        long b = createCategory(token, storeId, "{\"name\":\"Bravo\"}");
+        long c = createCategory(token, storeId, "{\"name\":\"Charlie\"}");
+
+        // Reorder to [Charlie, Alpha, Bravo]; response reflects the new order.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/categories/reorder")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryIds\":[" + c + "," + a + "," + b + "]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Charlie"))
+                .andExpect(jsonPath("$[1].name").value("Alpha"))
+                .andExpect(jsonPath("$[2].name").value("Bravo"));
+
+        // Persisted: a fresh GET returns the same order.
+        mockMvc.perform(get("/merchant/stores/" + storeId + "/categories")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Charlie"))
+                .andExpect(jsonPath("$[0].displayOrder").value(0))
+                .andExpect(jsonPath("$[2].name").value("Bravo"));
+    }
+
+    @Test
+    void reorderCategories_rejectsForeignCategoryId() throws Exception {
+        String ownerToken = registerAndGetToken("cat-reorder-own@test.com", "MERCHANT", null);
+        long storeId = createStore(ownerToken, "Reorder Own", "cat-reorder-own-store");
+        long mine = createCategory(ownerToken, storeId, "{\"name\":\"Mine\"}");
+
+        String otherToken = registerAndGetToken("cat-reorder-other@test.com", "MERCHANT", null);
+        long otherStore = createStore(otherToken, "Other", "cat-reorder-other-store");
+        long foreign = createCategory(otherToken, otherStore, "{\"name\":\"Theirs\"}");
+
+        // A foreign category id in the reorder list → 404 (not owned).
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/categories/reorder")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"categoryIds\":[" + mine + "," + foreign + "]}"))
+                .andExpect(status().isNotFound());
+    }
 }
