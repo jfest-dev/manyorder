@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Eye, Link2 } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import logoImage from '../assets/manyorder-logo.png';
@@ -198,8 +198,10 @@ export function AppShell({
             </button>
           )}
 
-          {/* ManyOrder Logo and Brand */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* ManyOrder Logo and Brand. The wordmark is a single unbreakable word,
+              so it's hidden on mobile - the logo mark carries the brand there and
+              the row stays within narrow viewports. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexShrink: 0 }}>
             <img
               src={logoImage}
               alt="ManyOrder"
@@ -207,24 +209,32 @@ export function AppShell({
                 width: '32px',
                 height: '32px',
                 borderRadius: '6px',
+                flexShrink: 0,
               }}
             />
-            <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>ManyOrder</span>
+            {isDesktop && (
+              <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>ManyOrder</span>
+            )}
           </div>
 
           <div style={{ flex: 1 }} />
 
-          {/* Preview and Copy Link Buttons */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Preview and Copy Link Buttons. On mobile they collapse to icon-only
+              squares so the top bar fits narrow viewports; text returns on desktop. */}
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
             <button
               onClick={openStorePreview}
+              aria-label="Preview store page"
+              title="Preview store page"
               style={{
                 height: '36px',
-                padding: '0 14px',
+                width: isDesktop ? undefined : '36px',
+                padding: isDesktop ? '0 14px' : '0',
                 fontSize: '13px',
                 fontWeight: 500,
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '6px',
                 border: '1px solid var(--border-subtle)',
                 borderRadius: '6px',
@@ -242,18 +252,22 @@ export function AppShell({
                 e.currentTarget.style.borderColor = 'var(--border-subtle)';
               }}
             >
-              {isDesktop ? 'Preview store page' : 'Preview'}
+              {isDesktop ? 'Preview store page' : <Eye size={18} />}
             </button>
 
             <button
               onClick={copyStoreLink}
+              aria-label="Copy store link"
+              title="Copy store link"
               style={{
                 height: '36px',
-                padding: '0 14px',
+                width: isDesktop ? undefined : '36px',
+                padding: isDesktop ? '0 14px' : '0',
                 fontSize: '13px',
                 fontWeight: 500,
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '6px',
                 background: '#000000',
                 color: 'white',
@@ -270,7 +284,7 @@ export function AppShell({
                 e.currentTarget.style.background = '#000000';
               }}
             >
-              {isDesktop ? 'Copy store link' : 'Copy link'}
+              {isDesktop ? 'Copy store link' : <Link2 size={18} />}
             </button>
           </div>
         </div>
