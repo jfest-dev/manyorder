@@ -22,6 +22,7 @@ import com.manyorder.api.domain.product.CreateProductRequest;
 import com.manyorder.api.domain.product.ProductPhotoResponse;
 import com.manyorder.api.domain.product.ProductResponse;
 import com.manyorder.api.domain.product.ProductService;
+import com.manyorder.api.domain.product.ReorderProductsRequest;
 import com.manyorder.api.domain.product.UpdateProductRequest;
 import com.manyorder.api.domain.upload.CloudinaryImageService;
 import com.manyorder.api.domain.upload.ImageValidation;
@@ -82,6 +83,15 @@ public class MerchantProductController {
         User user = currentUserService.require(authentication);
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
         return productService.createProduct(merchant, request);
+    }
+
+    @PatchMapping("/reorder")
+    public List<ProductResponse> reorderProducts(@PathVariable Long storeId,
+                                                 @Valid @RequestBody ReorderProductsRequest request,
+                                                 Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+        return productService.reorderProducts(merchant, request.getProductIds());
     }
 
     @PatchMapping("/{productId}")

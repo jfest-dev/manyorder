@@ -515,6 +515,13 @@ export const productsApi = {
   deactivate: (storeId: number, productId: number) =>
     request<ProductResponse>(`/merchant/stores/${storeId}/products/${productId}/deactivate`, { method: 'PATCH' }),
 
+  /** Persist a new product order (full list of ids, top to bottom). */
+  reorder: (storeId: number, productIds: number[]) =>
+    request<ProductResponse[]>(`/merchant/stores/${storeId}/products/reorder`, {
+      method: 'PATCH',
+      body: { productIds },
+    }),
+
   /**
    * Upload a photo for an existing product and get back its hosted URL. Multipart
    * (browser sets the boundary - no manual Content-Type). Server validates and

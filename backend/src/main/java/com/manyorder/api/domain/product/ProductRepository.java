@@ -12,8 +12,8 @@ import com.manyorder.api.domain.category.Category;
 import com.manyorder.api.domain.merchant.Merchant;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
-    List<Product> findByMerchant(Merchant merchant);
-    List<Product> findByMerchantAndIsActiveTrue(Merchant merchant);
+    List<Product> findByMerchantOrderByDisplayOrderAscIdAsc(Merchant merchant);
+    List<Product> findByMerchantAndIsActiveTrueOrderByDisplayOrderAscIdAsc(Merchant merchant);
     Optional<Product> findByMerchantAndId(Merchant merchant, Long id);
 
     /** Product counts per category for a store: [categoryId, count]. */

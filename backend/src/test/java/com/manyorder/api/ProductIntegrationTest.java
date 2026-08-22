@@ -384,4 +384,71 @@ class ProductIntegrationTest extends IntegrationTestBase {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void createProduct_appendsToEndByDefault() throws Exception {
+        String token = registerAndGetToken("prod-append@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Append Store", "prod-append-store");
+
+        createProduct(token, storeId, "{\"name\":\"First\",\"price\":1.00}");
+        createProduct(token, storeId, "{\"name\":\"Second\",\"price\":2.00}");
+
+        mockMvc.perform(get("/merchant/stores/" + storeId + "/products")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("First"))
+                .andExpect(jsonPath("$[1].name").value("Second"));
+    }
+
+    @Test
+    void reorderProducts_persistsOrder_forMerchantAndStorefront() throws Exception {
+        String token = registerAndGetToken("prod-reorder@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Reorder Store", "prod-reorder-store");
+
+        long a = createProduct(token, storeId, "{\"name\":\"Aaa\",\"price\":1.00}");
+        long b = createProduct(token, storeId, "{\"name\":\"Bbb\",\"price\":2.00}");
+        long c = createProduct(token, storeId, "{\"name\":\"Ccc\",\"price\":3.00}");
+
+        // Reorder to [Ccc, Aaa, Bbb]; response reflects the new order.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/reorder")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productIds\":[" + c + "," + a + "," + b + "]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Ccc"))
+                .andExpect(jsonPath("$[1].name").value("Aaa"))
+                .andExpect(jsonPath("$[2].name").value("Bbb"));
+
+        // Merchant list persists it.
+        mockMvc.perform(get("/merchant/stores/" + storeId + "/products")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Ccc"))
+                .andExpect(jsonPath("$[2].name").value("Bbb"));
+
+        // Storefront honours the same order (WYSIWYG).
+        mockMvc.perform(get("/public/storefront/" + storeId + "/products"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Ccc"))
+                .andExpect(jsonPath("$[1].name").value("Aaa"))
+                .andExpect(jsonPath("$[2].name").value("Bbb"));
+    }
+
+    @Test
+    void reorderProducts_rejectsForeignProductId() throws Exception {
+        String ownerToken = registerAndGetToken("prod-reorder-own@test.com", "MERCHANT", null);
+        long storeId = createStore(ownerToken, "Reorder Own", "prod-reorder-own-store");
+        long mine = createProduct(ownerToken, storeId, "{\"name\":\"Mine\",\"price\":1.00}");
+
+        String otherToken = registerAndGetToken("prod-reorder-other@test.com", "MERCHANT", null);
+        long otherStore = createStore(otherToken, "Other", "prod-reorder-other-store");
+        long foreign = createProduct(otherToken, otherStore, "{\"name\":\"Theirs\",\"price\":1.00}");
+
+        // A foreign product id in the reorder list → 404 (not owned).
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/reorder")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productIds\":[" + mine + "," + foreign + "]}"))
+                .andExpect(status().isNotFound());
+    }
 }

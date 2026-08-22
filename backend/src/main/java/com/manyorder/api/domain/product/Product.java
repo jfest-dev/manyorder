@@ -55,6 +55,10 @@ public class Product {
     @Column(nullable = false, columnDefinition = "integer default 0 not null")
     private Integer stock = 0;
 
+    /** Merchant-defined ordering for the products list + storefront (lower first). */
+    @Column(nullable = false, columnDefinition = "integer default 0 not null")
+    private Integer displayOrder = 0;
+
     /** Stock-keeping unit — free text, not enforced unique. */
     private String sku;
 
@@ -144,6 +148,9 @@ public class Product {
 
     public Integer getStock() { return stock; }
     public void setStock(Integer stock) { this.stock = stock; }
+
+    public Integer getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
 
     public String getSku() { return sku; }
     public void setSku(String sku) { this.sku = sku; }

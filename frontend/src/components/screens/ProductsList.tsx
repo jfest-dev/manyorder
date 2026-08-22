@@ -2,6 +2,7 @@ import { Search, Plus, Download, Edit, Package } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { ToggleSwitch } from '../ToggleSwitch';
+import { ReorderableList } from '../ReorderableList';
 import { useEffect, useMemo, useState } from 'react';
 import { productsApi, storesApi, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
@@ -89,6 +90,21 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
       return haystack.some((h) => h.includes(q));
     });
   }, [products, searchQuery]);
+
+  // Reorder is over the full list; disable it while a search filter is active
+  // (dragging a subset would be ambiguous). When not searching, filtered === products.
+  const searching = searchQuery.trim() !== '';
+
+  const handleReorder = async (reordered: ProductResponse[]) => {
+    const previous = products;
+    setProducts(reordered);
+    try {
+      await productsApi.reorder(storeId, reordered.map((p) => p.id));
+    } catch (e) {
+      setProducts(previous); // revert
+      setError(e instanceof ApiError ? e.message : 'Failed to save the new order.');
+    }
+  };
 
   const handleExportProducts = () => {
     const headers = ['Product ID', 'Name', 'SKU', 'Category', 'Price', 'Stock', 'Units Sold', 'Status'];
@@ -207,11 +223,18 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
           <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--error-color)' }}>{error}</div>
         ) : (
           <>
+            <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '0 0 12px', padding: '0 8px' }}>
+              {searching
+                ? 'Clear the search to reorder products.'
+                : 'Drag the grip to reorder. This is the order products appear on your storefront.'}
+            </p>
+
             {/* Desktop Table */}
             <div className="desktop-table" style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ background: 'var(--bg-card-subtle)' }}>
+                    <th style={{ width: '28px' }} aria-hidden />
                     {['Product', 'Category', 'Price', 'Stock', 'Units Sold', 'Status'].map((h) => (
                       <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>{h}</th>
                     ))}
@@ -219,42 +242,52 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((p) => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <td style={{ padding: '12px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <Thumb p={p} size={40} />
-                          <div>
-                            <div className="text-small" style={{ fontWeight: 500 }}>{p.name}</div>
-                            {p.sku && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>SKU: {p.sku}</div>}
+                  <ReorderableList
+                    items={filtered}
+                    getKey={(p) => p.id}
+                    disabled={searching}
+                    onReorder={handleReorder}
+                    renderRow={(p, { handle, setNodeRef, dragging }) => (
+                      <tr
+                        ref={setNodeRef as (el: HTMLTableRowElement | null) => void}
+                        style={{ borderBottom: '1px solid var(--border-subtle)', opacity: dragging ? 0.6 : 1 }}
+                      >
+                        <td style={{ padding: '12px 0 12px 8px', verticalAlign: 'middle' }}>{handle}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Thumb p={p} size={40} />
+                            <div>
+                              <div className="text-small" style={{ fontWeight: 500 }}>{p.name}</div>
+                              {p.sku && <div className="text-xs" style={{ color: 'var(--text-muted)' }}>SKU: {p.sku}</div>}
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.categoryName || '-'}</td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{formatMoney(p.price, currency)}</td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px' }}>
-                        <span style={{ color: p.stock === 0 && !p.preOrder ? '#DC2626' : 'var(--text-primary)' }}>{p.stock} in stock</span>
-                      </td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.unitsSold}</td>
-                      <td style={{ padding: '12px 16px' }}><StatusTag p={p} /></td>
-                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                        <button
-                          onClick={() => onEditProduct?.(p.id)}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
-                            background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
-                            borderRadius: 'var(--radius-field)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-app)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-card-subtle)'; }}
-                        >
-                          <Edit size={16} />
-                          Edit
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.categoryName || '-'}</td>
+                        <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{formatMoney(p.price, currency)}</td>
+                        <td style={{ padding: '12px 16px', fontSize: '13px' }}>
+                          <span style={{ color: p.stock === 0 && !p.preOrder ? '#DC2626' : 'var(--text-primary)' }}>{p.stock} in stock</span>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.unitsSold}</td>
+                        <td style={{ padding: '12px 16px' }}><StatusTag p={p} /></td>
+                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                          <button
+                            onClick={() => onEditProduct?.(p.id)}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                              background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
+                              borderRadius: 'var(--radius-field)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-app)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-card-subtle)'; }}
+                          >
+                            <Edit size={16} />
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                  />
                 </tbody>
               </table>
 
@@ -267,37 +300,47 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
 
             {/* Mobile Cards */}
             <div className="mobile-cards" style={{ display: 'none' }}>
-              {filtered.map((p) => (
-                <div key={p.id} style={{ padding: '16px', borderRadius: '8px', background: 'var(--bg-card-subtle)', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
-                    <Thumb p={p} size={48} />
-                    <div style={{ flex: 1 }}>
-                      <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>{p.name}</div>
-                      <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        {p.categoryName || '-'}{p.sku ? ` · SKU: ${p.sku}` : ''}
+              <ReorderableList
+                items={filtered}
+                getKey={(p) => p.id}
+                disabled={searching}
+                onReorder={handleReorder}
+                renderRow={(p, { handle, setNodeRef, dragging }) => (
+                  <div
+                    ref={setNodeRef as (el: HTMLDivElement | null) => void}
+                    style={{ padding: '16px', borderRadius: '8px', background: 'var(--bg-card-subtle)', marginBottom: '12px', opacity: dragging ? 0.6 : 1 }}
+                  >
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                      <span style={{ marginTop: '2px' }}>{handle}</span>
+                      <Thumb p={p} size={48} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>{p.name}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          {p.categoryName || '-'}{p.sku ? ` · SKU: ${p.sku}` : ''}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <div>
-                      <span className="text-small" style={{ fontWeight: 500 }}>{formatMoney(p.price, currency)}</span>
-                      <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>{p.stock} in stock · {p.unitsSold} sold</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <div>
+                        <span className="text-small" style={{ fontWeight: 500 }}>{formatMoney(p.price, currency)}</span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>{p.stock} in stock · {p.unitsSold} sold</span>
+                      </div>
+                      <StatusTag p={p} />
                     </div>
-                    <StatusTag p={p} />
+                    <button
+                      onClick={() => onEditProduct?.(p.id)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px',
+                        background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)',
+                        color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
+                      }}
+                    >
+                      <Edit size={16} />
+                      Edit Product
+                    </button>
                   </div>
-                  <button
-                    onClick={() => onEditProduct?.(p.id)}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px',
-                      background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)',
-                      color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
-                    }}
-                  >
-                    <Edit size={16} />
-                    Edit Product
-                  </button>
-                </div>
-              ))}
+                )}
+              />
             </div>
 
             <style>{`

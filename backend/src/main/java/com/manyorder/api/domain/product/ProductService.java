@@ -52,12 +52,12 @@ public class ProductService {
     // the response (the ProductResponse extracts categoryName to a plain String).
     @Transactional(readOnly = true)
     public List<ProductResponse> getProducts(Merchant merchant) {
-        return withUnitsSold(merchant, productRepository.findByMerchant(merchant));
+        return withUnitsSold(merchant, productRepository.findByMerchantOrderByDisplayOrderAscIdAsc(merchant));
     }
 
     @Transactional(readOnly = true)
     public List<ProductResponse> getActiveProducts(Merchant merchant) {
-        return withUnitsSold(merchant, productRepository.findByMerchantAndIsActiveTrue(merchant));
+        return withUnitsSold(merchant, productRepository.findByMerchantAndIsActiveTrueOrderByDisplayOrderAscIdAsc(merchant));
     }
 
     /**
@@ -70,7 +70,7 @@ public class ProductService {
     public List<ProductResponse> getActiveProductsByMerchantId(Long merchantId) {
         Merchant merchant = merchantRepository.findById(merchantId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
-        return withStorefrontUnitsSold(merchant, productRepository.findByMerchantAndIsActiveTrue(merchant));
+        return withStorefrontUnitsSold(merchant, productRepository.findByMerchantAndIsActiveTrueOrderByDisplayOrderAscIdAsc(merchant));
     }
 
     @Transactional(readOnly = true)
@@ -88,6 +88,7 @@ public class ProductService {
                 request.getPrice());
         product.setCategory(resolveCategory(merchant, request.getCategoryId()));
         product.setStock(request.getStock() != null ? request.getStock() : 0);
+        product.setDisplayOrder(nextDisplayOrder(merchant)); // append to the end of the list
         product.setSku(request.getSku());
         product.setPhotoUrl(isBlank(request.getPhotoUrl()) ? null : request.getPhotoUrl());
         product.setPreOrder(request.isPreOrder());
@@ -98,6 +99,19 @@ public class ProductService {
         // A new product always takes the sent modifier set (empty when omitted).
         applyModifierGroups(product, request.getModifierGroups(), merchant.getCurrency());
         return toResponse(productRepository.save(product));
+    }
+
+    /**
+     * Persist a new order for the merchant's products. Every id must belong to the
+     * merchant; displayOrder is set to each id's position in the list.
+     */
+    @Transactional
+    public List<ProductResponse> reorderProducts(Merchant merchant, List<Long> productIds) {
+        int i = 0;
+        for (Long id : productIds) {
+            requireStoreProduct(merchant, id).setDisplayOrder(i++);
+        }
+        return getProducts(merchant);
     }
 
     @Transactional
@@ -270,6 +284,16 @@ public class ProductService {
     private Product requireStoreProduct(Merchant merchant, Long productId) {
         return productRepository.findByMerchantAndId(merchant, productId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+    }
+
+    /** One past the current highest displayOrder, so a new product appends to the end. */
+    private int nextDisplayOrder(Merchant merchant) {
+        return productRepository.findByMerchantOrderByDisplayOrderAscIdAsc(merchant).stream()
+                .map(Product::getDisplayOrder)
+                .filter(java.util.Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .max()
+                .orElse(-1) + 1;
     }
 
     /** null/0 -> no category; a positive id must reference a category in this store. */
