@@ -250,31 +250,74 @@ export function Inventory() {
 
       {/* Inventory Table */}
       <Card>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-card-subtle)' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Product</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>SKU</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Category</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Stock</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Status</th>
-                <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Price</th>
-              </tr>
-            </thead>
-            <tbody>
+        {filteredInventory.length === 0 ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            No inventory items found
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table */}
+            <div className="desktop-table" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--bg-card-subtle)' }}>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Product</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>SKU</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Category</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Stock</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Status</th>
+                    <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Price</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredInventory.map((item) => {
+                    const status = getStockStatus(item);
+                    return (
+                      <tr key={item.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{item.name}</td>
+                        <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{item.sku}</td>
+                        <td style={{ padding: '12px 16px', fontSize: '13px' }}>{item.category}</td>
+                        <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{item.stock}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <span
+                            className="text-tag"
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              background: `${status.color}20`,
+                              color: status.color,
+                              fontSize: '12px',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {status.label}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{item.price}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="mobile-cards" style={{ display: 'none' }}>
               {filteredInventory.map((item) => {
                 const status = getStockStatus(item);
                 return (
-                  <tr key={item.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{item.name}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{item.sku}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px' }}>{item.category}</td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{item.stock}</td>
-                    <td style={{ padding: '12px 16px' }}>
-                      <span 
+                  <div key={item.id} style={{ padding: '16px', borderRadius: '8px', background: 'var(--bg-card-subtle)', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>{item.name}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          {item.category}{item.sku ? ` · SKU: ${item.sku}` : ''}
+                        </div>
+                      </div>
+                      <span
                         className="text-tag"
                         style={{
+                          flexShrink: 0,
                           padding: '4px 8px',
                           borderRadius: '4px',
                           background: `${status.color}20`,
@@ -285,24 +328,24 @@ export function Inventory() {
                       >
                         {status.label}
                       </span>
-                    </td>
-                    <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{item.price}</td>
-                  </tr>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className="text-small" style={{ fontWeight: 500 }}>{item.price}</span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{item.stock} in stock</span>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
-
-          {filteredInventory.length === 0 && (
-            <div style={{ 
-              padding: '48px 24px', 
-              textAlign: 'center', 
-              color: 'var(--text-muted)' 
-            }}>
-              No inventory items found
             </div>
-          )}
-        </div>
+
+            <style>{`
+              @media (max-width: 768px) {
+                .desktop-table { display: none !important; }
+                .mobile-cards { display: block !important; }
+              }
+            `}</style>
+          </>
+        )}
       </Card>
     </div>
   );

@@ -301,7 +301,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
             </div>
 
             <style>{`
-              @media (max-width: 767px) {
+              @media (max-width: 768px) {
                 .desktop-table { display: none !important; }
                 .mobile-cards { display: block !important; }
               }
