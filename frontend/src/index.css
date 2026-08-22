@@ -526,6 +526,15 @@ p, body {
   box-sizing: border-box;
 }
 
+/* Mobile pan guard: no element may force the page to scroll horizontally.
+   `clip` (not `hidden`) clips the overflow without making html/body a scroll
+   container, so it can't force overflow-y to auto or break sticky headers. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
 @property --tw-translate-x {
   syntax: "*";
   inherits: false;

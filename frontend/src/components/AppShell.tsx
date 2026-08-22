@@ -289,11 +289,15 @@ export function AppShell({
           </div>
         </div>
 
-        {/* Content */}
+        {/* Content. overflowX is hidden (not auto) so a stray too-wide child can
+            never pan the whole screen sideways - only opt-in inner scrollers (e.g.
+            a wide table in its own overflow-x:auto wrapper) scroll horizontally.
+            overflowY stays auto for normal vertical scrolling + sticky headers. */}
         <div
           style={{
             flex: 1,
-            overflow: 'auto',
+            overflowY: 'auto',
+            overflowX: 'hidden',
             background: 'var(--bg-app)',
             padding: '24px',
           }}
