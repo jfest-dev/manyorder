@@ -814,10 +814,10 @@ export function Marketing({ currency = 'sgd' }: MarketingProps = {}) {
       <style>{`
         @media (max-width: 768px) {
           div[style*="grid-template-columns: 1fr 1fr"] {
-            grid-template-columns: 1fr !important;
+            grid-template-columns: minmax(0, 1fr) !important;
           }
           div[style*="grid-template-columns: 1fr 1fr 1fr"] {
-            grid-template-columns: 1fr !important;
+            grid-template-columns: minmax(0, 1fr) !important;
           }
         }
       `}</style>

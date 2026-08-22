@@ -539,7 +539,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
       <style>{`
         @media (max-width: 1024px) {
           div[style*="grid-template-columns: 1fr 400px"] {
-            grid-template-columns: 1fr !important;
+            grid-template-columns: minmax(0, 1fr) !important;
           }
           div[style*="position: sticky"] {
             position: static !important;

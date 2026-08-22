@@ -346,7 +346,7 @@ export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
       <style>{`
         @media (max-width: 1024px) {
           div[style*="grid-template-columns: 1.6fr 1fr"] {
-            grid-template-columns: 1fr !important;
+            grid-template-columns: minmax(0, 1fr) !important;
           }
         }
       `}</style>

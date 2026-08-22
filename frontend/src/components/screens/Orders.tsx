@@ -536,7 +536,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
             top: 16px;
             right: 20px;
           }
-          .orders-detail { grid-template-columns: 1fr !important; }
+          .orders-detail { grid-template-columns: minmax(0, 1fr) !important; }
         }
       `}</style>
     </div>
