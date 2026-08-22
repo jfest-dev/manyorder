@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Download, Plus, Search, MessageCircle } from 'lucide-react';
 import { Button } from '../Button';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ordersApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { orderSummaryLines, waLink, type WaOrderSection } from '../../lib/whatsapp';
@@ -88,6 +89,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = false, onEditOrder }: OrdersProps) {
   const storeId = Number(store.id);
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<OrderStatus | 'ALL'>(initialStatus);
@@ -246,12 +248,43 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
             Manage and track all customer orders
           </p>
         </div>
-        <Button variant="primary" onClick={() => onNavigate('orders-add')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {isDesktop ? (
+          <Button variant="primary" onClick={() => onNavigate('orders-add')}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={16} />
+              Add Order
+            </div>
+          </Button>
+        ) : (
+          /* Mobile: compact "+ Add" pill, mirroring the top-bar buttons' responsive
+             collapse. aria-label carries the full action since the label is shortened. */
+          <button
+            onClick={() => onNavigate('orders-add')}
+            aria-label="Add order"
+            title="Add order"
+            style={{
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'var(--primary-solid)',
+              color: 'var(--text-on-dark)',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--primary-solid-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--primary-solid)'; }}
+          >
             <Plus size={16} />
-            Add Order
-          </div>
-        </Button>
+            Add
+          </button>
+        )}
       </div>
 
       {/* Search + filters */}
