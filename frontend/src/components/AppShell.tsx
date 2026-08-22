@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Menu, X, Eye, Link2 } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -59,6 +59,58 @@ export function AppShell({
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
+
+  // --- Swipe to open/close the mobile drawer -------------------------------
+  // A right-swipe that starts inside the content (not the extreme left edge)
+  // opens the drawer; a left-swipe closes it. We reserve the leftmost EDGE_ZONE
+  // for iOS Safari's native back gesture (which we can't reliably suppress) so
+  // back-navigation keeps working. Listeners are attached natively to `document`
+  // (not via React's synthetic delegation) and never preventDefault, so vertical
+  // scrolling and sticky headers are untouched.
+  const swipe = useRef<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false });
+  const menuOpenRef = useRef(isMobileMenuOpen);
+  useEffect(() => { menuOpenRef.current = isMobileMenuOpen; }, [isMobileMenuOpen]);
+
+  useEffect(() => {
+    if (isDesktop) return; // no drawer on desktop
+    const EDGE_ZONE = 28; // px from the left edge reserved for iOS native back
+    const H_THRESHOLD = 60; // min horizontal travel to trigger
+    // Ignore swipes that begin inside a horizontally-scrollable region.
+    const inHScroller = (target: EventTarget | null) => {
+      let el = target as HTMLElement | null;
+      while (el && el !== document.body) {
+        if (el.scrollWidth > el.clientWidth + 2) {
+          const ox = getComputedStyle(el).overflowX;
+          if (ox === 'auto' || ox === 'scroll') return true;
+        }
+        el = el.parentElement;
+      }
+      return false;
+    };
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || inHScroller(e.target)) { swipe.current.active = false; return; }
+      const t = e.touches[0];
+      swipe.current = { x: t.clientX, y: t.clientY, active: true };
+    };
+    const onEnd = (e: TouchEvent) => {
+      const s = swipe.current;
+      const wasActive = s.active; // capture before reset - s aliases swipe.current
+      swipe.current.active = false;
+      if (!wasActive) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      const horizontal = Math.abs(dx) > Math.abs(dy); // ignore vertical scrolls
+      if (!menuOpenRef.current && horizontal && dx > H_THRESHOLD && s.x > EDGE_ZONE) setIsMobileMenuOpen(true);
+      else if (menuOpenRef.current && horizontal && dx < -H_THRESHOLD) setIsMobileMenuOpen(false);
+    };
+    document.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchend', onEnd);
+    };
+  }, [isDesktop]);
 
   const openStorePreview = () => {
     const s = stores.find((x) => x.id === activeStoreId);
@@ -126,11 +178,13 @@ export function AppShell({
         />
       )}
 
-      {/* Mobile Sidebar Overlay */}
-      {!isDesktop && isMobileMenuOpen && (
+      {/* Mobile Sidebar Overlay. Kept mounted on mobile so it can slide in/out;
+          the backdrop fades and the drawer translates based on isMobileMenuOpen. */}
+      {!isDesktop && (
         <>
           <div
             onClick={toggleMobileMenu}
+            aria-hidden={!isMobileMenuOpen}
             style={{
               position: 'fixed',
               top: 0,
@@ -139,6 +193,9 @@ export function AppShell({
               bottom: 0,
               background: 'rgba(0, 0, 0, 0.5)',
               zIndex: 40,
+              opacity: isMobileMenuOpen ? 1 : 0,
+              pointerEvents: isMobileMenuOpen ? 'auto' : 'none',
+              transition: 'opacity 0.25s ease',
             }}
           />
           <div
@@ -148,6 +205,9 @@ export function AppShell({
               left: 0,
               bottom: 0,
               zIndex: 50,
+              transform: isMobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)',
+              transition: 'transform 0.25s ease',
+              willChange: 'transform',
             }}
           >
             <Sidebar
