@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Package, ShoppingBag, Plus, MessageCircle, MapPin, Clock } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Package, ShoppingBag, Plus, MessageCircle, MapPin, Clock, Search, X } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import type { ProductResponse } from '../../lib/api';
@@ -102,10 +102,26 @@ export function StorefrontView({
   }, [products]);
 
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  // Focus the field the moment the search input expands.
+  useEffect(() => { if (searchOpen) searchInputRef.current?.focus(); }, [searchOpen]);
 
-  const visible = activeCategory === ALL
-    ? products
-    : products.filter((p) => p.categoryName === activeCategory);
+  // Category chip AND text search combine (both must match). Search is
+  // case-insensitive over name, description, and category name - never price.
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products.filter((p) => {
+      if (activeCategory !== ALL && p.categoryName !== activeCategory) return false;
+      if (!q) return true;
+      return [p.name, p.description, p.categoryName]
+        .filter(Boolean)
+        .some((field) => (field as string).toLowerCase().includes(q));
+    });
+  }, [products, activeCategory, search]);
+
+  const filtering = search.trim() !== '' || activeCategory !== ALL;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: '#F3F4F6' }}>
@@ -168,27 +184,66 @@ export function StorefrontView({
         </button>
       )}
 
-      {/* Category chips (selected = brand-black) - pinned so they stay reachable
-          while scrolling a long product list. */}
-      {categories.length > 0 && (
-        <div style={{ position: 'sticky', top: 0, zIndex: 15, display: 'flex', gap: '8px', padding: '12px', overflowX: 'auto', background: 'white', borderBottom: '1px solid var(--border-subtle)' }}>
-          {[{ key: ALL, label: 'All' }, ...categories.map((c) => ({ key: c, label: c }))].map((chip) => {
-            const on = activeCategory === chip.key;
-            return (
+      {/* Sticky filter row: category chips + a search icon that expands, in place,
+          into a full-width search field (chips hidden while it's open). One compact
+          row either way, pinned so the customer can filter while scrolling. */}
+      {products.length > 0 && (
+        <div style={{ position: 'sticky', top: 0, zIndex: 15, background: 'white', borderBottom: '1px solid var(--border-subtle)', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {searchOpen ? (
+            <>
+              <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                <input
+                  ref={searchInputRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search products"
+                  aria-label="Search products"
+                  style={{
+                    width: '100%', padding: '9px 12px 9px 36px', borderRadius: '999px',
+                    border: '1px solid var(--border-subtle)', background: '#F3F4F6',
+                    fontSize: '14px', outline: 'none', color: 'var(--text-primary)',
+                  }}
+                />
+              </div>
               <button
-                key={chip.key}
-                onClick={() => setActiveCategory(chip.key)}
-                style={{
-                  flexShrink: 0, padding: '6px 14px', borderRadius: '999px', cursor: 'pointer',
-                  fontSize: '12.5px', fontWeight: on ? 600 : 500,
-                  border: on ? `1px solid ${BRAND}` : '1px solid var(--border-subtle)',
-                  background: on ? BRAND : 'white', color: on ? 'white' : 'var(--text-secondary)',
-                }}
+                aria-label="Close search"
+                onClick={() => { setSearchOpen(false); setSearch(''); }}
+                style={{ flexShrink: 0, width: '34px', height: '34px', borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
-                {chip.label}
+                <X size={18} />
               </button>
-            );
-          })}
+            </>
+          ) : (
+            <>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: '8px', overflowX: 'auto' }}>
+                {categories.length > 0 && [{ key: ALL, label: 'All' }, ...categories.map((c) => ({ key: c, label: c }))].map((chip) => {
+                  const on = activeCategory === chip.key;
+                  return (
+                    <button
+                      key={chip.key}
+                      onClick={() => setActiveCategory(chip.key)}
+                      style={{
+                        flexShrink: 0, padding: '6px 14px', borderRadius: '999px', cursor: 'pointer',
+                        fontSize: '12.5px', fontWeight: on ? 600 : 500,
+                        border: on ? `1px solid ${BRAND}` : '1px solid var(--border-subtle)',
+                        background: on ? BRAND : 'white', color: on ? 'white' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {chip.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                aria-label="Search products"
+                onClick={() => setSearchOpen(true)}
+                style={{ flexShrink: 0, width: '34px', height: '34px', borderRadius: '50%', border: '1px solid var(--border-subtle)', background: 'white', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Search size={18} />
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -197,7 +252,7 @@ export function StorefrontView({
         {visible.length === 0 ? (
           <div style={{ padding: '48px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
             <Package size={22} style={{ marginBottom: '8px' }} />
-            <div>No products yet.</div>
+            <div>{filtering ? 'No products match.' : 'No products yet.'}</div>
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
