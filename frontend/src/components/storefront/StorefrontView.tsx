@@ -42,6 +42,18 @@ const plusButtonStyle = (enabled: boolean): React.CSSProperties => ({
   display: 'flex', alignItems: 'center', justifyContent: 'center',
 });
 
+/** The floating brand add/options control on a grid card's photo: a circle for
+ *  "+"/add, a pill when it shows a modifier count. Carries a shadow so it reads
+ *  against any photo. */
+const floatBtnStyle = (enabled: boolean, pill: boolean): React.CSSProperties => ({
+  height: '34px', minWidth: '34px', width: pill ? undefined : '34px',
+  padding: pill ? '0 10px' : '0', borderRadius: pill ? '999px' : '50%', border: 'none',
+  background: enabled ? BRAND : '#9CA3AF', color: 'white',
+  cursor: enabled ? 'pointer' : 'not-allowed',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.25)', fontSize: '14px', fontWeight: 700, lineHeight: 1,
+});
+
 /**
  * The public shop view - store header, category filter, product list. Purely
  * presentational and width-fluid, so it renders identically full-page and inside
@@ -97,6 +109,7 @@ export function StorefrontView({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: '#F3F4F6' }}>
+      <style>{`@media (max-width: 360px) { .shop-card-desc { display: none; } }`}</style>
       {/* Header (theme colour) */}
       <div style={{ background: headerColor, color: 'white', padding: '24px 16px', textAlign: 'center' }}>
         <div
@@ -187,7 +200,8 @@ export function StorefrontView({
             <div>No products yet.</div>
           </div>
         ) : (
-          visible.map((p) => {
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+            {visible.map((p) => {
             const orderable = isOrderable(p);
             const inCart = quantities[p.id] ?? 0;
             // A product with ANY modifier group can't be blind quick-added - its "+"
@@ -203,24 +217,56 @@ export function StorefrontView({
                 key={p.id}
                 onClick={() => onProductClick?.(p.id)}
                 style={{
-                  display: 'flex', gap: '12px', padding: '10px', background: 'white',
-                  borderRadius: '12px', border: '1px solid var(--border-subtle)',
-                  cursor: onProductClick ? 'pointer' : 'default', alignItems: 'center',
+                  background: 'white', borderRadius: '12px', border: '1px solid var(--border-subtle)',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden', minWidth: 0,
+                  cursor: onProductClick ? 'pointer' : 'default',
+                  display: 'flex', flexDirection: 'column',
                 }}
               >
-                <div style={{ width: '64px', height: '64px', borderRadius: '8px', flexShrink: 0, overflow: 'hidden', background: '#E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {/* Square photo with the floating add / options control at its corner. */}
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '1', background: '#E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   {p.photoUrl
                     ? <img src={p.photoUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <Package size={20} style={{ color: '#9CA3AF' }} />}
+                    : <Package size={28} style={{ color: '#9CA3AF' }} />}
+
+                  {/* Products with options: opens the PDP/decision sheet, showing the total
+                      already in the cart (or "+"). Plain products: "+" quick-add until in
+                      cart, then a stepper. */}
+                  <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: '8px', bottom: '8px' }}>
+                    {hasModifiers ? (
+                      <button
+                        aria-label={modifierTotal > 0 ? `${p.name}, ${modifierTotal} in cart, choose options` : `Choose options for ${p.name}`}
+                        disabled={!orderable || !onProductClick}
+                        onClick={() => onProductClick?.(p.id)}
+                        style={floatBtnStyle(orderable && !!onProductClick, modifierTotal > 0)}
+                      >
+                        {modifierTotal > 0 ? modifierTotal : <Plus size={18} />}
+                      </button>
+                    ) : inCart > 0 && onSetQuantity ? (
+                      <div style={{ background: 'white', borderRadius: '999px', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>
+                        <QuantityStepper quantity={inCart} onChange={(q) => onSetQuantity(p.id, q)} min={0} size="sm" />
+                      </div>
+                    ) : (
+                      <button
+                        aria-label={`Add ${p.name}`}
+                        disabled={!orderable || !onAddToCart}
+                        onClick={() => onAddToCart?.(p.id)}
+                        style={floatBtnStyle(orderable && !!onAddToCart, false)}
+                      >
+                        <Plus size={18} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{p.name}</div>
+                {/* Name, description, price + badges - stacked below the photo. */}
+                <div style={{ padding: '8px 10px 10px', minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>{p.name}</div>
                   {p.description && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</div>
+                    <div className="shop-card-desc" style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>{p.description}</div>
                   )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{formatMoney(p.price, currency)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{formatMoney(p.price, currency)}</span>
                     {p.preOrder && <span style={{ fontSize: '9px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', padding: '2px 6px', borderRadius: '4px' }}>Pre-order</span>}
                     {!orderable && <span style={{ fontSize: '9px', fontWeight: 600, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: '4px' }}>Sold Out</span>}
                   </div>
@@ -228,40 +274,10 @@ export function StorefrontView({
                     <div style={{ fontSize: '10px', color: '#92400E', marginTop: '3px' }}>Ready {readyLine}</div>
                   )}
                 </div>
-
-                {/* Products with options: a button that opens the PDP/decision sheet.
-                    It shows the total already in the cart (across all option sets), or
-                    "+" when none. Plain products: "+" quick-add until in cart, then a stepper. */}
-                <div onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
-                  {hasModifiers ? (
-                    <button
-                      aria-label={modifierTotal > 0 ? `${p.name}, ${modifierTotal} in cart, choose options` : `Choose options for ${p.name}`}
-                      disabled={!orderable || !onProductClick}
-                      onClick={() => onProductClick?.(p.id)}
-                      style={plusButtonStyle(orderable && !!onProductClick)}
-                    >
-                      {modifierTotal > 0 ? (
-                        <span style={{ fontSize: '14px', fontWeight: 700, lineHeight: 1, padding: '0 4px' }}>{modifierTotal}</span>
-                      ) : (
-                        <Plus size={18} />
-                      )}
-                    </button>
-                  ) : inCart > 0 && onSetQuantity ? (
-                    <QuantityStepper quantity={inCart} onChange={(q) => onSetQuantity(p.id, q)} min={0} size="sm" />
-                  ) : (
-                    <button
-                      aria-label={`Add ${p.name}`}
-                      disabled={!orderable || !onAddToCart}
-                      onClick={() => onAddToCart?.(p.id)}
-                      style={plusButtonStyle(orderable && !!onAddToCart)}
-                    >
-                      <Plus size={18} />
-                    </button>
-                  )}
-                </div>
               </div>
             );
-          })
+            })}
+          </div>
         )}
 
         {!preview && onTrackOrder && (
