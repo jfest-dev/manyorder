@@ -6,11 +6,15 @@ import java.time.LocalTime;
 
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 /** PATCH semantics: null fields are left unchanged. */
 public class UpdateProductRequest {
 
+    @Size(max = 255, message = "Name must be 255 characters or fewer")
     private String name;
+
+    @Size(max = 5000, message = "Description must be 5000 characters or fewer")
     private String description;
 
     @Positive
@@ -22,6 +26,7 @@ public class UpdateProductRequest {
     @PositiveOrZero
     private Integer stock;
 
+    @Size(max = 255, message = "SKU must be 255 characters or fewer")
     private String sku;
 
     /** Empty string clears the photo (and deletes the old file); null leaves it. */
@@ -34,6 +39,8 @@ public class UpdateProductRequest {
     private LocalDate preOrderReadyDate;
     private LocalTime preOrderReadyTimeStart;
     private LocalTime preOrderReadyTimeEnd;
+
+    @Size(max = 255, message = "Pre-order note must be 255 characters or fewer")
     private String preOrderNote;
 
     /** Null = leave the product's modifiers unchanged; non-null = replace them wholesale. */

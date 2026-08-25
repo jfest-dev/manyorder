@@ -35,9 +35,11 @@ public class Product {
     @JoinColumn(name = "merchant_id", nullable = false)
     private Merchant merchant;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 255)
     private String name;
 
+    /** Long-form menu description; stored as TEXT so it is not capped at 255. */
+    @Column(columnDefinition = "text")
     private String description;
 
     @Column(nullable = false)
@@ -60,6 +62,7 @@ public class Product {
     private Integer displayOrder = 0;
 
     /** Stock-keeping unit — free text, not enforced unique. */
+    @Column(length = 255)
     private String sku;
 
     /** Absolute product photo URL on the image host. Null = no photo. */

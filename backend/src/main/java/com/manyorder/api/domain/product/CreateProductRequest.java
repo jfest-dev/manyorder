@@ -8,12 +8,15 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 public class CreateProductRequest {
 
     @NotBlank
+    @Size(max = 255, message = "Name must be 255 characters or fewer")
     private String name;
 
+    @Size(max = 5000, message = "Description must be 5000 characters or fewer")
     private String description;
 
     @NotNull
@@ -27,6 +30,7 @@ public class CreateProductRequest {
     @PositiveOrZero
     private Integer stock;
 
+    @Size(max = 255, message = "SKU must be 255 characters or fewer")
     private String sku;
 
     /** Absolute photo URL from the product-photo upload endpoint; blank = none. */
@@ -36,6 +40,8 @@ public class CreateProductRequest {
     private LocalDate preOrderReadyDate;
     private LocalTime preOrderReadyTimeStart;
     private LocalTime preOrderReadyTimeEnd;
+
+    @Size(max = 255, message = "Pre-order note must be 255 characters or fewer")
     private String preOrderNote;
 
     @jakarta.validation.Valid

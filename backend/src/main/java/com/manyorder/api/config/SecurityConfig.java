@@ -69,6 +69,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/public/**").permitAll()
+                        // The container's internal ERROR dispatch re-enters the filter
+                        // chain to render /error, but JwtFilter (a OncePerRequestFilter)
+                        // is skipped on error dispatches, so no auth is present. Without
+                        // permitAll here, every unhandled server error on a secured
+                        // endpoint is masked as an empty-body 401 instead of its true
+                        // status. Boot's default error body carries no exception detail.
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/webjars/**")
                         .permitAll()
                         .requestMatchers("/admin/**").hasRole("PLATFORM_ADMIN")
