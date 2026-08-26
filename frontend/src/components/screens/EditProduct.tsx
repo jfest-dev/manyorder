@@ -286,8 +286,8 @@ export function EditProduct({
                 {photoError && <p className="text-xs" style={{ color: 'var(--error-color)', marginTop: '6px' }}>{photoError}</p>}
               </div>
 
-              <FieldInput label="Product Name" placeholder="Wireless Headphones" value={name} onChange={setName} required />
-              <FieldInput label="Description" placeholder="Short description" value={description} onChange={setDescription} helperText="Brief description or variant info" />
+              <FieldInput label="Product Name" placeholder="Wireless Headphones" value={name} onChange={setName} maxLength={255} required />
+              <FieldInput label="Description" placeholder="Short description" value={description} onChange={setDescription} helperText="Brief description or variant info" maxLength={5000} />
               <CategorySelect
                 storeId={storeId}
                 value={categoryId}
@@ -300,7 +300,7 @@ export function EditProduct({
                 <FieldInput label="Stock Quantity" placeholder="0" type="number" value={stock} onChange={setStock} helperText="Available inventory" />
               </div>
 
-              <FieldInput label="SKU" placeholder="e.g. HDPH-001" value={sku} onChange={setSku} helperText="Optional stock-keeping unit" />
+              <FieldInput label="SKU" placeholder="e.g. HDPH-001" value={sku} onChange={setSku} helperText="Optional stock-keeping unit" maxLength={255} />
 
               {/* Status */}
               <div>

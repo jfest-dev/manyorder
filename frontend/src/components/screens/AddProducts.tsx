@@ -251,8 +251,8 @@ export function AddProducts({
                       <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px' }}>{IMAGE_RULE_TEXT}</p>
                     </div>
 
-                    <FieldInput label="Product Name" placeholder="Iced White" value={product.name} onChange={(v) => update(product.id, 'name', v)} maxLength={60} error={errors[product.id]?.name} />
-                    <FieldInput label="Description" placeholder="250ml - Signature" value={product.description} onChange={(v) => update(product.id, 'description', v)} helperText="Brief description or variant info" maxLength={100} multiline />
+                    <FieldInput label="Product Name" placeholder="Iced White" value={product.name} onChange={(v) => update(product.id, 'name', v)} maxLength={255} error={errors[product.id]?.name} />
+                    <FieldInput label="Description" placeholder="250ml - Signature" value={product.description} onChange={(v) => update(product.id, 'description', v)} helperText="Brief description or variant info" maxLength={5000} multiline />
                     <CategorySelect
                       storeId={storeId}
                       value={product.categoryId}
@@ -264,7 +264,7 @@ export function AddProducts({
                       <FieldInput label="Stock Quantity" placeholder="0" type="number" min={0} step={1} value={product.quantity} onChange={(v) => update(product.id, 'quantity', v)} helperText="Available inventory" error={errors[product.id]?.quantity} />
                     </div>
 
-                    <FieldInput label="SKU" placeholder="e.g. ICW-001" value={product.sku} onChange={(v) => update(product.id, 'sku', v)} helperText="Optional stock-keeping unit" />
+                    <FieldInput label="SKU" placeholder="e.g. ICW-001" value={product.sku} onChange={(v) => update(product.id, 'sku', v)} helperText="Optional stock-keeping unit" maxLength={255} />
 
                     {/* Pre-order */}
                     <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
