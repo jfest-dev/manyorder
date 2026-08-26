@@ -209,11 +209,11 @@ export function EditProduct({
   };
 
   const handleDelete = async () => {
-    if (!confirm('Hide this product from your store? You can re-add it later.')) return;
+    if (!confirm('Delete this product permanently? This cannot be undone. Past orders keep their record.')) return;
     setSaving(true);
     try {
-      await productsApi.deactivate(storeId, productId);
-      sessionStorage.removeItem(draftKey); // product hidden - drop the draft
+      await productsApi.delete(storeId, productId);
+      sessionStorage.removeItem(draftKey); // product deleted - drop the draft
       backToList();
     } catch (e: any) {
       setError(e instanceof ApiError ? e.message : 'Could not delete product');

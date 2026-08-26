@@ -285,8 +285,8 @@ public class OrderService {
         List<OrderItemResponse> items = orderItemRepository.findByOrder(order)
                 .stream()
                 .map(item -> new OrderItemResponse(
-                        item.getProduct().getId(),
-                        item.getProduct().getName(),
+                        item.getProduct() != null ? item.getProduct().getId() : null,
+                        item.getProductName(), // snapshot: correct even after the product is deleted
                         item.getQuantity(),
                         item.getPrice(),
                         item.getUnitPrice(),

@@ -515,6 +515,11 @@ export const productsApi = {
   deactivate: (storeId: number, productId: number) =>
     request<ProductResponse>(`/merchant/stores/${storeId}/products/${productId}/deactivate`, { method: 'PATCH' }),
 
+  /** Permanently delete a product. Order history is preserved server-side via a
+   *  name/price snapshot on each order line. Returns 204. */
+  delete: (storeId: number, productId: number) =>
+    request<void>(`/merchant/stores/${storeId}/products/${productId}`, { method: 'DELETE' }),
+
   /** Persist a new product order (full list of ids, top to bottom). */
   reorder: (storeId: number, productIds: number[]) =>
     request<ProductResponse[]>(`/merchant/stores/${storeId}/products/reorder`, {

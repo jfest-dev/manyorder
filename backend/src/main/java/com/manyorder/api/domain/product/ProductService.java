@@ -276,6 +276,23 @@ public class ProductService {
         return toResponse(productRepository.save(product));
     }
 
+    /**
+     * Permanently delete a product. Past order lines are detached (their name and
+     * price are snapshotted on the line, so order history survives); the product
+     * and its owned modifier groups are removed; and the hosted photo is deleted
+     * so it is not orphaned.
+     */
+    @Transactional
+    public void deleteProduct(Merchant merchant, Long productId) {
+        Product product = requireStoreProduct(merchant, productId);
+        String orphanedPhoto = product.getPhotoUrl();
+        orderItemRepository.detachProduct(product); // null out product_id on any order lines
+        productRepository.delete(product);          // cascades its modifier groups/options
+        if (orphanedPhoto != null && !orphanedPhoto.isBlank()) {
+            imageService.deleteByUrl(orphanedPhoto);
+        }
+    }
+
     /** Resolve a product owned by this store, or 404. Used by the photo endpoint. */
     public Product requireOwnedProduct(Merchant merchant, Long productId) {
         return requireStoreProduct(merchant, productId);

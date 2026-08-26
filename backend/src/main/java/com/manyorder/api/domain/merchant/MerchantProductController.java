@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -111,6 +112,18 @@ public class MerchantProductController {
         User user = currentUserService.require(authentication);
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
         return productService.deactivateProduct(merchant, productId);
+    }
+
+    /** Permanently delete a product (owner only). Order history is preserved via
+     *  the name/price snapshot on each order line. */
+    @DeleteMapping("/{productId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteProduct(@PathVariable Long storeId,
+                              @PathVariable Long productId,
+                              Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+        productService.deleteProduct(merchant, productId);
     }
 
     /**

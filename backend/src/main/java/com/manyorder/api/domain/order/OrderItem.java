@@ -30,9 +30,17 @@ public class OrderItem {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id", nullable = false)
+    /** The ordered product. Nullable: it is set to null when the product is
+     *  permanently deleted, so past orders survive — {@link #productName} keeps
+     *  the label and {@link #price} the amount charged. */
+    @ManyToOne(optional = true, fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id")
     private Product product;
+
+    /** Product name at order time (a snapshot), so order history reads correctly
+     *  even after the product row is deleted. */
+    @Column(nullable = false, length = 255)
+    private String productName;
 
     @Column(nullable = false)
     private Integer quantity;
@@ -56,9 +64,15 @@ public class OrderItem {
     public OrderItem(Order order, Product product, Integer quantity, BigDecimal price) {
         this.order = order;
         this.product = product;
+        this.productName = product.getName(); // snapshot, survives product deletion
         this.quantity = quantity;
         this.price = price;
     }
+
+    /** Cleared when the referenced product is permanently deleted. */
+    public void detachProduct() { this.product = null; }
+
+    public String getProductName() { return productName; }
 
     public void addModifier(OrderItemModifier modifier) { this.modifiers.add(modifier); }
 

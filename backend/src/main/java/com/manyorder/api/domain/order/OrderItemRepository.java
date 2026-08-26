@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,6 +14,14 @@ import com.manyorder.api.domain.product.Product;
 public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
     List<OrderItem> findByOrder(Order order);
+
+    /**
+     * Null out the product link on every order line for a product being deleted,
+     * so order history survives — the line keeps its snapshotted name and price.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE OrderItem oi SET oi.product = null WHERE oi.product = :product")
+    int detachProduct(@Param("product") Product product);
 
     /**
      * Units sold per product for a store: total quantity across the given order

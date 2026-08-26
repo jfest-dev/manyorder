@@ -233,7 +233,7 @@ public class GuestCheckoutController {
                                 m.getGroupName(), m.getOptionName(), m.getPriceDelta()))
                         .toList();
                 items.add(new GuestCheckoutResponse.ItemSummary(
-                        it.getProduct().getName(), it.getQuantity(), it.getUnitPrice(),
+                        it.getProductName(), it.getQuantity(), it.getUnitPrice(),
                         it.getLineSubtotal(), mods, it.getNotes()));
             }
             allItems.addAll(items);
@@ -263,7 +263,8 @@ public class GuestCheckoutController {
     /** An order is a pre-order order when all its items are pre-order products. */
     private boolean isPreorderOrder(Order order) {
         List<OrderItem> items = orderItemRepository.findByOrder(order);
-        return !items.isEmpty() && items.stream().allMatch(it -> it.getProduct().isPreOrder());
+        // A deleted product (null) can't be confirmed pre-order, so it fails the all-match.
+        return !items.isEmpty() && items.stream().allMatch(it -> it.getProduct() != null && it.getProduct().isPreOrder());
     }
 
     private static BigDecimal sumLines(List<Line> lines) {
