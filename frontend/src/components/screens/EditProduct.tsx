@@ -375,7 +375,7 @@ export function EditProduct({
                 <div style={{ padding: '10px', background: '#F9FAFB', borderRadius: '6px', display: 'flex', gap: '10px', alignItems: 'center' }}>
                   {shownPhoto && <img src={shownPhoto} alt={name} style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827', marginBottom: '2px' }}>{name || 'Product Name'}</div>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827', marginBottom: '2px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{name || 'Product Name'}</div>
                     <div style={{ fontSize: '10px', color: '#6B7280', marginBottom: '4px' }}>{description || 'No description'}</div>
                     {categoryName && <div style={{ display: 'inline-block', padding: '2px 6px', background: '#E5E7EB', borderRadius: '3px', fontSize: '9px', color: '#4B5563', fontWeight: 500 }}>{categoryName}</div>}
                   </div>

@@ -65,18 +65,21 @@ export function AddProducts({
   onNavigate,
   onFinish,
 }: AddProductsProps) {
-  // Draft persistence: in-progress rows (text/schedule fields; not photos, which
-  // are File objects) survive a refresh / accidental nav, cleared when the flow
-  // is finished. `saved` is persisted too so already-created rows aren't re-added.
-  const draftKey = `manyorder_adddraft_${storeId}`;
-  const readDraft = (): { products?: Product[]; saved?: Record<string, boolean> } | null => {
+  // Draft persistence: only IN-PROGRESS (unsaved) rows survive a refresh /
+  // accidental nav — text/schedule fields, not photos (File objects). Once a row
+  // is created it is dropped from the draft (see the persist effect below), so a
+  // saved product never resurrects as a stale, disabled "Added" row on the next
+  // visit. `saved` is session-only: it is neither persisted nor restored. The
+  // key is versioned so older drafts (which stored saved rows) are ignored.
+  const draftKey = `manyorder_adddraft_v2_${storeId}`;
+  const readDraft = (): { products?: Product[] } | null => {
     try { const raw = sessionStorage.getItem(draftKey); return raw ? JSON.parse(raw) : null; } catch { return null; }
   };
   const [products, setProducts] = useState<Product[]>(() => {
     const d = readDraft();
     return d?.products && d.products.length > 0 ? d.products : [blank('1')];
   });
-  const [saved, setSaved] = useState<Record<string, boolean>>(() => readDraft()?.saved ?? {}); // form id -> created/added
+  const [saved, setSaved] = useState<Record<string, boolean>>({}); // form id -> created this session (not persisted)
   const [savingId, setSavingId] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, FieldErrors>>({});
   const [formError, setFormError] = useState<Record<string, string>>({});
@@ -182,11 +185,16 @@ export function AddProducts({
     }
   };
 
-  // Persist the draft (rows minus their File-backed photo fields) + saved map.
+  // Persist only in-progress (unsaved) rows, minus their File-backed photo fields.
+  // Already-created rows are excluded so a saved product never comes back as a
+  // stale draft; when nothing is in progress, the draft is cleared entirely.
   useEffect(() => {
     try {
-      const persistable = products.map(({ photoFile, photoPreview, ...rest }) => rest);
-      sessionStorage.setItem(draftKey, JSON.stringify({ products: persistable, saved }));
+      const persistable = products
+        .filter((p) => !saved[p.id])
+        .map(({ photoFile, photoPreview, ...rest }) => rest);
+      if (persistable.length === 0) sessionStorage.removeItem(draftKey);
+      else sessionStorage.setItem(draftKey, JSON.stringify({ products: persistable }));
     } catch { /* storage full - draft is best-effort */ }
   }, [draftKey, products, saved]);
 
@@ -357,7 +365,7 @@ export function AddProducts({
                         {p.photoPreview ? <img src={p.photoPreview} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Package size={16} style={{ color: '#9CA3AF' }} />}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 500, color: p.name.trim() ? '#111827' : '#9CA3AF' }}>{p.name.trim() || 'New product'}</div>
+                        <div style={{ fontSize: '13px', fontWeight: 500, color: p.name.trim() ? '#111827' : '#9CA3AF', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{p.name.trim() || 'New product'}</div>
                         {p.preOrder && (() => { const r = formatPreorderReady(p.readyDate, p.readyTimeStart, p.readyTimeEnd); return <div style={{ fontSize: '9px', color: '#92400E' }}>Pre-order{r ? ` · ${r}` : ''}</div>; })()}
                       </div>
                       <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827', flexShrink: 0 }}>{formatMoney(p.price ?? 0, currency)}</div>
