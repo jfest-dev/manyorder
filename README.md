@@ -60,13 +60,16 @@ account:
 Each store has categories, products (photos, descriptions, add-on modifiers, and
 a mix of in-stock, sold-out, and pre-order items), and a few sample orders.
 
-Sign in to the dashboard at http://localhost:3000:
+It also seeds three sign-in accounts that together demonstrate the app's
+role-based access control. All use the password `password123`:
 
-| Role | Email | Password |
+| Account | What it can do | Email |
 |---|---|---|
-| Merchant (owns all three stores) | hello@manyorder.com | password123 |
-| Staff (Kiri Brew) | staff@manyorder.com | password123 |
-| Platform admin | admin@manyorder.com | password123 |
+| Merchant | Owns and fully manages all three stores | hello@manyorder.com |
+| Staff | Works a single store's orders, without owner-level settings | staff@manyorder.com |
+| Platform admin | Cross-store administration | admin@manyorder.com |
+
+Sign in to the dashboard at http://localhost:3000.
 
 ## Tests
 
@@ -77,8 +80,10 @@ cd frontend && npm test
 
 ## Notes
 
-- Never commit `.env` — only `.env.example` belongs in git.
-- `PLATFORM_ADMIN` can't be self-registered. Promote a user directly:
-  `UPDATE users SET role = 'PLATFORM_ADMIN' WHERE email = '...';`
-- Deploying beyond dev? See [`docs/deployment-notes.md`](docs/deployment-notes.md)
-  for a required manual migration.
+Configuration and secrets are read from a `.env` file in each of `backend/` and
+`frontend/`. Copy the committed `.env.example` templates and fill in your own
+values; the real `.env` files stay out of version control.
+
+The platform-admin role cannot be created through sign-up. If you need to grant
+it, or you are deploying against a database that already holds data, see
+[`docs/deployment-notes.md`](docs/deployment-notes.md).

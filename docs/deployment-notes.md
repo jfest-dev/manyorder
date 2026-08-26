@@ -2,7 +2,7 @@
 
 There is no migration tool (Flyway/Liquibase) in this project. A fresh database
 builds its schema from the JPA entity mappings on startup, but an existing
-database is never altered automatically — any schema change must be applied by
+database is never altered automatically, so any schema change must be applied by
 hand before deploying the code that depends on it.
 
 ## Pending manual migrations
@@ -22,3 +22,12 @@ ALTER TABLE order_items ALTER COLUMN product_id DROP NOT NULL;
 
 Fresh databases and the dev database already have this; only existing
 staging/prod databases need it.
+
+## Granting the platform-admin role
+
+The `PLATFORM_ADMIN` role cannot be assigned through sign-up. Grant it directly
+in the database:
+
+```sql
+UPDATE users SET role = 'PLATFORM_ADMIN' WHERE email = '...';
+```
