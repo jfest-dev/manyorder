@@ -316,7 +316,7 @@ export function StorefrontView({
 
                 {/* Name, description, price + badges - stacked below the photo. */}
                 <div style={{ padding: '8px 10px 10px', minWidth: 0 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3 }}>{p.name}</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{p.name}</div>
                   {p.description && (
                     <div className="shop-card-desc" style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>{p.description}</div>
                   )}
