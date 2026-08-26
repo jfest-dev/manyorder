@@ -272,6 +272,13 @@ export function AddProducts({
                       <FieldInput label="Stock Quantity" placeholder="0" type="number" min={0} step={1} value={product.quantity} onChange={(v) => update(product.id, 'quantity', v)} helperText="Available inventory" error={errors[product.id]?.quantity} />
                     </div>
 
+                    {!isSaved && !product.preOrder && product.name.trim() !== '' &&
+                      (product.quantity.trim() === '' || Number(product.quantity) === 0) && (
+                      <p className="text-small" style={{ color: '#92400E', marginTop: '-6px' }}>
+                        0 in stock, so this shows as Out of Stock on your storefront. Save anyway if that's intended.
+                      </p>
+                    )}
+
                     <FieldInput label="SKU" placeholder="e.g. ICW-001" value={product.sku} onChange={(v) => update(product.id, 'sku', v)} helperText="Optional stock-keeping unit" maxLength={255} />
 
                     {/* Pre-order */}
@@ -331,7 +338,7 @@ export function AddProducts({
             ) : (
               savedList.length > 0 && (
                 <Button fullWidth onClick={() => { clearDraft(); onNavigate?.('products-all'); }}>
-                  Done → View products ({savedList.length} added)
+                  Done
                 </Button>
               )
             )}

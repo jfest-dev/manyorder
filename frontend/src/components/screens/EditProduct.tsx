@@ -300,6 +300,12 @@ export function EditProduct({
                 <FieldInput label="Stock Quantity" placeholder="0" type="number" value={stock} onChange={setStock} helperText="Available inventory" />
               </div>
 
+              {!preOrder && (stock.trim() === '' || Number(stock) === 0) && (
+                <p className="text-small" style={{ color: '#92400E', marginTop: '-6px' }}>
+                  0 in stock, so this shows as Out of Stock on your storefront. Save anyway if that's intended.
+                </p>
+              )}
+
               <FieldInput label="SKU" placeholder="e.g. HDPH-001" value={sku} onChange={setSku} helperText="Optional stock-keeping unit" maxLength={255} />
 
               {/* Status */}
