@@ -275,7 +275,7 @@ export function AddProducts({
                     {!isSaved && !product.preOrder && product.name.trim() !== '' &&
                       (product.quantity.trim() === '' || Number(product.quantity) === 0) && (
                       <p className="text-small" style={{ color: '#92400E', marginTop: '-6px' }}>
-                        0 in stock, so this shows as Out of Stock on your storefront. Save anyway if that's intended.
+                        This item will show as Out of Stock until you add inventory.
                       </p>
                     )}
 

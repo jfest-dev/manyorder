@@ -17,9 +17,13 @@ interface ProductsListProps {
 type DisplayStatus = 'active' | 'draft' | 'outofstock' | 'preorder';
 
 function statusOf(p: ProductResponse): DisplayStatus {
+  // Hidden (deactivated) takes precedence: a hidden product reads as "Draft"
+  // even at 0 stock, so a hide/"delete" is visibly reflected instead of being
+  // masked as "Out of Stock".
+  if (!p.isActive) return 'draft';
   if (p.preOrder) return 'preorder';
   if (p.stock === 0) return 'outofstock';
-  return p.isActive ? 'active' : 'draft';
+  return 'active';
 }
 
 const STATUS_COLOR: Record<DisplayStatus, string> = {
