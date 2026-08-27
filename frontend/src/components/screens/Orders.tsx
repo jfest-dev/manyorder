@@ -450,18 +450,12 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                             {o.contactEmail && <div style={{ color: 'var(--text-secondary)' }}>{o.contactEmail}</div>}
                           </>
                         } />
-                        <InfoRow label="Fulfilment" value={
-                          <>
-                            <div>{fulfilmentLabel(o.orderType)}</div>
-                            {o.orderType === 'DELIVERY' && <div style={{ color: 'var(--text-secondary)' }}>{o.deliveryAddress || 'No address given'}</div>}
-                          </>
-                        } />
-                        <InfoRow label="Payment" value={
-                          <>
-                            <div>{o.paymentMethod || '-'}</div>
-                            {o.paymentReference && <div style={{ color: 'var(--text-secondary)' }}>Ref {o.paymentReference}</div>}
-                          </>
-                        } />
+                        {o.orderType === 'DELIVERY' && (
+                          <InfoRow label="Deliver to" value={o.deliveryAddress || 'No address given'} />
+                        )}
+                        {o.paymentReference && (
+                          <InfoRow label="Payment ref" value={o.paymentReference} />
+                        )}
                         {o.notes && <InfoRow label="Notes" value={<span style={{ whiteSpace: 'pre-wrap' }}>{o.notes}</span>} />}
                       </div>
                     </div>
