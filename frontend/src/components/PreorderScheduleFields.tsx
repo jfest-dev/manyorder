@@ -31,6 +31,8 @@ export function PreorderScheduleFields({
   date, onDateChange, timeStart, onTimeStartChange, timeEnd, onTimeEndChange,
 }: PreorderScheduleFieldsProps) {
   const hasTime = !!(timeStart || timeEnd);
+  // Today (local), YYYY-MM-DD — the earliest allowed ready date. Same-day is fine.
+  const today = new Date().toLocaleDateString('en-CA');
   return (
     <div style={{
       background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
@@ -39,7 +41,7 @@ export function PreorderScheduleFields({
     }}>
       <div>
         <label style={fieldLabel}>Ready date</label>
-        <input type="date" value={date} onChange={(e) => onDateChange(e.target.value)} style={dateInput} />
+        <input type="date" min={today} value={date} onChange={(e) => onDateChange(e.target.value)} style={dateInput} />
       </div>
 
       <div>

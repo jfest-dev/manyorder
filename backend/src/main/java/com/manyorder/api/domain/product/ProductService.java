@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import java.time.LocalDate;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -91,6 +93,7 @@ public class ProductService {
         product.setDisplayOrder(nextDisplayOrder(merchant)); // append to the end of the list
         product.setSku(request.getSku());
         product.setPhotoUrl(isBlank(request.getPhotoUrl()) ? null : request.getPhotoUrl());
+        requireValidPreOrderDate(request.isPreOrder(), request.getPreOrderReadyDate());
         product.setPreOrder(request.isPreOrder());
         product.setPreOrderReadyDate(request.getPreOrderReadyDate());
         product.setPreOrderReadyTimeStart(request.getPreOrderReadyTimeStart());
@@ -145,6 +148,7 @@ public class ProductService {
         // all of this untouched.
         if (request.getPreOrder() != null) {
             boolean preOrder = request.getPreOrder();
+            requireValidPreOrderDate(preOrder, request.getPreOrderReadyDate());
             product.setPreOrder(preOrder);
             if (preOrder) {
                 product.setPreOrderReadyDate(request.getPreOrderReadyDate());
@@ -301,6 +305,14 @@ public class ProductService {
     private Product requireStoreProduct(Merchant merchant, Long productId) {
         return productRepository.findByMerchantAndId(merchant, productId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+    }
+
+    /** A pre-order's ready date must be today or later; same-day is allowed. */
+    private void requireValidPreOrderDate(boolean preOrder, LocalDate readyDate) {
+        if (preOrder && readyDate != null && readyDate.isBefore(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Pre-order ready date can't be in the past.");
+        }
     }
 
     /** One past the current highest displayOrder, so a new product appends to the end. */
