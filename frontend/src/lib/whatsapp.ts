@@ -26,6 +26,9 @@ export interface WaCombined {
   deliveryFee: number;
   /** When true the fee is unresolved → the total is shown as an estimate. */
   deliveryFeePending?: boolean;
+  /** Delivery order: show a "Free" delivery-fee line when the fee is 0 (so the
+   *  message matches the panel). Pickup orders leave this unset and omit the line. */
+  isDelivery?: boolean;
   discountAmount: number;
   discountCode?: string | null;
   totalAmount: number;
@@ -57,6 +60,7 @@ export function orderSummaryLines(sections: WaOrderSection[], currency: string, 
   lines.push(`Subtotal: ${formatMoney(combined.subtotal, currency)}`);
   if (combined.deliveryFeePending) lines.push('Delivery fee: To be confirmed');
   else if (combined.deliveryFee > 0) lines.push(`Delivery fee: ${formatMoney(combined.deliveryFee, currency)}`);
+  else if (combined.isDelivery) lines.push('Delivery fee: Free');
   if (combined.discountAmount > 0) {
     lines.push(`Discount (${combined.discountCode}): ${formatMoney(combined.discountAmount, currency)} off`);
   }

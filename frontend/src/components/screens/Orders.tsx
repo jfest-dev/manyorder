@@ -262,6 +262,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
       subtotal: group.reduce((n, o) => n + o.subtotal, 0),
       deliveryFee: group.reduce((n, o) => n + o.deliveryFee, 0),
       deliveryFeePending: group.some((o) => o.deliveryFeePending),
+      isDelivery: order.orderType === 'DELIVERY', // show "Delivery fee: Free" on $0 delivery, matching the panel
       discountAmount: group.reduce((n, o) => n + o.discountAmount, 0),
       discountCode: group.find((o) => o.discountCode)?.discountCode ?? null,
       totalAmount: group.reduce((n, o) => n + o.totalAmount, 0),
