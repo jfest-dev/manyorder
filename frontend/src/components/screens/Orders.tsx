@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Download, Plus, Search, MessageCircle } from 'lucide-react';
+import { ChevronDown, Download, Plus, Search, MessageCircle, Copy, Check } from 'lucide-react';
 import { Button } from '../Button';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ordersApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from '../../lib/api';
@@ -82,8 +82,45 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
       <span className="text-xs" style={{ width: '84px', flexShrink: 0, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.02em', paddingTop: '1px' }}>{label}</span>
-      <div className="text-small" style={{ color: 'var(--text-primary)', minWidth: 0 }}>{value}</div>
+      <div className="text-small" style={{ flex: 1, color: 'var(--text-primary)', minWidth: 0 }}>{value}</div>
     </div>
+  );
+}
+
+/** A tap-to-copy value line: full-width, touch-comfortable target that copies
+ *  `text` to the clipboard and briefly confirms with a check. */
+function CopyValue({ text, muted = false }: { text: string; muted?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard unavailable (older browser / insecure context) */ }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Tap to copy"
+      style={{
+        // flex-start (not center) so the value's first line aligns with the label,
+        // matching the other InfoRows; min-height keeps a comfortable touch target.
+        display: 'flex', alignItems: 'flex-start', gap: '8px', width: '100%', minHeight: '40px',
+        padding: 0, border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer',
+        font: 'inherit', color: muted ? 'var(--text-secondary)' : 'var(--text-primary)',
+      }}
+    >
+      <span style={{ flex: 1, minWidth: 0, wordBreak: 'break-word', lineHeight: 1.5 }}>{text}</span>
+      <span style={{
+        flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: '40px', height: '20px', marginRight: '-8px',
+        color: copied ? '#047857' : 'var(--text-muted)',
+      }}>
+        {copied ? <Check size={16} /> : <Copy size={16} />}
+      </span>
+    </button>
   );
 }
 
@@ -445,13 +482,21 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                       <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '14px', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         <InfoRow label="Contact" value={
                           <>
-                            <div>{o.contactName || o.customerName || '-'}</div>
-                            <div style={{ color: 'var(--text-secondary)' }}>{o.contactPhone || 'No phone'}</div>
-                            {o.contactEmail && <div style={{ color: 'var(--text-secondary)' }}>{o.contactEmail}</div>}
+                            {(o.contactName || o.customerName)
+                              ? <CopyValue text={o.contactName || o.customerName || ''} />
+                              : <div>-</div>}
+                            {o.contactPhone
+                              ? <CopyValue text={o.contactPhone} muted />
+                              : <div style={{ color: 'var(--text-secondary)' }}>No phone</div>}
+                            {o.contactEmail && <CopyValue text={o.contactEmail} muted />}
                           </>
                         } />
                         {o.orderType === 'DELIVERY' && (
-                          <InfoRow label="Deliver to" value={o.deliveryAddress || 'No address given'} />
+                          <InfoRow label="Deliver to" value={
+                            o.deliveryAddress
+                              ? <CopyValue text={o.deliveryAddress} />
+                              : <div style={{ color: 'var(--text-secondary)' }}>No address given</div>
+                          } />
                         )}
                         {o.paymentReference && (
                           <InfoRow label="Payment ref" value={o.paymentReference} />
