@@ -287,7 +287,7 @@ export function EditProduct({
               </div>
 
               <FieldInput label="Product Name" placeholder="Wireless Headphones" value={name} onChange={setName} maxLength={255} required />
-              <FieldInput label="Description" placeholder="Short description" value={description} onChange={setDescription} helperText="Brief description or variant info" maxLength={5000} />
+              <FieldInput label="Description" placeholder="Short description" value={description} onChange={setDescription} helperText="Brief description or variant info" maxLength={5000} multiline />
               <CategorySelect
                 storeId={storeId}
                 value={categoryId}
