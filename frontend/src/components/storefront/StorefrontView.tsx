@@ -145,7 +145,8 @@ export function StorefrontView({
         {store.storeDescription && (
           <p style={{
             fontSize: '13px', opacity: 0.9, marginTop: '6px', maxWidth: '520px', marginInline: 'auto',
-            // Never let a long description overwhelm the header.
+            // Honour line breaks the merchant typed, but never let a long description overwhelm the header.
+            whiteSpace: 'pre-line',
             display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
           }}>
             {store.storeDescription}

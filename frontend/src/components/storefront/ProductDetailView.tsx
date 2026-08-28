@@ -168,7 +168,7 @@ export function ProductDetailView({
         ) : null}
 
         {product.description && (
-          <p style={{ fontSize: '14px', lineHeight: 1.5, color: 'var(--text-secondary)', margin: 0 }}>{product.description}</p>
+          <p style={{ fontSize: '14px', lineHeight: 1.5, color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-line' }}>{product.description}</p>
         )}
 
         {/* Modifier groups */}
