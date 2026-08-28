@@ -4,7 +4,7 @@ import { Button } from '../Button';
 import { Card } from '../Card';
 import { Upload, LogOut, Store, X, Loader2 } from 'lucide-react';
 import { storeInitials } from '../../lib/initials';
-import { styledSelect } from '../../lib/selectStyle';
+import { Select } from '../Select';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 
 interface CreateStoreProps {
@@ -324,17 +324,12 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                   Phone
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
-                  <select
+                  <Select
                     value={countryCode}
-                    onChange={(e) => setCountryCode(e.target.value)}
-                    style={styledSelect}
-                  >
-                    {countryCodes.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setCountryCode}
+                    options={countryCodes}
+                    ariaLabel="Country code"
+                  />
 
                   <input
                     type="tel"

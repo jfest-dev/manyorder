@@ -16,7 +16,7 @@ export const dialogOverlayStyle: CSSProperties = {
 export const dialogCardStyle: CSSProperties = {
   background: 'var(--bg-card)', borderRadius: 'var(--radius-medium)', padding: '20px',
   width: '100%', maxWidth: '380px', border: '1px solid var(--border-strong)',
-  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.18)',
+  boxShadow: 'var(--shadow-overlay)',
 };
 
 const btnBase: CSSProperties = {

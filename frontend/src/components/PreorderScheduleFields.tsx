@@ -1,4 +1,5 @@
 import { TimeField } from './TimeField';
+import { DatePicker } from './DatePicker';
 
 interface PreorderScheduleFieldsProps {
   date: string;
@@ -14,11 +15,6 @@ const fieldLabel: React.CSSProperties = {
 };
 const miniLabel: React.CSSProperties = {
   fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px',
-};
-const dateInput: React.CSSProperties = {
-  width: '100%', height: '40px', padding: '0 12px', border: '1px solid var(--border-strong)',
-  borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px',
-  color: 'var(--text-primary)', outline: 'none', fontFamily: 'inherit',
 };
 
 /**
@@ -41,7 +37,7 @@ export function PreorderScheduleFields({
     }}>
       <div>
         <label style={fieldLabel}>Ready date</label>
-        <input type="date" min={today} value={date} onChange={(e) => onDateChange(e.target.value)} style={dateInput} />
+        <DatePicker value={date} onChange={onDateChange} min={today} ariaLabel="Ready date" />
       </div>
 
       <div>

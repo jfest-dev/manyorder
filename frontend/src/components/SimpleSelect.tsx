@@ -1,4 +1,4 @@
-import { styledSelect } from '../lib/selectStyle';
+import { Select } from './Select';
 
 interface SimpleSelectProps {
   label?: string;
@@ -9,7 +9,7 @@ interface SimpleSelectProps {
   compact?: boolean;
 }
 
-/** Native select styled to match the FieldInput look. */
+/** Label + custom dropdown, matching the FieldInput look. */
 export function SimpleSelect({ label, value, onChange, options, helperText, compact }: SimpleSelectProps) {
   return (
     <div>
@@ -18,16 +18,7 @@ export function SimpleSelect({ label, value, onChange, options, helperText, comp
           {label}
         </label>
       )}
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="text-small"
-        style={{ ...styledSelect, height: compact ? '32px' : '40px' }}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
+      <Select value={value} onChange={onChange} options={options} height={compact ? 32 : 40} ariaLabel={label} />
       {helperText && (
         <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>{helperText}</p>
       )}

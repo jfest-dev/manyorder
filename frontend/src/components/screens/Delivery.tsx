@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Truck, MessageCircle, Check } from 'lucide-react';
 import { Button } from '../Button';
+import { Checkbox } from '../Checkbox';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
 import { storesApi, StoreResponse, ApiError, type FulfilmentMode } from '../../lib/api';
@@ -231,7 +232,7 @@ export function Delivery({ storeId, currency, onSaved }: DeliveryProps) {
                 {showThresholdRow && (
                   <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
                     <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={freeOverEnabled} onChange={(e) => setFreeOverEnabled(e.target.checked)} style={{ marginTop: '3px' }} />
+                      <Checkbox checked={freeOverEnabled} onChange={setFreeOverEnabled} ariaLabel="Free delivery over a spend" style={{ marginTop: '3px' }} />
                       <span>
                         <span className="text-small" style={{ fontWeight: 600, display: 'block', color: 'var(--text-primary)' }}>Free delivery over a spend</span>
                         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>

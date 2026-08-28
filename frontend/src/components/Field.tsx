@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { styledSelect } from '../lib/selectStyle';
+import { Select } from './Select';
 
 interface FieldInputProps {
   label?: string;
@@ -215,19 +215,13 @@ export function FieldSelect({
         </div>
       )}
 
-      <select
+      <Select
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        style={styledSelect}
-      >
-        <option value="">{placeholder}</option>
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+        onChange={onChange}
+        options={options}
+        placeholder={placeholder}
+        ariaLabel={label}
+      />
 
       {helperText && (
         <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>

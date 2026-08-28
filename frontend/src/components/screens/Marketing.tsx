@@ -4,7 +4,8 @@ import { Card } from '../Card';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
-import { styledSelect } from '../../lib/selectStyle';
+import { Select } from '../Select';
+import { DatePicker } from '../DatePicker';
 import { useConfirm } from '../ConfirmDialog';
 
 interface Promotion {
@@ -277,14 +278,15 @@ export function Marketing({ currency = 'sgd' }: MarketingProps = {}) {
               <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
                 Discount Type *
               </label>
-              <select
+              <Select
                 value={newPromo.type}
-                onChange={(e) => setNewPromo({ ...newPromo, type: e.target.value as 'percentage' | 'fixed' })}
-                style={styledSelect}
-              >
-                <option value="percentage">Percentage (%)</option>
-                <option value="fixed">Fixed Amount</option>
-              </select>
+                onChange={(v) => setNewPromo({ ...newPromo, type: v as 'percentage' | 'fixed' })}
+                ariaLabel="Discount type"
+                options={[
+                  { value: 'percentage', label: 'Percentage (%)' },
+                  { value: 'fixed', label: 'Fixed Amount' },
+                ]}
+              />
             </div>
 
             <div>
@@ -396,41 +398,13 @@ export function Marketing({ currency = 'sgd' }: MarketingProps = {}) {
               <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
                 Start Date
               </label>
-              <input
-                type="date"
-                value={newPromo.startDate}
-                onChange={(e) => setNewPromo({ ...newPromo, startDate: e.target.value })}
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  padding: '0 12px',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: 'var(--bg-card)',
-                  fontSize: '13px',
-                  outline: 'none',
-                }}
-              />
+              <DatePicker value={newPromo.startDate} onChange={(v) => setNewPromo({ ...newPromo, startDate: v })} ariaLabel="Start date" />
             </div>
             <div>
               <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
                 End Date
               </label>
-              <input
-                type="date"
-                value={newPromo.endDate}
-                onChange={(e) => setNewPromo({ ...newPromo, endDate: e.target.value })}
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  padding: '0 12px',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: 'var(--bg-card)',
-                  fontSize: '13px',
-                  outline: 'none',
-                }}
-              />
+              <DatePicker value={newPromo.endDate} onChange={(v) => setNewPromo({ ...newPromo, endDate: v })} ariaLabel="End date" />
             </div>
           </div>
 
@@ -472,14 +446,15 @@ export function Marketing({ currency = 'sgd' }: MarketingProps = {}) {
               <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
                 Discount Type *
               </label>
-              <select
+              <Select
                 value={editPromoData.type}
-                onChange={(e) => setEditPromoData({ ...editPromoData, type: e.target.value as 'percentage' | 'fixed' })}
-                style={styledSelect}
-              >
-                <option value="percentage">Percentage (%)</option>
-                <option value="fixed">Fixed Amount</option>
-              </select>
+                onChange={(v) => setEditPromoData({ ...editPromoData, type: v as 'percentage' | 'fixed' })}
+                ariaLabel="Discount type"
+                options={[
+                  { value: 'percentage', label: 'Percentage (%)' },
+                  { value: 'fixed', label: 'Fixed Amount' },
+                ]}
+              />
             </div>
 
             <div>
@@ -591,41 +566,13 @@ export function Marketing({ currency = 'sgd' }: MarketingProps = {}) {
               <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
                 Start Date
               </label>
-              <input
-                type="date"
-                value={editPromoData.startDate}
-                onChange={(e) => setEditPromoData({ ...editPromoData, startDate: e.target.value })}
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  padding: '0 12px',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: 'var(--bg-card)',
-                  fontSize: '13px',
-                  outline: 'none',
-                }}
-              />
+              <DatePicker value={editPromoData.startDate} onChange={(v) => setEditPromoData({ ...editPromoData, startDate: v })} ariaLabel="Start date" />
             </div>
             <div>
               <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
                 End Date
               </label>
-              <input
-                type="date"
-                value={editPromoData.endDate}
-                onChange={(e) => setEditPromoData({ ...editPromoData, endDate: e.target.value })}
-                style={{
-                  width: '100%',
-                  height: '40px',
-                  padding: '0 12px',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: 'var(--bg-card)',
-                  fontSize: '13px',
-                  outline: 'none',
-                }}
-              />
+              <DatePicker value={editPromoData.endDate} onChange={(v) => setEditPromoData({ ...editPromoData, endDate: v })} ariaLabel="End date" />
             </div>
           </div>
 

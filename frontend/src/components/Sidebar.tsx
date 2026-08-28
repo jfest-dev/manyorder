@@ -209,7 +209,7 @@ export function Sidebar({
                   background: 'var(--bg-card)',
                   border: '1px solid var(--border-subtle)',
                   borderRadius: '12px',
-                  boxShadow: '0 8px 24px rgba(15, 23, 42, 0.10)',
+                  boxShadow: 'var(--shadow-overlay)',
                   zIndex: 100,
                   overflow: 'hidden',
                   padding: '6px',

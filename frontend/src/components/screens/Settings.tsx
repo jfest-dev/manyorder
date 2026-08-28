@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Upload, AlertTriangle, X, Loader2 } from 'lucide-react';
 import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
+import { Checkbox } from '../Checkbox';
 import { PasswordField } from '../PasswordField';
 import { accountApi, storesApi, uploadsApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
 import { validatePassword, PASSWORD_RULE_TEXT } from '../../lib/password';
@@ -38,7 +39,7 @@ function Toggle({ title, description, checked, onChange }: {
 }) {
   return (
     <label style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer', padding: '10px 0' }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ marginTop: '3px' }} />
+      <Checkbox checked={checked} onChange={onChange} ariaLabel={title} style={{ marginTop: '3px' }} />
       <span>
         <span className="text-small" style={{ fontWeight: 600, display: 'block' }}>{title}</span>
         <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{description}</span>

@@ -708,7 +708,7 @@ function MerchantApp() {
             position: 'fixed', bottom: '24px', left: '50%', zIndex: 2000,
             transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px',
             background: 'var(--text-primary)', color: 'var(--bg-card)',
-            padding: '10px 16px', borderRadius: '10px', boxShadow: '0 8px 28px rgba(0,0,0,0.20)',
+            padding: '10px 16px', borderRadius: '10px', boxShadow: 'var(--shadow-overlay)',
             fontSize: '13px', fontWeight: 600, animation: 'mo-toast-in 0.18s ease-out',
           }}
         >

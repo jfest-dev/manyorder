@@ -473,6 +473,9 @@
   --radius-field: 8px;
   --radius-pill: 999px;
   --error-color: #dc2626;
+  /* One clean, modern elevation for every floating overlay (dialogs, dropdowns,
+     the store switcher, date picker, toast) - keep them all pointing here. */
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.18);
 }
 
 body {
@@ -660,3 +663,40 @@ body {
   syntax: "*";
   inherits: false
 }
+
+/* ---- Custom form controls (Radix Select / Popover / react-day-picker / checkbox) ---- */
+/* State styling lives here because Radix exposes hover/selected/open as data-attributes. */
+.mo-select-trigger[data-state="open"] { border-color: var(--primary-solid); }
+.mo-select-trigger[data-placeholder] { color: var(--text-muted); }
+.mo-select-trigger:disabled { opacity: 0.55; }
+.mo-select-item[data-highlighted] { background: var(--bg-card-subtle); }
+.mo-select-item[data-state="checked"] { font-weight: 600; }
+.mo-select-item[data-disabled] { opacity: 0.5; pointer-events: none; }
+
+/* Date picker popover + calendar */
+.mo-popover-content {
+  background: var(--bg-card); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-medium); box-shadow: var(--shadow-overlay);
+  padding: 12px; z-index: 1100;
+}
+.mo-daypicker { --rdp-cell-size: 36px; margin: 0; }
+.mo-daypicker .rdp-caption_label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.mo-daypicker .rdp-head_cell { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+.mo-daypicker .rdp-day { font-size: 13px; color: var(--text-primary); border-radius: var(--radius-field); }
+.mo-daypicker .rdp-button:hover:not([disabled]):not(.rdp-day_selected) { background: var(--bg-card-subtle); }
+.mo-daypicker .rdp-day_today:not(.rdp-day_selected) { font-weight: 700; color: var(--primary-solid); }
+.mo-daypicker .rdp-day_selected,
+.mo-daypicker .rdp-day_selected:hover { background: var(--primary-solid); color: var(--text-on-dark); }
+.mo-daypicker .rdp-day_disabled { opacity: 0.35; }
+.mo-daypicker .rdp-nav_button { color: var(--text-secondary); border-radius: var(--radius-field); }
+.mo-daypicker .rdp-nav_button:hover { background: var(--bg-card-subtle); }
+
+/* Custom checkbox */
+.mo-checkbox {
+  width: 18px; height: 18px; flex-shrink: 0; border: 1px solid var(--border-strong);
+  border-radius: 5px; background: var(--bg-card); display: inline-flex; align-items: center;
+  justify-content: center; cursor: pointer; outline: none; transition: background 0.12s, border-color 0.12s;
+}
+.mo-checkbox[data-state="checked"] { background: var(--primary-solid); border-color: var(--primary-solid); color: var(--text-on-dark); }
+.mo-checkbox:focus-visible { box-shadow: 0 0 0 3px var(--bg-card-subtle); }
+.mo-checkbox:disabled { opacity: 0.5; cursor: default; }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
+import { Checkbox } from '../Checkbox';
 import { AuthLayout } from '../auth/AuthLayout';
 import { GoogleSignInButton } from '../auth/GoogleSignInButton';
 import { FieldInput } from '../Field';
@@ -66,7 +67,7 @@ export function SignIn() {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+            <Checkbox checked={remember} onChange={setRemember} ariaLabel="Remember me" />
             Remember me
           </label>
           <button

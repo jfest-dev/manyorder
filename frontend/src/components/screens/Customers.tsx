@@ -3,7 +3,7 @@ import { Card } from '../Card';
 import { Button } from '../Button';
 import { useState } from 'react';
 import { FieldInput } from '../Field';
-import { styledSelect } from '../../lib/selectStyle';
+import { Select } from '../Select';
 
 interface Customer {
   id: string;
@@ -212,31 +212,37 @@ export function Customers() {
               <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
                 Status
               </label>
-              <select
+              <Select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                style={{ ...styledSelect, width: 'auto', height: '36px' }}
-              >
-                <option value="all">All Statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
+                onChange={setFilterStatus}
+                height={36}
+                triggerStyle={{ width: 'auto', minWidth: '150px' }}
+                ariaLabel="Status filter"
+                options={[
+                  { value: 'all', label: 'All Statuses' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'inactive', label: 'Inactive' },
+                ]}
+              />
             </div>
             
             <div>
               <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
                 Orders
               </label>
-              <select
+              <Select
                 value={filterOrders}
-                onChange={(e) => setFilterOrders(e.target.value)}
-                style={{ ...styledSelect, width: 'auto', height: '36px' }}
-              >
-                <option value="all">All Orders</option>
-                <option value="10+">10+ orders</option>
-                <option value="5-9">5-9 orders</option>
-                <option value="1-4">1-4 orders</option>
-              </select>
+                onChange={setFilterOrders}
+                height={36}
+                triggerStyle={{ width: 'auto', minWidth: '150px' }}
+                ariaLabel="Orders filter"
+                options={[
+                  { value: 'all', label: 'All Orders' },
+                  { value: '10+', label: '10+ orders' },
+                  { value: '5-9', label: '5-9 orders' },
+                  { value: '1-4', label: '1-4 orders' },
+                ]}
+              />
             </div>
 
             <div style={{ marginLeft: 'auto' }}>

@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react';
+import { Select } from './Select';
 
 interface TimeFieldProps {
   /** 24-hour "HH:mm" (what the backend stores), or '' when unset. */
@@ -39,26 +39,6 @@ export function TimeField({ value, onChange, ariaLabel }: TimeFieldProps) {
     : OPTIONS;
 
   return (
-    <div style={{ position: 'relative' }}>
-      <select
-        value={v}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={ariaLabel}
-        style={{
-          appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none',
-          width: '100%', height: '40px', padding: '0 34px 0 12px',
-          border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)',
-          background: 'var(--bg-card)', color: v ? 'var(--text-primary)' : 'var(--text-muted)',
-          fontSize: '14px', fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
-        }}
-      >
-        <option value="">Select time</option>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <ChevronDown
-        size={16}
-        style={{ position: 'absolute', right: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-muted)' }}
-      />
-    </div>
+    <Select value={v} onChange={onChange} options={options} placeholder="Select time" ariaLabel={ariaLabel} fontSize={14} />
   );
 }
