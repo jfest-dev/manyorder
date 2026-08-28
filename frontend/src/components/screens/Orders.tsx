@@ -6,6 +6,7 @@ import { ordersApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from 
 import { formatMoney } from '../../lib/currency';
 import { orderSummaryLines, waLink, type WaOrderSection } from '../../lib/whatsapp';
 import type { Store } from '../../App';
+import { useConfirm } from '../ConfirmDialog';
 
 interface OrdersProps {
   store: Store;
@@ -125,6 +126,7 @@ function CopyValue({ text, muted = false }: { text: string; muted?: boolean }) {
 }
 
 export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = false, onEditOrder }: OrdersProps) {
+  const confirm = useConfirm();
   const storeId = Number(store.id);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [orders, setOrders] = useState<OrderResponse[]>([]);
@@ -188,9 +190,15 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
 
   const changeStatus = async (order: OrderResponse, status: OrderStatus) => {
     // Cancelling is destructive and can't be undone - confirm before it takes effect.
-    if (status === 'CANCELLED' &&
-        !window.confirm(`Cancel order #${order.id}? This can't be undone and the customer's order will be marked cancelled.`)) {
-      return;
+    if (status === 'CANCELLED') {
+      const ok = await confirm({
+        title: 'Cancel order',
+        message: `Cancel order #${order.id}? This can't be undone and the customer's order will be marked cancelled.`,
+        confirmLabel: 'Cancel order',
+        cancelLabel: 'Keep order',
+        tone: 'danger',
+      });
+      if (!ok) return;
     }
     setBusyOrderId(order.id);
     try {

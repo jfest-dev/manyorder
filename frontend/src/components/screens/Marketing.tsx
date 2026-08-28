@@ -5,6 +5,7 @@ import { Button } from '../Button';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
 import { styledSelect } from '../../lib/selectStyle';
+import { useConfirm } from '../ConfirmDialog';
 
 interface Promotion {
   id: string;
@@ -28,6 +29,7 @@ interface MarketingProps {
 }
 
 export function Marketing({ currency = 'sgd' }: MarketingProps = {}) {
+  const confirm = useConfirm();
   const [showAddForm, setShowAddForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingPromo, setEditingPromo] = useState<Promotion | null>(null);
@@ -753,8 +755,8 @@ export function Marketing({ currency = 'sgd' }: MarketingProps = {}) {
                       cursor: 'pointer',
                       color: '#DC2626',
                     }}
-                    onClick={() => {
-                      if (confirm('Delete this promotion?')) {
+                    onClick={async () => {
+                      if (await confirm({ title: 'Delete promotion', message: 'Delete this promotion?', confirmLabel: 'Delete', tone: 'danger' })) {
                         alert('Promotion deleted');
                       }
                     }}

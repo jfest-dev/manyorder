@@ -1,6 +1,7 @@
 import { Store, Package, LayoutDashboard, Settings, ShoppingCart, Users, ChevronDown, LogOut, Megaphone, Crown, Check, Truck } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { NavItem } from './NavItem';
+import { useConfirm } from './ConfirmDialog';
 import logoImage from 'figma:asset/656d97789c4d3f72628639902518b8fbf366d5ba.png';
 import { supabase } from '../lib/supabase';
 
@@ -28,6 +29,7 @@ export function Sidebar({
   onStoreChange,
   isOpen = true 
 }: SidebarProps) {
+  const confirm = useConfirm();
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
   const [triggerHover, setTriggerHover] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
@@ -301,7 +303,7 @@ export function Sidebar({
                 <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '6px', paddingTop: '6px' }}>
                   <button
                     onClick={async () => {
-                      if (confirm('Sign out of your account?')) {
+                      if (await confirm({ title: 'Sign out', message: 'Sign out of your account?', confirmLabel: 'Sign out' })) {
                         await supabase.auth.signOut();
                         setShowStoreDropdown(false);
                       }

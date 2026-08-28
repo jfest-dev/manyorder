@@ -6,6 +6,7 @@ import { PasswordField } from '../PasswordField';
 import { accountApi, storesApi, uploadsApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
 import { validatePassword, PASSWORD_RULE_TEXT } from '../../lib/password';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
+import { useConfirm } from '../ConfirmDialog';
 
 interface SettingsProps {
   storeId: number;
@@ -73,6 +74,7 @@ const ADDRESS_KEYS: (keyof UpdateStorePayload)[] = ['streetAddress', 'city', 'po
 const NOTIFICATION_KEYS: (keyof UpdateStorePayload)[] = ['notifyNewOrderEmail', 'notifyLowStockEmail'];
 
 export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<UpdateStorePayload>({});
   // Last-saved baseline; a card's Save button enables only when its fields diverge from this.
@@ -184,9 +186,11 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
       return;
     }
     if (form.currency && form.currency !== savedCurrency) {
-      const proceed = confirm(
-        'Changing currency does not convert your existing product prices. You\'ll need to update them manually. Continue?',
-      );
+      const proceed = await confirm({
+        title: 'Change currency?',
+        message: "Changing currency does not convert your existing product prices. You'll need to update them manually. Continue?",
+        confirmLabel: 'Continue',
+      });
       if (!proceed) return;
     }
 

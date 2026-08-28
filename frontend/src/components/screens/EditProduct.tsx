@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload, X, ArrowLeft } from 'lucide-react';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
@@ -13,6 +13,25 @@ import { ToggleSwitch } from '../ToggleSwitch';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { editorGroupsFromViews, editorGroupsToInputs, validateEditorGroups, type EditorGroup } from '../../lib/modifiers';
 import { productsApi, UpdateProductPayload, ApiError } from '../../lib/api';
+import { UnsavedChangesDialog, useConfirm } from '../ConfirmDialog';
+
+type ProductSnapshot = {
+  name: string; price: number | null; description: string; categoryId: string;
+  stock: string; sku: string; status: 'active' | 'draft'; photoUrl: string;
+  preOrder: boolean; preOrderReadyDate: string; preOrderReadyTimeStart: string;
+  preOrderReadyTimeEnd: string; preOrderNote: string; modifierGroups: EditorGroup[];
+};
+
+/** Serialize the editable fields to a stable string, for unsaved-change detection. */
+function comparable(v: ProductSnapshot): string {
+  return JSON.stringify({
+    name: v.name, price: v.price, description: v.description, categoryId: v.categoryId,
+    stock: v.stock, sku: v.sku, status: v.status, photoUrl: v.photoUrl,
+    preOrder: v.preOrder, preOrderReadyDate: v.preOrderReadyDate,
+    preOrderReadyTimeStart: v.preOrderReadyTimeStart, preOrderReadyTimeEnd: v.preOrderReadyTimeEnd,
+    preOrderNote: v.preOrderNote, modifierGroups: v.modifierGroups,
+  });
+}
 
 interface EditProductProps {
   storeId: number;
@@ -22,6 +41,8 @@ interface EditProductProps {
   storeColor?: string;
   currency?: string;
   onNavigate?: (screen: string) => void;
+  /** Register an unsaved-changes guard with the host; it intercepts navigation. */
+  registerLeaveGuard?: (fn: ((intent: () => void) => boolean) | null) => void;
 }
 
 export function EditProduct({
@@ -32,7 +53,9 @@ export function EditProduct({
   storeColor = '#000000',
   currency = 'sgd',
   onNavigate,
+  registerLeaveGuard,
 }: EditProductProps) {
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -64,12 +87,13 @@ export function EditProduct({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Draft persistence: in-progress edits survive a refresh / accidental nav and
-  // restore automatically, cleared once the product saves. Photo (a File) isn't
-  // persisted - only the text/schedule fields. `hydrated` gates the save effect
-  // so we don't persist the blank pre-load state over a real draft.
-  const draftKey = `manyorder_editdraft_${storeId}_${productId}`;
-  const [hydrated, setHydrated] = useState(false);
+  // Unsaved-change tracking. We snapshot the values as loaded from the server and
+  // compare against the live form. Unsaved edits are intentionally NOT persisted:
+  // leaving the screen prompts (Save/Discard/Cancel) rather than silently keeping
+  // a draft. `leaveIntent`, when set, is the pending navigation the dialog runs.
+  const initialRef = useRef<string>('');
+  const dirtyRef = useRef(false);
+  const [leaveIntent, setLeaveIntent] = useState<(() => void) | null>(null);
 
   const backToList = () => onNavigate?.('products-all');
 
@@ -94,46 +118,64 @@ export function EditProduct({
         setPreOrderReadyTimeStart((p.preOrderReadyTimeStart ?? '').slice(0, 5)); // HH:mm for <input type=time>
         setPreOrderReadyTimeEnd((p.preOrderReadyTimeEnd ?? '').slice(0, 5));
         setPreOrderNote(p.preOrderNote ?? '');
-        setModifierGroups(editorGroupsFromViews(p.modifierGroups));
+        const groups = editorGroupsFromViews(p.modifierGroups);
+        setModifierGroups(groups);
 
-        // Overlay any unsaved draft on top of the freshly-loaded values.
-        try {
-          const raw = sessionStorage.getItem(draftKey);
-          if (raw) {
-            const d = JSON.parse(raw);
-            if (d.name !== undefined) setName(d.name);
-            if (d.price !== undefined) setPrice(d.price);
-            if (d.description !== undefined) setDescription(d.description);
-            if (d.categoryId !== undefined) setCategoryId(d.categoryId);
-            if (d.stock !== undefined) setStock(d.stock);
-            if (d.sku !== undefined) setSku(d.sku);
-            if (d.status !== undefined) setStatus(d.status);
-            if (d.preOrder !== undefined) setPreOrder(d.preOrder);
-            if (d.preOrderReadyDate !== undefined) setPreOrderReadyDate(d.preOrderReadyDate);
-            if (d.preOrderReadyTimeStart !== undefined) setPreOrderReadyTimeStart(d.preOrderReadyTimeStart);
-            if (d.preOrderReadyTimeEnd !== undefined) setPreOrderReadyTimeEnd(d.preOrderReadyTimeEnd);
-            if (d.preOrderNote !== undefined) setPreOrderNote(d.preOrderNote);
-            if (d.modifierGroups !== undefined) setModifierGroups(d.modifierGroups);
-          }
-        } catch { /* ignore a malformed draft */ }
-        setHydrated(true);
+        // Snapshot the loaded values for unsaved-change detection, and clear any
+        // draft older builds left behind (they used to auto-restore unsaved edits).
+        initialRef.current = comparable({
+          name: p.name,
+          price: p.price,
+          description: p.description ?? '',
+          categoryId: p.categoryId != null ? String(p.categoryId) : '',
+          stock: String(p.stock ?? 0),
+          sku: p.sku ?? '',
+          status: p.isActive ? 'active' : 'draft',
+          photoUrl: p.photoUrl ?? '',
+          preOrder: p.preOrder,
+          preOrderReadyDate: p.preOrderReadyDate ?? '',
+          preOrderReadyTimeStart: (p.preOrderReadyTimeStart ?? '').slice(0, 5),
+          preOrderReadyTimeEnd: (p.preOrderReadyTimeEnd ?? '').slice(0, 5),
+          preOrderNote: p.preOrderNote ?? '',
+          modifierGroups: groups,
+        });
+        try { sessionStorage.removeItem(`manyorder_editdraft_${storeId}_${productId}`); } catch { /* ignore stale draft */ }
       })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof ApiError ? e.message : 'Could not load product'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [storeId, productId, draftKey]);
+  }, [storeId, productId]);
 
-  // Persist in-progress edits (text/schedule fields) once the form is hydrated.
+  // Do the loaded values differ from what's in the form now? (A newly picked
+  // photo file counts too.) Kept in a ref so the nav guard reads the latest value.
+  const dirty =
+    !loading &&
+    (comparable({
+      name, price, description, categoryId, stock, sku, status, photoUrl,
+      preOrder, preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd, preOrderNote, modifierGroups,
+    }) !== initialRef.current || photoFile !== null);
+  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+
+  // Register a navigation guard with the host. While there are unsaved edits, any
+  // attempt to leave (Back button, sidebar, browser Back) opens the dialog below
+  // instead of navigating; the pending destination runs once the user chooses.
+  const guard = useCallback((intent: () => void) => {
+    if (!dirtyRef.current) return true;
+    setLeaveIntent(() => intent);
+    return false;
+  }, []);
   useEffect(() => {
-    if (!hydrated) return;
-    try {
-      sessionStorage.setItem(draftKey, JSON.stringify({
-        name, price, description, categoryId, stock, sku, status,
-        preOrder, preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd, preOrderNote, modifierGroups,
-      }));
-    } catch { /* storage full - draft is best-effort */ }
-  }, [hydrated, draftKey, name, price, description, categoryId, stock, sku, status,
-      preOrder, preOrderReadyDate, preOrderReadyTimeStart, preOrderReadyTimeEnd, preOrderNote, modifierGroups]);
+    registerLeaveGuard?.(guard);
+    return () => registerLeaveGuard?.(null);
+  }, [registerLeaveGuard, guard]);
+
+  // Native warning for a full page unload (refresh / tab close) while dirty.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   // Live object-URL preview for a newly picked file.
   useEffect(() => {
@@ -160,15 +202,15 @@ export function EditProduct({
   };
 
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     setError(null);
-    if (!name.trim()) { setError('Product name is required.'); return; }
+    if (!name.trim()) { setError('Product name is required.'); return false; }
     const priceNum = price;
-    if (priceNum === null || priceNum <= 0) { setError('Enter a valid price.'); return; }
+    if (priceNum === null || priceNum <= 0) { setError('Enter a valid price.'); return false; }
     const stockNum = stock.trim() === '' ? 0 : parseInt(stock, 10);
-    if (Number.isNaN(stockNum) || stockNum < 0) { setError('Stock must be 0 or more.'); return; }
+    if (Number.isNaN(stockNum) || stockNum < 0) { setError('Stock must be 0 or more.'); return false; }
     const modifierError = validateEditorGroups(modifierGroups);
-    if (modifierError) { setError(modifierError); return; }
+    if (modifierError) { setError(modifierError); return false; }
 
     setSaving(true);
     try {
@@ -199,21 +241,28 @@ export function EditProduct({
       if (status === 'draft') {
         await productsApi.deactivate(storeId, productId);
       }
-      sessionStorage.removeItem(draftKey); // saved - drop the draft
-      backToList();
+      dirtyRef.current = false; // saved - no unsaved changes to guard
+      return true;
     } catch (e: any) {
       setError(e instanceof ApiError ? e.message : 'Could not save changes');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm('Delete this product permanently? This cannot be undone. Past orders keep their record.')) return;
+    const ok = await confirm({
+      title: 'Delete product',
+      message: 'Delete this product permanently? This cannot be undone. Past orders keep their record.',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!ok) return;
     setSaving(true);
     try {
       await productsApi.delete(storeId, productId);
-      sessionStorage.removeItem(draftKey); // product deleted - drop the draft
+      dirtyRef.current = false; // deleted - nothing to guard on the way out
       backToList();
     } catch (e: any) {
       setError(e instanceof ApiError ? e.message : 'Could not delete product');
@@ -223,6 +272,21 @@ export function EditProduct({
 
   const shownPhoto = photoPreview || photoUrl;
   const previewPrice = price === null ? '' : formatMoney(price, currency);
+
+  // Unsaved-changes dialog actions (see the guard above).
+  const cancelLeave = () => setLeaveIntent(null);
+  const discardAndLeave = () => {
+    const go = leaveIntent;
+    dirtyRef.current = false;
+    setLeaveIntent(null);
+    go?.();
+  };
+  const saveAndLeave = async () => {
+    const go = leaveIntent;
+    const ok = await handleSave();
+    setLeaveIntent(null); // close either way; a failed save leaves the error on the form
+    if (ok) go?.();
+  };
 
   if (loading) {
     return <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading product…</p>;
@@ -345,10 +409,10 @@ export function EditProduct({
               {error && <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>}
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '8px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
-                <Button variant="primary" onClick={handleSave} disabled={saving} fullWidth>
+                <Button variant="primary" onClick={async () => { if (await handleSave()) backToList(); }} disabled={saving} fullWidth>
                   {saving ? 'Saving…' : 'Save Changes'}
                 </Button>
-                <Button variant="ghost" onClick={backToList} disabled={saving}>Cancel</Button>
+                <Button variant="ghost" onClick={() => { dirtyRef.current = false; backToList(); }} disabled={saving}>Cancel</Button>
               </div>
 
               <div style={{ paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
@@ -420,6 +484,14 @@ export function EditProduct({
           div[style*="position: sticky"] { position: static !important; }
         }
       `}</style>
+
+      <UnsavedChangesDialog
+        open={!!leaveIntent}
+        saving={saving}
+        onSave={saveAndLeave}
+        onDiscard={discardAndLeave}
+        onCancel={cancelLeave}
+      />
     </div>
   );
 }
