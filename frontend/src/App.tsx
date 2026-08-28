@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell';
@@ -218,6 +218,19 @@ function MerchantApp() {
   // second one, and so step 2 can render against it.
   const [onboardingStoreId, setOnboardingStoreId] = useState<string | null>(null);
 
+  // Unsaved-changes guard. A screen (Edit Product) registers a guard here; while
+  // it has unsaved edits it intercepts navigation away (Back button, sidebar, or
+  // browser Back), returning false and running its own Save/Discard/Cancel dialog,
+  // then invoking the pending navigation once the user chooses to leave.
+  const leaveGuardRef = useRef<((intent: () => void) => boolean) | null>(null);
+  const registerLeaveGuard = useCallback(
+    (fn: ((intent: () => void) => boolean) | null) => { leaveGuardRef.current = fn; },
+    [],
+  );
+  // Latest active screen, for the URL->state guard (its effect deps are the URL).
+  const activeScreenRef = useRef(activeScreen);
+  useEffect(() => { activeScreenRef.current = activeScreen; }, [activeScreen]);
+
   // --- Screen <-> URL sync (single-route screen-switcher) ---
   // State is the source of truth for what's rendered; the URL mirrors it so a
   // refresh restores the screen and Back/Forward walk screen-to-screen.
@@ -254,9 +267,27 @@ function MerchantApp() {
       mountedUrlSync.current = true;
       return;
     }
-    if (activeScreen === 'onboarding-1' || activeScreen === 'onboarding-2') return;
+    const current = activeScreenRef.current;
+    if (current === 'onboarding-1' || current === 'onboarding-2') return;
     const target = resolveScreen(searchParams.get('screen'), isStaff, editingOrderId, editingProductId);
-    setActiveScreen((current) => (current === target ? current : target));
+    if (target === current) return;
+    const apply = () => setActiveScreen(target);
+    // A registered guard (unsaved edits) can intercept Back/Forward: keep the
+    // current screen shown and restore the URL to match while it prompts.
+    if (leaveGuardRef.current && !leaveGuardRef.current(apply)) {
+      const desired = paramForScreen(current);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (desired) next.set('screen', desired);
+          else next.delete('screen');
+          return next;
+        },
+        { replace: true },
+      );
+      return;
+    }
+    apply();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -463,7 +494,10 @@ function MerchantApp() {
       alert('Staff accounts can view orders and products only.');
       return;
     }
-    setActiveScreen(screen as Screen);
+    const apply = () => setActiveScreen(screen as Screen);
+    // A registered guard (unsaved edits) intercepts and prompts before leaving.
+    if (leaveGuardRef.current && !leaveGuardRef.current(apply)) return;
+    apply();
   };
 
   const renderScreen = () => {
@@ -592,6 +626,7 @@ function MerchantApp() {
             storeColor={activeStore.color}
             currency={activeStore.currency}
             onNavigate={navigateScreen as any}
+            registerLeaveGuard={registerLeaveGuard}
           />
         ) : (
           <Dashboard />
@@ -606,6 +641,7 @@ function MerchantApp() {
             storeColor={activeStore.color}
             currency={activeStore.currency}
             onNavigate={navigateScreen as any}
+            registerLeaveGuard={registerLeaveGuard}
           />
         ) : (
           <Dashboard />

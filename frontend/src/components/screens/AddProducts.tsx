@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Upload, X, Check, Package } from 'lucide-react';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
@@ -13,6 +13,7 @@ import { formatPreorderReady } from '../../lib/datetime';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { editorGroupsToInputs, validateEditorGroups, type EditorGroup } from '../../lib/modifiers';
 import { productsApi, CreateProductPayload, ApiError } from '../../lib/api';
+import { useConfirm } from '../ConfirmDialog';
 
 interface Product {
   id: string; // local form id
@@ -48,6 +49,8 @@ interface AddProductsProps {
   /** Onboarding only: shown as a "Finish setup → dashboard" action (products are
    *  already persisted as they're added). Absent in the dashboard. */
   onFinish?: () => void;
+  /** Register an unsaved-changes guard with the host; it intercepts navigation. */
+  registerLeaveGuard?: (fn: ((intent: () => void) => boolean) | null) => void;
 }
 
 const blank = (id: string): Product => ({
@@ -64,7 +67,10 @@ export function AddProducts({
   showHeader = true,
   onNavigate,
   onFinish,
+  registerLeaveGuard,
 }: AddProductsProps) {
+  const confirm = useConfirm();
+  const dirtyRef = useRef(false);
   // Draft persistence: only IN-PROGRESS (unsaved) rows survive a refresh /
   // accidental nav — text/schedule fields, not photos (File objects). Once a row
   // is created it is dropped from the draft (see the persist effect below), so a
@@ -201,6 +207,39 @@ export function AddProducts({
   const clearDraft = () => { try { sessionStorage.removeItem(draftKey); } catch { /* ignore */ } };
 
   const savedList = useMemo(() => products.filter((p) => saved[p.id]), [products, saved]);
+
+  // Unsaved-change guard: any in-progress row (not yet "Added") that has real
+  // content counts. Unlike Edit Product there's no single save, so leaving offers
+  // a plain Discard/Keep-editing confirm rather than a Save/Discard/Cancel choice.
+  const rowHasContent = (p: Product) =>
+    p.name.trim() !== '' || p.price !== null || p.description.trim() !== '' ||
+    p.sku.trim() !== '' || p.quantity.trim() !== '' || p.note.trim() !== '' ||
+    p.preOrder || p.readyDate !== '' || p.modifierGroups.length > 0 || !!p.photoFile;
+  const dirty = products.some((p) => !saved[p.id] && rowHasContent(p));
+  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+
+  const guard = useCallback((intent: () => void) => {
+    if (!dirtyRef.current) return true;
+    confirm({
+      title: 'Unsaved products',
+      message: "You have products you haven't added yet. Leave without adding them?",
+      confirmLabel: 'Leave',
+      cancelLabel: 'Keep editing',
+      tone: 'danger',
+    }).then((ok) => { if (ok) { dirtyRef.current = false; intent(); } });
+    return false;
+  }, [confirm]);
+  useEffect(() => {
+    registerLeaveGuard?.(guard);
+    return () => registerLeaveGuard?.(null);
+  }, [registerLeaveGuard, guard]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
   // The preview mirrors what you're typing: every row with any content, saved or
   // not - so pre-order times, price, name etc. update live, not only after Save.
   const previewList = useMemo(
