@@ -2,8 +2,8 @@ import { Store, Package, LayoutDashboard, Settings, ShoppingCart, Users, Chevron
 import { useState, useEffect, useRef } from 'react';
 import { NavItem } from './NavItem';
 import { useConfirm } from './ConfirmDialog';
+import { useAuth } from '../context/AuthContext';
 import logoImage from 'figma:asset/656d97789c4d3f72628639902518b8fbf366d5ba.png';
-import { supabase } from '../lib/supabase';
 
 interface StoreData {
   id: string;
@@ -30,6 +30,7 @@ export function Sidebar({
   isOpen = true 
 }: SidebarProps) {
   const confirm = useConfirm();
+  const { logout } = useAuth();
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
   const [triggerHover, setTriggerHover] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
@@ -304,8 +305,8 @@ export function Sidebar({
                   <button
                     onClick={async () => {
                       if (await confirm({ title: 'Sign out', message: 'Sign out of your account?', confirmLabel: 'Sign out' })) {
-                        await supabase.auth.signOut();
                         setShowStoreDropdown(false);
+                        logout(); // clears the JWT + user state and redirects to /signin
                       }
                     }}
                     style={{

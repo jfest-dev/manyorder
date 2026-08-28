@@ -1,6 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { authApi, clearToken, getToken, setToken, LoginResponse } from '../lib/api';
-import { registerSupabaseSignOut } from '../lib/supabase';
 
 export interface AuthUser {
   userId: number;
@@ -66,10 +65,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Screens live under /app; a hard redirect keeps legacy screens simple.
     window.location.href = '/signin';
   }, []);
-
-  useEffect(() => {
-    registerSupabaseSignOut(logout);
-  }, [logout]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
