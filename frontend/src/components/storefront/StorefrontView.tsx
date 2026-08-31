@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Package, ShoppingBag, Plus, MessageCircle, MapPin, Clock, Search, X } from 'lucide-react';
+import { Package, ShoppingBag, Plus, MapPin, Clock, Search, X, Share2, Check } from 'lucide-react';
+import { WhatsAppIcon } from '../icons/WhatsAppIcon';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import type { ProductResponse } from '../../lib/api';
@@ -123,58 +124,124 @@ export function StorefrontView({
 
   const filtering = search.trim() !== '' || activeCategory !== ALL;
 
+  // Share the storefront link. Native share sheet on mobile; clipboard fallback
+  // with a brief "Copied" state (mirrors the dashboard's Copy Store Link).
+  const [shareCopied, setShareCopied] = useState(false);
+  const shareShop = async () => {
+    const url = window.location.origin + window.location.pathname;
+    if (navigator.share) {
+      try { await navigator.share({ title: store.name || 'Shop', url }); } catch { /* dismissed */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1600);
+    } catch { /* clipboard blocked - nothing to do */ }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: '#F3F4F6' }}>
       <style>{`@media (max-width: 360px) { .shop-card-desc { display: none; } }`}</style>
-      {/* Header (theme colour) */}
-      <div style={{ background: headerColor, color: 'white', padding: '24px 16px', textAlign: 'center' }}>
-        <div
-          style={{
-            width: '64px', height: '64px', borderRadius: '50%', margin: '0 auto 12px',
-            background: store.logoUrl ? 'transparent' : 'rgba(255,255,255,0.2)',
-            border: '2px solid rgba(255,255,255,0.35)', overflow: 'hidden',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '20px', fontWeight: 600,
-          }}
-        >
-          {store.logoUrl
-            ? <img src={store.logoUrl} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : initialsOf(store.name)}
-        </div>
-        <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0 }}>{store.name || 'My Store'}</h1>
-        {store.storeDescription && (
-          <p style={{
-            fontSize: '13px', opacity: 0.9, marginTop: '6px', maxWidth: '520px', marginInline: 'auto',
-            // Honour line breaks the merchant typed, but never let a long description overwhelm the header.
-            whiteSpace: 'pre-line',
-            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
-            {store.storeDescription}
-          </p>
+      {/* Theme-colour band - the store's brand colour across the top; the card
+          overlaps its bottom so the two touch (only a vertical negative margin,
+          so no horizontal pan). Share Shop sits in the top-right. */}
+      <div style={{
+        background: headerColor, height: '110px', position: 'relative',
+        // Respect the notch/status bar if this is ever shown full-bleed (PWA/webview);
+        // in a normal browser the inset is 0, so this is a no-op there.
+        paddingTop: 'env(safe-area-inset-top, 0px)', boxSizing: 'content-box',
+      }}>
+        {!preview && (
+          <button
+            type="button"
+            onClick={shareShop}
+            aria-label="Share shop"
+            style={{
+              position: 'absolute',
+              top: 'calc(env(safe-area-inset-top, 0px) + 24px)',
+              right: 'calc(env(safe-area-inset-right, 0px) + 12px)',
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '8px 12px', borderRadius: '999px', border: 'none', cursor: 'pointer',
+              background: 'rgba(255, 255, 255, 0.92)', color: '#111827', fontSize: '12px', fontWeight: 600,
+              boxShadow: '0 1px 4px rgba(0, 0, 0, 0.15)',
+            }}
+          >
+            {shareCopied ? <Check size={14} /> : <Share2 size={14} />}
+            {shareCopied ? 'Copied' : 'Share'}
+          </button>
         )}
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '14px', marginTop: '10px', fontSize: '12px', opacity: 0.95 }}>
-          {(store.totalItemsSold ?? 0) > 0 && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <ShoppingBag size={13} /> {store.totalItemsSold!.toLocaleString()} sold
-            </span>
-          )}
-          {store.phoneNumber && (
-            <a href={`https://wa.me/${store.phoneNumber.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'inherit', textDecoration: 'none' }}>
-              <MessageCircle size={13} /> {store.phoneNumber}
-            </a>
-          )}
-          {store.operatingHours && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <Clock size={13} /> {store.operatingHours}
-            </span>
-          )}
-          {store.address && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <MapPin size={13} /> {store.address}
-            </span>
-          )}
+      </div>
+
+      {/* Store card - white, left-aligned, overlapping the band. */}
+      <div
+        style={{
+          background: 'white', borderRadius: '16px', margin: '-40px 12px 12px', padding: '16px',
+          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)', position: 'relative',
+          display: 'flex', flexDirection: 'column', gap: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+          <div
+            style={{
+              width: '76px', height: '76px', borderRadius: '16px', flexShrink: 0, overflow: 'hidden',
+              background: store.logoUrl ? '#F3F4F6' : headerColor, color: 'white',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 600,
+            }}
+          >
+            {store.logoUrl
+              ? <img src={store.logoUrl} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : initialsOf(store.name)}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: '#111827', overflowWrap: 'anywhere' }}>
+              {store.name || 'My Store'}
+            </h1>
+            {store.storeDescription && (
+              <p style={{
+                fontSize: '13px', color: '#6B7280', margin: '4px 0 0', lineHeight: 1.45,
+                whiteSpace: 'pre-line', overflowWrap: 'anywhere',
+                // Cap at 4 lines so a very long description can't blow up the card height.
+                display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+              }}>
+                {store.storeDescription}
+              </p>
+            )}
+            {/* "X sold" count is intentionally hidden on the storefront (tracking kept
+                on store.totalItemsSold). See docs/backlog.md - to be replaced by a
+                seller gamification/badge system rather than a raw sold count. */}
+          </div>
         </div>
+
+        {/* Store info - hours, phone, address as one plain, left-aligned list
+            (same colour, size and spacing, no separate band). */}
+        {(store.operatingHours || store.phoneNumber || store.address) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: '#6B7280' }}>
+            {store.operatingHours && (
+              <span style={{ display: 'inline-flex', alignItems: 'flex-start', gap: '8px' }}>
+                <Clock size={14} style={{ flexShrink: 0, marginTop: '1px', color: '#6B7280' }} />
+                {/* Wraps naturally (typically <= 2 lines); never truncated. */}
+                <span style={{ minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.45 }}>{store.operatingHours}</span>
+              </span>
+            )}
+            {store.phoneNumber && (
+              <a href={`https://wa.me/${store.phoneNumber.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'inherit', textDecoration: 'none' }}>
+                <WhatsAppIcon size={14} color="#6B7280" style={{ flexShrink: 0 }} /> {store.phoneNumber}
+              </a>
+            )}
+            {store.address && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.address)}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'flex-start', gap: '8px', color: 'inherit', textDecoration: 'none' }}
+              >
+                <MapPin size={14} style={{ flexShrink: 0, marginTop: '1px', color: '#6B7280' }} />
+                <span style={{ minWidth: 0 }}>{store.address}</span>
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Recent-order recall - one tap back to the order placed on this device. */}

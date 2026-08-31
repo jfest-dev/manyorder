@@ -27,3 +27,12 @@ stale past date and the "Pre-order" badge until someone edits it.
 Handle expiry later, for example auto-hide the pre-order badge once the ready
 date is past (falling back to normal in-stock / out-of-stock display), and/or
 alert the merchant so they can update or clear the pre-order.
+
+## Seller gamification to replace the raw sold count
+
+The storefront header used to show a plain "X sold" count. It is now hidden
+(the underlying tally on the store, totalItemsSold, is still tracked). Replace
+it later with a gamification or status system based on real sales thresholds,
+for example earned badges or tiers such as "Bestseller", rather than surfacing
+a raw number. Decide the thresholds and tiers, then show the earned badge on
+the storefront in place of the old count.
