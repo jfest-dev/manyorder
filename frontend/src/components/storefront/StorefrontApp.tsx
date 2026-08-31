@@ -15,7 +15,7 @@ import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { getRecentOrder, clearRecentOrder, anyOrderStatusActive, type RecentOrder } from '../../lib/orderRecall';
 import {
   parseCart, addLine, setLineQty, removeLine, updateLine, hydrateCart, healCart,
-  cartCount as countCart, plainQuantities, productTotals, plainSignature, lineSignature,
+  cartLineCount, plainQuantities, productTotals, plainSignature, lineSignature,
   type CartItem, type CartLine,
 } from '../../lib/cart';
 
@@ -111,7 +111,9 @@ export function StorefrontApp() {
   // details. Lines whose product no longer exists are dropped.
   const hydratedCart = useMemo<CartLine[]>(() => hydrateCart(cart, products), [cart, products]);
 
-  const cartCount = useMemo(() => countCart(cart), [cart]);
+  // Count the resolved lines, not the raw cart, so an orphaned line (e.g. a
+  // hard-deleted product) can't show a count with nothing in the cart.
+  const cartCount = useMemo(() => cartLineCount(hydratedCart), [hydratedCart]);
   const cartSubtotal = useMemo(() => hydratedCart.reduce((s, l) => s + l.lineSubtotal, 0), [hydratedCart]);
   // Shop grid stepper reflects the PLAIN line (no modifiers/notes) per product.
   const quantities = useMemo(() => plainQuantities(cart), [cart]);

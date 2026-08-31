@@ -139,6 +139,16 @@ export function cartCount(cart: CartItem[]): number {
 }
 
 /**
+ * Total quantity across already-resolved lines. Because hydrateCart drops lines
+ * whose product no longer exists, counting hydrated lines (rather than the raw
+ * cart) keeps the cart-bar count in step with what the cart actually shows - a
+ * hard-deleted product can't leave a phantom count.
+ */
+export function cartLineCount(lines: CartLine[]): number {
+  return lines.reduce((n, l) => n + l.quantity, 0);
+}
+
+/**
  * Quantities of the PLAIN lines only (no modifiers, no note), keyed by product
  * id - what the shop grid's inline "+"/stepper reflects. Lines that carry
  * modifiers/notes are managed from the cart page, not the shop stepper.

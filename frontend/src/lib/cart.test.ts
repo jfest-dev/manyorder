@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { ProductResponse } from './api';
 import {
   lineSignature, plainSignature, normalizeOptionIds, normalizeNotes,
-  parseCart, addLine, setLineQty, removeLine, updateLine, cartCount, plainQuantities, productTotals,
+  parseCart, addLine, setLineQty, removeLine, updateLine, cartCount, cartLineCount, plainQuantities, productTotals,
   hydrateCart, healCart, cartLineToCheckoutItem, type CartItem,
 } from './cart';
 
@@ -174,6 +174,27 @@ describe('cartCount', () => {
     cart = addLine(cart, item({ productId: 1, quantity: 2, modifierOptionIds: [100] }));
     cart = addLine(cart, item({ productId: 1, quantity: 3, modifierOptionIds: [101] }));
     expect(cartCount(cart)).toBe(5);
+  });
+});
+
+describe('cartLineCount', () => {
+  it('sums quantities across resolved lines', () => {
+    const lines = hydrateCart(
+      [item({ productId: 1, quantity: 2 }), item({ productId: 1, quantity: 3, modifierOptionIds: [101] })],
+      [product()],
+    );
+    expect(cartLineCount(lines)).toBe(5);
+  });
+
+  it('ignores a line whose product is gone (no phantom count)', () => {
+    // productId 999 was hard-deleted: it survives in the raw cart but hydrateCart
+    // drops it, so the resolved count is 2 (the S$0.00-with-a-count bug).
+    const rawCart: CartItem[] = [
+      { productId: 1, quantity: 2, modifierOptionIds: [] },
+      { productId: 999, quantity: 8, modifierOptionIds: [] },
+    ];
+    expect(cartCount(rawCart)).toBe(10);                       // raw cart still counts the orphan
+    expect(cartLineCount(hydrateCart(rawCart, [product()]))).toBe(2); // resolved count ignores it
   });
 });
 
