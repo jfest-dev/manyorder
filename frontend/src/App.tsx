@@ -649,7 +649,18 @@ function MerchantApp() {
       case 'products-categories':
         return activeStore ? <Categories storeId={Number(activeStore.id)} /> : <Dashboard />;
       case 'products-inventory':
-        return <Inventory />;
+        return activeStore ? (
+          <Inventory
+            storeId={Number(activeStore.id)}
+            currency={activeStore.currency}
+            onEditProduct={(productId) => {
+              setEditingProductId(productId);
+              setActiveScreen('products-edit');
+            }}
+          />
+        ) : (
+          <Dashboard />
+        );
 
       case 'customers':
         return <Customers />;

@@ -36,3 +36,19 @@ it later with a gamification or status system based on real sales thresholds,
 for example earned badges or tiers such as "Bestseller", rather than surfacing
 a raw number. Decide the thresholds and tiers, then show the earned badge on
 the storefront in place of the old count.
+
+## Inventory needs a genuinely distinct purpose
+
+The Inventory screen is now wired to real data (read-only stock levels, value,
+status and sold counts), which is honest, but it duplicates the Products screen
+almost one to one. It needs a genuinely distinct purpose, not decided yet.
+Ideas to consider later:
+
+- Restock action-list: show only items needing attention (low or out) with a
+  quick restock action, instead of the full catalogue.
+- Cross-store inventory view: Products is per-store, so Inventory could
+  aggregate stock across all of a merchant's stores.
+- Stock movement log: what changed and when, not just current levels.
+- Fast bulk stock-take mode: update many quantities quickly in one pass.
+
+This needs proper product thinking, not a rushed decision.
