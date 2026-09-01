@@ -580,6 +580,49 @@ export const customersApi = {
     request<CustomerResponse>(`/merchant/stores/${storeId}/customers`, { method: 'POST', body: payload }),
 };
 
+export type DiscountType = 'PERCENTAGE' | 'FIXED';
+
+export interface DiscountResponse {
+  id: number;
+  code: string;
+  name: string | null;
+  type: DiscountType;
+  value: number;
+  usageLimit: number | null;
+  usedCount: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  active: boolean;
+  createdAt: string;
+}
+
+export interface DiscountPayload {
+  code: string;
+  name?: string;
+  type: DiscountType;
+  value: number;
+  usageLimit?: number | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  active?: boolean;
+}
+
+export const discountsApi = {
+  list: (storeId: number) =>
+    request<DiscountResponse[]>(`/merchant/stores/${storeId}/discounts`),
+
+  /** Create a discount. 409 if the code exists; 400 for percent > 100 or start after end. */
+  create: (storeId: number, payload: DiscountPayload) =>
+    request<DiscountResponse>(`/merchant/stores/${storeId}/discounts`, { method: 'POST', body: payload }),
+
+  /** PATCH: only the provided fields change. */
+  update: (storeId: number, discountId: number, payload: Partial<DiscountPayload>) =>
+    request<DiscountResponse>(`/merchant/stores/${storeId}/discounts/${discountId}`, { method: 'PATCH', body: payload }),
+
+  delete: (storeId: number, discountId: number) =>
+    request<void>(`/merchant/stores/${storeId}/discounts/${discountId}`, { method: 'DELETE' }),
+};
+
 export interface CategoryResponse {
   id: number;
   name: string;

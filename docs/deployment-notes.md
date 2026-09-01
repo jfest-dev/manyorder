@@ -23,6 +23,19 @@ ALTER TABLE order_items ALTER COLUMN product_id DROP NOT NULL;
 Fresh databases and the dev database already have this; only existing
 staging/prod databases need it.
 
+### `discounts`: optional name column
+
+The Marketing screen lets a merchant give a discount a friendly label beyond
+its code. The column is nullable, so existing discounts are unaffected. Before
+deploying to a database that already holds data, run:
+
+```sql
+ALTER TABLE discounts ADD COLUMN name varchar(255);
+```
+
+Fresh databases and the dev database (Hibernate ddl-auto: update) already have
+this; only existing staging/prod databases need it.
+
 ## Granting the platform-admin role
 
 The `PLATFORM_ADMIN` role cannot be assigned through sign-up. Grant it directly

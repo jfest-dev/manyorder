@@ -653,7 +653,11 @@ function MerchantApp() {
           <Dashboard />
         );
       case 'marketing':
-        return <Marketing currency={activeStore?.currency} />;
+        return activeStore ? (
+          <Marketing storeId={Number(activeStore.id)} currency={activeStore.currency} />
+        ) : (
+          <Dashboard />
+        );
 
       case 'delivery':
         return activeStore ? (

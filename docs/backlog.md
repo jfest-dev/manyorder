@@ -63,3 +63,43 @@ alongside its selling price so the app can show margin per item and overall.
 As a possible F&B-specific extension on top of that, ingredient and recipe
 tracking (cost by ingredient, stock drawn down per sale). Not scoped in
 detail, just captured for later thinking.
+
+## Storefront promo display
+
+Discounts today are code-only: a customer must know and type a code at
+checkout. A larger, customer-facing feature would surface active promotions
+on the storefront itself, similar to GrabFood and other e-commerce patterns,
+so shoppers discover them without a code. This could include category-linked
+badges, promo banners at the top of the shop, minimum-spend thresholds, and
+tying a discount to specific products or categories. It is a genuinely large
+feature and needs its own proper scoping session later. Not scoped now.
+
+## Product-specific discounts
+
+Let a discount code apply only to certain products instead of the whole
+order. Investigated; it is a real, separate build session touching checkout
+math. Findings and the changes needed:
+
+- Data model: add an optional Discount-to-Product link (a discount_products
+  join table / ManyToMany). Empty set = store-wide (today's behavior);
+  non-empty = applies only to those products. Existing discounts get no rows,
+  so they stay store-wide. This is an optional, non-breaking scope, not a
+  breaking change.
+- Checkout math: today the discount is computed against the whole combined
+  subtotal (DiscountService.computeAmount). Change it to compute a
+  "discountable subtotal" = the sum of line totals whose product is in the
+  discount's set (or all lines when store-wide), then apply the percentage or
+  the fixed amount capped at that matching subtotal. Reorder the redeem flow
+  so the discount's scope is known before the amount is computed, and reject a
+  code that matches nothing in the cart.
+- Split-order (ready + pre-order): today the combined discount is allocated to
+  the two linked orders by full-subtotal share. Change it to allocate by each
+  bucket's matching-subtotal share (remainder to the second bucket so they sum
+  exactly), so a code matching only pre-order items puts the whole discount on
+  that order. Store-wide codes are unchanged.
+- Public "Apply code" validate endpoint would need the cart items (not just a
+  trusted subtotal) to preview the matching subtotal server-side.
+- Frontend: a real product multi-select "Applies to" in the Marketing form
+  (the genuine version of the targeting UI removed from the mock).
+
+Needs its own build session; not scoped further here.

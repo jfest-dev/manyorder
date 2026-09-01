@@ -43,6 +43,7 @@ public class DiscountService {
                 merchant, code, request.getType(), request.getValue(),
                 request.getUsageLimit(), request.getStartsAt(), request.getEndsAt(),
                 request.getActive() == null || request.getActive());
+        discount.setName(request.getName());
         return new DiscountResponse(discountRepository.save(discount));
     }
 
@@ -58,6 +59,7 @@ public class DiscountService {
             }
             discount.setCode(code);
         }
+        if (request.getName() != null) discount.setName(request.getName());
         if (request.getType() != null) discount.setType(request.getType());
         if (request.getValue() != null) discount.setValue(request.getValue());
         if (request.getUsageLimit() != null) discount.setUsageLimit(request.getUsageLimit());

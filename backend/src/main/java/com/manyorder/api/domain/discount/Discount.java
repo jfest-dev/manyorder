@@ -38,6 +38,9 @@ public class Discount {
     @Column(nullable = false)
     private String code;
 
+    /** Optional friendly label shown in the dashboard; the code is the identity. */
+    private String name;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private DiscountType type;
@@ -83,6 +86,8 @@ public class Discount {
     public Merchant getMerchant() { return merchant; }
     public String getCode() { return code; }
     public void setCode(String code) { this.code = code; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public DiscountType getType() { return type; }
     public void setType(DiscountType type) { this.type = type; }
     public BigDecimal getValue() { return value; }

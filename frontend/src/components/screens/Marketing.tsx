@@ -1,775 +1,314 @@
-import { useState } from 'react';
-import { Plus, Percent, Tag, X, Edit2, Trash2, Users, Package } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Plus, Tag, Percent, X, Edit2, Trash2, TrendingUp, Award } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
 import { Select } from '../Select';
 import { DatePicker } from '../DatePicker';
+import { Checkbox } from '../Checkbox';
 import { useConfirm } from '../ConfirmDialog';
-
-interface Promotion {
-  id: string;
-  name: string;
-  code: string;
-  type: 'percentage' | 'fixed';
-  value: number;
-  target: 'all' | 'products' | 'customers';
-  targetItems: string[];
-  startDate: string;
-  endDate: string;
-  usageLimit?: number;
-  usedCount: number;
-  status: 'active' | 'inactive' | 'expired';
-  isPremium?: boolean;
-}
+import { discountsApi, DiscountResponse, DiscountType, DiscountPayload, ApiError } from '../../lib/api';
+import { formatMoney } from '../../lib/currency';
 
 interface MarketingProps {
-  /** Store currency, so the fixed-amount discount value formats correctly. */
+  storeId: number;
+  /** Store currency, so a fixed-amount discount formats correctly. */
   currency?: string;
 }
 
-export function Marketing({ currency = 'sgd' }: MarketingProps = {}) {
+type Status = 'active' | 'scheduled' | 'expired' | 'inactive';
+
+function statusOf(d: DiscountResponse): Status {
+  if (!d.active) return 'inactive';
+  const now = Date.now();
+  if (d.endsAt && new Date(d.endsAt).getTime() < now) return 'expired';
+  if (d.startsAt && new Date(d.startsAt).getTime() > now) return 'scheduled';
+  return 'active';
+}
+const STATUS_META: Record<Status, { label: string; color: string }> = {
+  active: { label: 'Active', color: '#10B981' },
+  scheduled: { label: 'Scheduled', color: '#2563EB' },
+  expired: { label: 'Expired', color: '#DC2626' },
+  inactive: { label: 'Inactive', color: '#6B7280' },
+};
+
+function fmtDate(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+}
+
+function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string; label: string; value: string }) {
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          width: '40px', height: '40px', borderRadius: '8px', background: `${tint}20`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {icon}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>{label}</p>
+          <p style={{ fontSize: '20px', fontWeight: 600, overflowWrap: 'anywhere' }}>{value}</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+interface FormState {
+  name: string;
+  code: string;
+  type: DiscountType;
+  value: string;
+  usageLimit: string;
+  startDate: string;
+  endDate: string;
+  active: boolean;
+}
+const BLANK: FormState = {
+  name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', startDate: '', endDate: '', active: true,
+};
+
+export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
   const confirm = useConfirm();
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [editingPromo, setEditingPromo] = useState<Promotion | null>(null);
-  
-  const [newPromo, setNewPromo] = useState({
-    name: '',
-    code: '',
-    type: 'percentage' as 'percentage' | 'fixed',
-    value: '',
-    target: 'all' as 'all' | 'products' | 'customers',
-    targetItems: [] as string[],
-    startDate: '',
-    endDate: '',
-    usageLimit: '',
-  });
+  const [discounts, setDiscounts] = useState<DiscountResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [editPromoData, setEditPromoData] = useState({
-    name: '',
-    code: '',
-    type: 'percentage' as 'percentage' | 'fixed',
-    value: '',
-    target: 'all' as 'all' | 'products' | 'customers',
-    targetItems: [] as string[],
-    startDate: '',
-    endDate: '',
-    usageLimit: '',
-  });
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<FormState>(BLANK);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const mockPromotions: Promotion[] = [
-    {
-      id: '1',
-      name: 'New Customer Discount',
-      code: 'WELCOME10',
-      type: 'percentage',
-      value: 10,
-      target: 'all',
-      targetItems: [],
-      startDate: '2025-01-01',
-      endDate: '2025-12-31',
-      usageLimit: 100,
-      usedCount: 23,
-      status: 'active',
-    },
-    {
-      id: '2',
-      name: 'Flash Sale - Coffee',
-      code: 'COFFEE20',
-      type: 'percentage',
-      value: 20,
-      target: 'products',
-      targetItems: ['Iced White', 'Cold Brew', 'Americano'],
-      startDate: '2025-12-01',
-      endDate: '2025-12-31',
-      usageLimit: 50,
-      usedCount: 45,
-      status: 'active',
-    },
-    {
-      id: '3',
-      name: 'VIP Customer Bonus',
-      code: 'VIP15',
-      type: 'percentage',
-      value: 15,
-      target: 'customers',
-      targetItems: ['John Doe', 'Sarah Wilson', 'Emily Davis'],
-      startDate: '2025-11-01',
-      endDate: '2025-11-30',
-      usedCount: 12,
-      status: 'expired',
-      isPremium: true,
-    },
-  ];
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return '#10B981';
-      case 'inactive':
-        return '#6B7280';
-      case 'expired':
-        return '#DC2626';
-      default:
-        return 'var(--text-muted)';
-    }
+  const load = () => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    discountsApi
+      .list(storeId)
+      .then((res) => { if (!cancelled) setDiscounts(res); })
+      .catch((e) => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load discounts'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   };
+  useEffect(load, [storeId]);
 
-  const handleCreatePromo = () => {
-    if (!newPromo.name || !newPromo.code || !newPromo.value) {
-      alert('Please fill in all required fields');
-      return;
-    }
+  // Summary stats, all derived from the fetched list (no extra backend call).
+  const activeCount = useMemo(() => discounts.filter((d) => statusOf(d) === 'active').length, [discounts]);
+  const totalRedemptions = useMemo(() => discounts.reduce((s, d) => s + d.usedCount, 0), [discounts]);
+  const mostUsed = useMemo(() => {
+    if (discounts.length === 0) return null;
+    const top = discounts.reduce((a, b) => (b.usedCount > a.usedCount ? b : a));
+    return top.usedCount > 0 ? top : null; // no "most-used" until something's been redeemed
+  }, [discounts]);
 
-    if (newPromo.target !== 'all' && mockPromotions.length >= 2) {
-      alert('🔒 Upgrade to Premium to create targeted promotions for specific products or customers!');
-      return;
-    }
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-    alert(`Promotion "${newPromo.name}" created successfully!`);
-    setShowAddForm(false);
-    setNewPromo({
-      name: '',
-      code: '',
-      type: 'percentage',
-      value: '',
-      target: 'all',
-      targetItems: [],
-      startDate: '',
-      endDate: '',
-      usageLimit: '',
+  const openAdd = () => { setForm(BLANK); setEditingId(null); setFormError(null); setFormOpen(true); };
+  const openEdit = (d: DiscountResponse) => {
+    setForm({
+      name: d.name ?? '', code: d.code, type: d.type, value: String(d.value),
+      usageLimit: d.usageLimit != null ? String(d.usageLimit) : '',
+      startDate: d.startsAt ? d.startsAt.slice(0, 10) : '',
+      endDate: d.endsAt ? d.endsAt.slice(0, 10) : '',
+      active: d.active,
     });
+    setEditingId(d.id);
+    setFormError(null);
+    setFormOpen(true);
   };
 
-  const handleEditPromo = () => {
-    if (!editPromoData.name || !editPromoData.code || !editPromoData.value) {
-      alert('Please fill in all required fields');
-      return;
-    }
+  const submit = async () => {
+    setFormError(null);
+    const value = Number(form.value);
+    if (!form.code.trim()) { setFormError('Code is required.'); return; }
+    if (form.value.trim() === '' || Number.isNaN(value) || value <= 0) { setFormError('Enter a value greater than 0.'); return; }
+    if (form.type === 'PERCENTAGE' && value > 100) { setFormError('A percentage discount cannot exceed 100%.'); return; }
+    const usageLimit = form.usageLimit.trim() === '' ? null : Number(form.usageLimit);
+    if (usageLimit != null && (Number.isNaN(usageLimit) || usageLimit < 0)) { setFormError('Usage limit must be 0 or more.'); return; }
+    if (form.startDate && form.endDate && form.startDate > form.endDate) { setFormError('The start date must be before the end date.'); return; }
 
-    if (editPromoData.target !== 'all' && mockPromotions.length >= 2) {
-      alert('🔒 Upgrade to Premium to create targeted promotions for specific products or customers!');
-      return;
+    const payload: DiscountPayload = {
+      code: form.code.trim(),
+      name: form.name.trim() || undefined,
+      type: form.type,
+      value,
+      usageLimit,
+      startsAt: form.startDate ? `${form.startDate}T00:00:00` : null,
+      endsAt: form.endDate ? `${form.endDate}T23:59:59` : null,
+      active: form.active,
+    };
+    setSubmitting(true);
+    try {
+      if (editingId != null) await discountsApi.update(storeId, editingId, payload);
+      else await discountsApi.create(storeId, payload);
+      setFormOpen(false);
+      load();
+    } catch (e: any) {
+      setFormError(e instanceof ApiError ? e.message : 'Could not save discount');
+    } finally {
+      setSubmitting(false);
     }
+  };
 
-    alert(`Promotion "${editPromoData.name}" updated successfully!`);
-    setShowEditForm(false);
-    setEditPromoData({
-      name: '',
-      code: '',
-      type: 'percentage',
-      value: '',
-      target: 'all',
-      targetItems: [],
-      startDate: '',
-      endDate: '',
-      usageLimit: '',
+  const handleDelete = async (d: DiscountResponse) => {
+    const ok = await confirm({
+      title: 'Delete discount',
+      message: `Delete the discount code ${d.code}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
     });
+    if (!ok) return;
+    try {
+      await discountsApi.delete(storeId, d.id);
+      load();
+    } catch (e: any) {
+      setError(e instanceof ApiError ? e.message : 'Could not delete discount');
+    }
   };
 
-  // A percentage is a plain 0–100 number; a fixed amount is real money, so it
-  // uses the currency-aware MoneyField (value is kept as a string in this mock's
-  // form state, bridged to/from MoneyField's numeric value).
-  const renderValueField = (type: 'percentage' | 'fixed', value: string, setValue: (v: string) => void) =>
-    type === 'percentage' ? (
-      <FieldInput label="Value *" placeholder="10" type="number" min={0} max={100} value={value} onChange={setValue} prefix="%" />
-    ) : (
-      <MoneyField
-        label="Value *"
-        currency={currency}
-        value={value === '' ? null : Number(value)}
-        onChange={(v) => setValue(v === null ? '' : String(v))}
-        min={0}
-      />
-    );
-
-  const activePromos = mockPromotions.filter(p => p.status === 'active');
-  const expiredPromos = mockPromotions.filter(p => p.status === 'expired');
+  const valueLabel = (d: DiscountResponse) =>
+    d.type === 'PERCENTAGE' ? `${d.value}% off` : `${formatMoney(d.value, currency)} off`;
 
   return (
     <div>
       {/* Header */}
-      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ marginBottom: '8px' }}>Marketing & Promotions</h1>
+          <h1 style={{ marginBottom: '8px' }}>Marketing</h1>
           <p className="text-small" style={{ color: 'var(--text-secondary)' }}>
-            Create discount codes and manage promotional campaigns
+            Discount codes customers enter at checkout
           </p>
         </div>
-        <Button onClick={() => setShowAddForm(!showAddForm)}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={16} />
-            Create Promotion
-          </div>
+        <Button variant="primary" onClick={openAdd}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Plus size={16} /> New Discount</span>
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-        gap: '16px',
-        marginBottom: '24px'
-      }}>
-        <Card>
-          <div className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: '8px' }}>
-            Active Promotions
-          </div>
-          <h2 style={{ marginBottom: '4px' }}>{activePromos.length}</h2>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Running campaigns
-          </div>
-        </Card>
-
-        <Card>
-          <div className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: '8px' }}>
-            Total Redemptions
-          </div>
-          <h2 style={{ marginBottom: '4px' }}>
-            {mockPromotions.reduce((sum, p) => sum + p.usedCount, 0)}
-          </h2>
-          <div className="text-xs" style={{ color: '#10B981' }}>
-            +12% vs last month
-          </div>
-        </Card>
-
-        <Card>
-          <div className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: '8px' }}>
-            Discount Revenue
-          </div>
-          <h2 style={{ marginBottom: '4px' }}>S$1,234</h2>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            Total discounts given
-          </div>
-        </Card>
-      </div>
-
-      {/* Add Promotion Form */}
-      {showAddForm && (
-        <Card style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 500 }}>Create New Promotion</h2>
-            <X size={16} style={{ cursor: 'pointer' }} onClick={() => setShowAddForm(false)} />
-          </div>
-
-          <div className="form-row-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <FieldInput
-                label="Promotion Name *"
-                placeholder="New Customer Discount"
-                value={newPromo.name}
-                onChange={(value) => setNewPromo({ ...newPromo, name: value })}
-              />
-            </div>
-            <div>
-              <FieldInput
-                label="Promo Code *"
-                placeholder="WELCOME10"
-                value={newPromo.code}
-                onChange={(value) => setNewPromo({ ...newPromo, code: value.toUpperCase() })}
-              />
-            </div>
-          </div>
-
-          <div className="form-row-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                Discount Type *
-              </label>
-              <Select
-                value={newPromo.type}
-                onChange={(v) => setNewPromo({ ...newPromo, type: v as 'percentage' | 'fixed' })}
-                ariaLabel="Discount type"
-                options={[
-                  { value: 'percentage', label: 'Percentage (%)' },
-                  { value: 'fixed', label: 'Fixed Amount' },
-                ]}
-              />
-            </div>
-
-            <div>
-              {renderValueField(newPromo.type, newPromo.value, (value) => setNewPromo({ ...newPromo, value }))}
-            </div>
-
-            <div>
-              <FieldInput
-                label="Usage Limit"
-                placeholder="100"
-                type="number"
-                value={newPromo.usageLimit}
-                onChange={(value) => setNewPromo({ ...newPromo, usageLimit: value })}
-                helperText="Leave empty for unlimited"
-              />
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-              Apply To
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => setNewPromo({ ...newPromo, target: 'all' })}
-                style={{
-                  flex: 1,
-                  padding: '10px 16px',
-                  border: newPromo.target === 'all' ? '2px solid #000' : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: newPromo.target === 'all' ? 'var(--bg-app)' : 'var(--bg-card)',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                }}
-              >
-                All Products
-              </button>
-              <button
-                onClick={() => {
-                  if (mockPromotions.length >= 2) {
-                    alert('🔒 Premium Feature: Upgrade to create product-specific promotions');
-                  } else {
-                    setNewPromo({ ...newPromo, target: 'products' });
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  padding: '10px 16px',
-                  border: newPromo.target === 'products' ? '2px solid #000' : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: newPromo.target === 'products' ? 'var(--bg-app)' : 'var(--bg-card)',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  position: 'relative',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                  <Package size={14} />
-                  Specific Products
-                  <span style={{ 
-                    fontSize: '10px', 
-                    background: '#000', 
-                    color: '#fff',
-                    padding: '2px 6px',
-                    borderRadius: '3px',
-                    fontWeight: 600
-                  }}>PRO</span>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  if (mockPromotions.length >= 2) {
-                    alert('🔒 Premium Feature: Upgrade to create customer-specific promotions');
-                  } else {
-                    setNewPromo({ ...newPromo, target: 'customers' });
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  padding: '10px 16px',
-                  border: newPromo.target === 'customers' ? '2px solid #000' : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: newPromo.target === 'customers' ? 'var(--bg-app)' : 'var(--bg-card)',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                  <Users size={14} />
-                  Specific Customers
-                  <span style={{ 
-                    fontSize: '10px', 
-                    background: '#000', 
-                    color: '#fff',
-                    padding: '2px 6px',
-                    borderRadius: '3px',
-                    fontWeight: 600
-                  }}>PRO</span>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                Start Date
-              </label>
-              <DatePicker value={newPromo.startDate} onChange={(v) => setNewPromo({ ...newPromo, startDate: v })} ariaLabel="Start date" />
-            </div>
-            <div>
-              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                End Date
-              </label>
-              <DatePicker value={newPromo.endDate} onChange={(v) => setNewPromo({ ...newPromo, endDate: v })} ariaLabel="End date" />
-            </div>
-          </div>
-
-          <Button onClick={handleCreatePromo} fullWidth>
-            Create Promotion
-          </Button>
-        </Card>
+      {/* Summary stats (same pattern as the Products screen). */}
+      {!loading && !error && discounts.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <StatCard icon={<Tag size={20} style={{ color: '#10B981' }} />} tint="#10B981" label="Active Discounts" value={String(activeCount)} />
+          <StatCard icon={<TrendingUp size={20} style={{ color: '#3B82F6' }} />} tint="#3B82F6" label="Total Redemptions" value={String(totalRedemptions)} />
+          <StatCard icon={<Award size={20} style={{ color: '#D97706' }} />} tint="#D97706" label="Most-Used Code" value={mostUsed ? mostUsed.code : '—'} />
+        </div>
       )}
 
-      {/* Edit Promotion Form */}
-      {showEditForm && editingPromo && (
-        <Card style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: 500 }}>Edit Promotion</h2>
-            <X size={16} style={{ cursor: 'pointer' }} onClick={() => setShowEditForm(false)} />
+      {loading ? (
+        <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading discounts…</p>
+      ) : error ? (
+        <Card><div className="text-small" style={{ padding: '24px', color: 'var(--error-color)' }}>{error}</div></Card>
+      ) : discounts.length === 0 ? (
+        <Card>
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+            No discount codes yet. Create one for customers to use at checkout.
           </div>
-
-          <div className="form-row-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <FieldInput
-                label="Promotion Name *"
-                placeholder="New Customer Discount"
-                value={editPromoData.name}
-                onChange={(value) => setEditPromoData({ ...editPromoData, name: value })}
-              />
-            </div>
-            <div>
-              <FieldInput
-                label="Promo Code *"
-                placeholder="WELCOME10"
-                value={editPromoData.code}
-                onChange={(value) => setEditPromoData({ ...editPromoData, code: value.toUpperCase() })}
-              />
-            </div>
-          </div>
-
-          <div className="form-row-3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                Discount Type *
-              </label>
-              <Select
-                value={editPromoData.type}
-                onChange={(v) => setEditPromoData({ ...editPromoData, type: v as 'percentage' | 'fixed' })}
-                ariaLabel="Discount type"
-                options={[
-                  { value: 'percentage', label: 'Percentage (%)' },
-                  { value: 'fixed', label: 'Fixed Amount' },
-                ]}
-              />
-            </div>
-
-            <div>
-              {renderValueField(editPromoData.type, editPromoData.value, (value) => setEditPromoData({ ...editPromoData, value }))}
-            </div>
-
-            <div>
-              <FieldInput
-                label="Usage Limit"
-                placeholder="100"
-                type="number"
-                value={editPromoData.usageLimit}
-                onChange={(value) => setEditPromoData({ ...editPromoData, usageLimit: value })}
-                helperText="Leave empty for unlimited"
-              />
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-              Apply To
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => setEditPromoData({ ...editPromoData, target: 'all' })}
-                style={{
-                  flex: 1,
-                  padding: '10px 16px',
-                  border: editPromoData.target === 'all' ? '2px solid #000' : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: editPromoData.target === 'all' ? 'var(--bg-app)' : 'var(--bg-card)',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                }}
-              >
-                All Products
-              </button>
-              <button
-                onClick={() => {
-                  if (mockPromotions.length >= 2) {
-                    alert('🔒 Premium Feature: Upgrade to create product-specific promotions');
-                  } else {
-                    setEditPromoData({ ...editPromoData, target: 'products' });
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  padding: '10px 16px',
-                  border: editPromoData.target === 'products' ? '2px solid #000' : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: editPromoData.target === 'products' ? 'var(--bg-app)' : 'var(--bg-card)',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                  position: 'relative',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                  <Package size={14} />
-                  Specific Products
-                  <span style={{ 
-                    fontSize: '10px', 
-                    background: '#000', 
-                    color: '#fff',
-                    padding: '2px 6px',
-                    borderRadius: '3px',
-                    fontWeight: 600
-                  }}>PRO</span>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  if (mockPromotions.length >= 2) {
-                    alert('🔒 Premium Feature: Upgrade to create customer-specific promotions');
-                  } else {
-                    setEditPromoData({ ...editPromoData, target: 'customers' });
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  padding: '10px 16px',
-                  border: editPromoData.target === 'customers' ? '2px solid #000' : '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-field)',
-                  background: editPromoData.target === 'customers' ? 'var(--bg-app)' : 'var(--bg-card)',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 500,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                  <Users size={14} />
-                  Specific Customers
-                  <span style={{ 
-                    fontSize: '10px', 
-                    background: '#000', 
-                    color: '#fff',
-                    padding: '2px 6px',
-                    borderRadius: '3px',
-                    fontWeight: 600
-                  }}>PRO</span>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                Start Date
-              </label>
-              <DatePicker value={editPromoData.startDate} onChange={(v) => setEditPromoData({ ...editPromoData, startDate: v })} ariaLabel="Start date" />
-            </div>
-            <div>
-              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                End Date
-              </label>
-              <DatePicker value={editPromoData.endDate} onChange={(v) => setEditPromoData({ ...editPromoData, endDate: v })} ariaLabel="End date" />
-            </div>
-          </div>
-
-          <Button onClick={handleEditPromo} fullWidth>
-            Update Promotion
-          </Button>
         </Card>
-      )}
-
-      {/* Active Promotions */}
-      <Card title="Active Promotions" style={{ marginBottom: '16px' }}>
-        {activePromos.length === 0 ? (
-          <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <Percent size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-            <p>No active promotions. Create one to start attracting customers!</p>
-          </div>
-        ) : (
-          <div style={{ marginTop: '16px' }}>
-            {activePromos.map((promo) => (
-              <div
-                key={promo.id}
-                style={{
-                  padding: '16px',
-                  borderBottom: '1px solid var(--border-subtle)',
-                  display: 'flex',
-                  gap: '16px',
-                  alignItems: 'flex-start',
-                }}
-              >
-                <div
-                  style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '8px',
-                    background: 'var(--bg-card-subtle)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Percent size={24} style={{ color: 'var(--text-secondary)' }} />
-                </div>
-
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <h3 className="text-small" style={{ fontWeight: 600 }}>
-                      {promo.name}
-                    </h3>
-                    {promo.isPremium && (
-                      <span style={{ 
-                        fontSize: '10px', 
-                        background: '#000', 
-                        color: '#fff',
-                        padding: '2px 6px',
-                        borderRadius: '3px',
-                        fontWeight: 600
-                      }}>
-                        PRO
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                    <code
-                      style={{
-                        padding: '4px 8px',
-                        background: '#000',
-                        color: '#fff',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {promo.code}
-                    </code>
-                    <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {promo.type === 'percentage' ? `${promo.value}%` : `S$${promo.value}`} off
-                    </span>
-                    {promo.target !== 'all' && (
-                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        • {promo.target === 'products' ? 'Products' : 'Customers'}: {promo.targetItems.join(', ')}
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    <span>Used: {promo.usedCount}{promo.usageLimit ? `/${promo.usageLimit}` : ''}</span>
-                    <span>Valid: {new Date(promo.startDate).toLocaleDateString()} - {new Date(promo.endDate).toLocaleDateString()}</span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    style={{
-                      padding: '8px',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '6px',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      color: 'var(--text-secondary)',
-                    }}
-                    onClick={() => {
-                      setEditingPromo(promo);
-                      setEditPromoData({
-                        name: promo.name,
-                        code: promo.code,
-                        type: promo.type,
-                        value: promo.value.toString(),
-                        target: promo.target,
-                        targetItems: promo.targetItems,
-                        startDate: promo.startDate,
-                        endDate: promo.endDate,
-                        usageLimit: promo.usageLimit ? promo.usageLimit.toString() : '',
-                      });
-                      setShowEditForm(true);
-                    }}
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button
-                    style={{
-                      padding: '8px',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '6px',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      color: '#DC2626',
-                    }}
-                    onClick={async () => {
-                      if (await confirm({ title: 'Delete promotion', message: 'Delete this promotion?', confirmLabel: 'Delete', tone: 'danger' })) {
-                        alert('Promotion deleted');
-                      }
-                    }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      {/* Expired Promotions */}
-      {expiredPromos.length > 0 && (
-        <Card title="Expired Promotions">
-          <div style={{ marginTop: '16px' }}>
-            {expiredPromos.map((promo) => (
-              <div
-                key={promo.id}
-                style={{
-                  padding: '12px 16px',
-                  borderBottom: '1px solid var(--border-subtle)',
-                  opacity: 0.6,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>
-                      {promo.name} - <code style={{ fontSize: '11px' }}>{promo.code}</code>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {discounts.map((d) => {
+            const meta = STATUS_META[statusOf(d)];
+            return (
+              <Card key={d.id}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 0, display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: `${meta.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {d.type === 'PERCENTAGE' ? <Percent size={18} style={{ color: meta.color }} /> : <Tag size={18} style={{ color: meta.color }} />}
                     </div>
-                    <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      Ended: {new Date(promo.endDate).toLocaleDateString()} • {promo.usedCount} redemptions
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 600 }}>{d.name || d.code}</span>
+                        <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: `${meta.color}20`, color: meta.color, fontSize: '12px', fontWeight: 500 }}>{meta.label}</span>
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
+                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)}
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>
+                        Used {d.usedCount}{d.usageLimit != null ? ` / ${d.usageLimit}` : ' · unlimited'}
+                        {(d.startsAt || d.endsAt) ? ` · ${fmtDate(d.startsAt) || 'now'} to ${fmtDate(d.endsAt) || 'no end'}` : ' · no date limit'}
+                      </div>
                     </div>
                   </div>
-                  <span
-                    className="text-tag"
-                    style={{
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      background: '#FEE2E2',
-                      color: '#DC2626',
-                      fontSize: '11px',
-                      fontWeight: 500,
-                    }}
-                  >
-                    Expired
-                  </span>
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button onClick={() => openEdit(d)} aria-label={`Edit ${d.code}`} style={iconBtn}><Edit2 size={16} /></button>
+                    <button onClick={() => handleDelete(d)} aria-label={`Delete ${d.code}`} style={{ ...iconBtn, color: '#DC2626' }}><Trash2 size={16} /></button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </Card>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
-      {/* Responsive Styles */}
-      <style>{`
-        @media (max-width: 768px) {
-          div[style*="grid-template-columns: 1fr 1fr"] {
-            grid-template-columns: minmax(0, 1fr) !important;
-          }
-          div[style*="grid-template-columns: 1fr 1fr 1fr"] {
-            grid-template-columns: minmax(0, 1fr) !important;
-          }
-        }
-      `}</style>
+      {/* Add / Edit modal */}
+      {formOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !submitting && setFormOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-medium)', border: '1px solid var(--border-strong)', boxShadow: 'var(--shadow-overlay)', width: '100%', maxWidth: '460px', maxHeight: '90vh', overflowY: 'auto', padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, margin: 0 }}>{editingId != null ? 'Edit discount' : 'New discount'}</h3>
+              <button onClick={() => !submitting && setFormOpen(false)} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={18} /></button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <FieldInput label="Name" placeholder="e.g. New customer offer" value={form.name} onChange={(v) => set('name', v)} maxLength={255} helperText="Optional label. The code is what customers type." />
+              <FieldInput label="Code" placeholder="WELCOME10" value={form.code} onChange={(v) => set('code', v)} maxLength={255} required helperText="Saved in uppercase. Must be unique for this store." />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Type</label>
+                  <Select value={form.type} onChange={(v) => set('type', v as DiscountType)} ariaLabel="Discount type" options={[
+                    { value: 'PERCENTAGE', label: 'Percentage (%)' },
+                    { value: 'FIXED', label: 'Fixed amount' },
+                  ]} />
+                </div>
+                {form.type === 'FIXED' ? (
+                  <MoneyField label="Amount off" currency={currency} value={form.value === '' ? null : Number(form.value)} onChange={(n) => set('value', n == null ? '' : String(n))} />
+                ) : (
+                  <FieldInput label="Percent off" type="number" inputMode="numeric" placeholder="10" value={form.value} onChange={(v) => set('value', v)} />
+                )}
+              </div>
+
+              <FieldInput label="Usage limit" type="number" inputMode="numeric" placeholder="Leave blank for unlimited" value={form.usageLimit} onChange={(v) => set('usageLimit', v)} helperText="Total redemptions allowed." />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Starts</label>
+                  <DatePicker value={form.startDate} onChange={(v) => set('startDate', v)} placeholder="No start" ariaLabel="Start date" />
+                </div>
+                <div>
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ends</label>
+                  <DatePicker value={form.endDate} onChange={(v) => set('endDate', v)} placeholder="No end" ariaLabel="End date" />
+                </div>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <Checkbox checked={form.active} onChange={(v) => set('active', v)} ariaLabel="Active" />
+                <span className="text-small">Active (customers can use this code now)</span>
+              </label>
+
+              {formError && <p className="text-small" style={{ color: 'var(--error-color)', margin: 0 }}>{formError}</p>}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+              <Button variant="ghost" onClick={() => setFormOpen(false)} disabled={submitting}>Cancel</Button>
+              <Button variant="primary" onClick={submit} disabled={submitting}>{submitting ? 'Saving…' : editingId != null ? 'Save changes' : 'Create discount'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const iconBtn: React.CSSProperties = {
+  width: '34px', height: '34px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)',
+  color: 'var(--text-secondary)', cursor: 'pointer',
+};

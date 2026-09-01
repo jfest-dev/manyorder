@@ -7,11 +7,16 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 public class CreateDiscountRequest {
 
     @NotBlank
     private String code;
+
+    /** Optional friendly label. */
+    @Size(max = 255)
+    private String name;
 
     @NotNull
     private DiscountType type;
@@ -34,6 +39,8 @@ public class CreateDiscountRequest {
 
     public String getCode() { return code; }
     public void setCode(String code) { this.code = code; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public DiscountType getType() { return type; }
     public void setType(DiscountType type) { this.type = type; }
     public BigDecimal getValue() { return value; }

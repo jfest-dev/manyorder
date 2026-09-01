@@ -63,14 +63,15 @@ class DiscountIntegrationTest extends IntegrationTestBase {
         String token = registerAndGetToken("disc-crud@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Disc Store", "disc-crud-store");
 
-        long id = createDiscount(token, storeId, Map.of("code", "save10", "type", "PERCENTAGE", "value", 10));
+        long id = createDiscount(token, storeId, Map.of("code", "save10", "name", "Ten Percent Off", "type", "PERCENTAGE", "value", 10));
 
-        // Code is normalised to upper case.
+        // Code is normalised to upper case; the optional name round-trips.
         mockMvc.perform(get("/merchant/stores/" + storeId + "/discounts")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(1)))
                 .andExpect(jsonPath("$[0].code").value("SAVE10"))
+                .andExpect(jsonPath("$[0].name").value("Ten Percent Off"))
                 .andExpect(jsonPath("$[0].type").value("PERCENTAGE"))
                 .andExpect(jsonPath("$[0].usedCount").value(0));
 

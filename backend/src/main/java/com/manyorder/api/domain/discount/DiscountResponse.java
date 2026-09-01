@@ -7,6 +7,7 @@ public class DiscountResponse {
 
     private final Long id;
     private final String code;
+    private final String name;
     private final DiscountType type;
     private final BigDecimal value;
     private final Integer usageLimit;
@@ -19,6 +20,7 @@ public class DiscountResponse {
     public DiscountResponse(Discount d) {
         this.id = d.getId();
         this.code = d.getCode();
+        this.name = d.getName();
         this.type = d.getType();
         this.value = d.getValue();
         this.usageLimit = d.getUsageLimit();
@@ -31,6 +33,7 @@ public class DiscountResponse {
 
     public Long getId() { return id; }
     public String getCode() { return code; }
+    public String getName() { return name; }
     public DiscountType getType() { return type; }
     public BigDecimal getValue() { return value; }
     public Integer getUsageLimit() { return usageLimit; }
