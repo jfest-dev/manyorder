@@ -1,9 +1,9 @@
-import { Search, Plus, Download, Edit, Package } from 'lucide-react';
+import { Search, Plus, Download, Edit, Package, AlertTriangle, TrendingUp } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { ToggleSwitch } from '../ToggleSwitch';
 import { ReorderableList } from '../ReorderableList';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { productsApi, storesApi, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 
@@ -38,6 +38,29 @@ const STATUS_LABEL: Record<DisplayStatus, string> = {
   outofstock: 'Out of Stock',
   preorder: 'Pre-order',
 };
+
+/** Active, non-pre-order products at or below this on-hand quantity are "Low Stock"
+ *  in the summary. No per-product threshold exists yet, so one value is shared. */
+const LOW_STOCK_AT = 5;
+
+function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string; label: string; value: string }) {
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          width: '40px', height: '40px', borderRadius: '8px', background: `${tint}20`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {icon}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>{label}</p>
+          <p style={{ fontSize: '20px', fontWeight: 600 }}>{value}</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: ProductsListProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,6 +121,15 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
   // Reorder is over the full list; disable it while a search filter is active
   // (dragging a subset would be ambiguous). When not searching, filtered === products.
   const searching = searchQuery.trim() !== '';
+
+  // Summary stats over ALL products (not the search-filtered view). "Out" reuses
+  // the honest row status; "low" is active, non-pre-order stock in 1..LOW_STOCK_AT.
+  const outOfStockCount = useMemo(() => products.filter((p) => statusOf(p) === 'outofstock').length, [products]);
+  const lowStockCount = useMemo(
+    () => products.filter((p) => p.isActive && !p.preOrder && p.stock > 0 && p.stock <= LOW_STOCK_AT).length,
+    [products],
+  );
+  const inventoryValue = useMemo(() => products.reduce((sum, p) => sum + p.stock * p.price, 0), [products]);
 
   const handleReorder = async (reordered: ProductResponse[]) => {
     const previous = products;
@@ -172,6 +204,16 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
           Manage your product catalog
         </p>
       </div>
+
+      {/* Summary stats (moved here from the former standalone Inventory screen). */}
+      {!loading && !error && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <StatCard icon={<Package size={20} style={{ color: '#3B82F6' }} />} tint="#3B82F6" label="Total Products" value={String(products.length)} />
+          <StatCard icon={<AlertTriangle size={20} style={{ color: '#F59E0B' }} />} tint="#F59E0B" label="Low Stock" value={String(lowStockCount)} />
+          <StatCard icon={<AlertTriangle size={20} style={{ color: '#DC2626' }} />} tint="#DC2626" label="Out of Stock" value={String(outOfStockCount)} />
+          <StatCard icon={<TrendingUp size={20} style={{ color: '#10B981' }} />} tint="#10B981" label="Inventory Value" value={formatMoney(inventoryValue, currency)} />
+        </div>
+      )}
 
       {/* Item customization: store-level notes toggle (add-ons/modifiers are set
           per product on each Add/Edit Product form). */}

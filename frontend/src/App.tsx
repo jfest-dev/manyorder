@@ -12,7 +12,6 @@ import { ProductsList } from './components/screens/ProductsList';
 import { AddProducts } from './components/screens/AddProducts';
 import { EditProduct } from './components/screens/EditProduct';
 import { Categories } from './components/screens/Categories';
-import { Inventory } from './components/screens/Inventory';
 import { Customers } from './components/screens/Customers';
 import { Marketing } from './components/screens/Marketing';
 import { Delivery } from './components/screens/Delivery';
@@ -43,7 +42,6 @@ type Screen =
   | 'products-add'
   | 'products-edit'
   | 'products-categories'
-  | 'products-inventory'
   | 'customers'
   | 'marketing'
   | 'delivery'
@@ -648,20 +646,6 @@ function MerchantApp() {
         );
       case 'products-categories':
         return activeStore ? <Categories storeId={Number(activeStore.id)} /> : <Dashboard />;
-      case 'products-inventory':
-        return activeStore ? (
-          <Inventory
-            storeId={Number(activeStore.id)}
-            currency={activeStore.currency}
-            onEditProduct={(productId) => {
-              setEditingProductId(productId);
-              setActiveScreen('products-edit');
-            }}
-          />
-        ) : (
-          <Dashboard />
-        );
-
       case 'customers':
         return <Customers />;
       case 'marketing':

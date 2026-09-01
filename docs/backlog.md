@@ -52,3 +52,14 @@ Ideas to consider later:
 - Fast bulk stock-take mode: update many quantities quickly in one pass.
 
 This needs proper product thinking, not a rushed decision.
+
+## Deeper inventory / cost tracking
+
+The standalone Inventory screen has been removed (its finished-goods stock
+summary now lives on the All Products screen). A genuinely deeper inventory
+feature is still worth building later. The shared foundation across F&B and
+retail would be cost price and margin tracking: record each product's cost
+alongside its selling price so the app can show margin per item and overall.
+As a possible F&B-specific extension on top of that, ingredient and recipe
+tracking (cost by ingredient, stock drawn down per sale). Not scoped in
+detail, just captured for later thinking.

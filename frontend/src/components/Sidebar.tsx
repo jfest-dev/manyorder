@@ -74,7 +74,6 @@ export function Sidebar({
     { label: 'All Products', id: 'products-all' },
     { label: 'Add Product', id: 'products-add' },
     { label: 'Categories', id: 'products-categories' },
-    { label: 'Inventory', id: 'products-inventory' },
   ];
 
   const storeSubItems = [
