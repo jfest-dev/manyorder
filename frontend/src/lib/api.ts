@@ -559,6 +559,27 @@ export const productsApi = {
   },
 };
 
+export interface CustomerResponse {
+  id: number;
+  fullName: string;
+  email: string;
+  phoneNumber: string | null;
+  createdAt: string;
+  ordersCount: number;
+  totalSpent: number;
+  firstOrderAt: string | null;
+  lastOrderAt: string | null;
+}
+
+export const customersApi = {
+  list: (storeId: number) =>
+    request<CustomerResponse[]>(`/merchant/stores/${storeId}/customers`),
+
+  /** Add a customer manually. 409 if the phone/email already exists. */
+  create: (storeId: number, payload: { fullName: string; phoneNumber: string; email?: string }) =>
+    request<CustomerResponse>(`/merchant/stores/${storeId}/customers`, { method: 'POST', body: payload }),
+};
+
 export interface CategoryResponse {
   id: number;
   name: string;
