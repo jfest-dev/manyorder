@@ -265,7 +265,7 @@ export function ProductDetailView({
                   fontSize: '14px', fontWeight: 600, cursor: canSubmit ? 'pointer' : 'not-allowed',
                 }}
               >
-                {!orderable ? 'Unavailable' : mode === 'edit' ? `Update · ${money}` : `Add ${qty} · ${money}`}
+                {!orderable ? 'Unavailable' : mode === 'edit' ? `Update basket · ${money}` : `Add to basket · ${money}`}
               </button>
             </div>
           </div>

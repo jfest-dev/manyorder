@@ -328,7 +328,15 @@ function PdpRoute({ products, store, cart, onAddToCart, onUpdateLine, onBack }: 
   const product = products.find((p) => String(p.id) === productId);
   if (!product) return <Navigate to={`/${store.slug}`} replace />;
 
-  const editingLine = editSignature ? cart.find((l) => l.product.id === product.id && l.signature === editSignature) : undefined;
+  // With an explicit edit target, reopen that exact line. Otherwise: a no-modifier
+  // product has only one possible cart line (its plain line), so opening it from the
+  // grid reflects/edits that line instead of stacking a new one. Modifier products
+  // stay additive on a fresh open (each open configures a possibly-new combination).
+  const editingLine = editSignature
+    ? cart.find((l) => l.product.id === product.id && l.signature === editSignature)
+    : product.modifierGroups.length === 0
+      ? cart.find((l) => l.signature === plainSignature(product.id))
+      : undefined;
 
   return (
     <ProductDetailView
