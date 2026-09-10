@@ -2,6 +2,28 @@
 
 Planned work, not yet built.
 
+## Multi-language support (i18n): English + Bahasa Indonesia
+
+Deliberately deferred until after the Sept 30 deadline, likely tied to actual
+Indonesia market entry. Scope is English and Bahasa Indonesia specifically,
+matching the real markets (Singapore now, Indonesia planned), not a general
+any-language framework. The storefront (customer-facing) matters more long-term
+than the merchant dashboard, but neither is needed for the current deadline.
+
+Real scope if pursued:
+
+- UI strings: every hardcoded string across the app has to be extracted into a
+  translation dictionary / i18n system, on both the storefront and the merchant
+  dashboard. This is broad, touch-everything work.
+- A language switcher in the UI.
+- A decision on where the language preference lives: per-user vs per-store.
+- Separate, harder problem: merchant-entered content (e.g. product
+  descriptions) is not covered by a UI translation system at all. It would need
+  either manual dual-language entry by the merchant or an AI-translation step,
+  which is its own distinct design decision.
+
+A genuine multi-day undertaking. Not built now.
+
 ## Owner-initiated staff invites
 
 Staff is a real role today, with working permissions, server- and client-side
