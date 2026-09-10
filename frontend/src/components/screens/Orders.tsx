@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Download, Plus, Search, MessageCircle, Copy, Check } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ChevronDown, Download, Plus, Search, MessageCircle, Copy, Check, DollarSign, ShoppingBag, RotateCcw, XCircle } from 'lucide-react';
 import { Button } from '../Button';
+import { Card } from '../Card';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ordersApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
@@ -122,6 +123,25 @@ function CopyValue({ text, muted = false }: { text: string; muted?: boolean }) {
         {copied ? <Check size={16} /> : <Copy size={16} />}
       </span>
     </button>
+  );
+}
+
+function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string; label: string; value: string }) {
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          width: '40px', height: '40px', borderRadius: '8px', background: `${tint}20`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {icon}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>{label}</p>
+          <p style={{ fontSize: '20px', fontWeight: 600, overflowWrap: 'anywhere' }}>{value}</p>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -284,6 +304,20 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
     return waLink(order.contactPhone, lines.join('\n'));
   };
 
+  // Summary stats over ALL orders (already fetched; the tab filter is client-side).
+  // Revenue matches the units-sold rule: only fulfilled orders count, so unfulfilled
+  // ones can't inflate it. Refunded/cancelled are shown separately as context.
+  const totalRevenue = useMemo(
+    () => orders.filter((o) => o.status === 'COMPLETED' || o.status === 'DELIVERED')
+      .reduce((s, o) => s + o.totalAmount, 0),
+    [orders],
+  );
+  const refundedAmount = useMemo(
+    () => orders.filter((o) => o.paymentStatus === 'REFUNDED').reduce((s, o) => s + o.totalAmount, 0),
+    [orders],
+  );
+  const cancelledCount = useMemo(() => orders.filter((o) => o.status === 'CANCELLED').length, [orders]);
+
   return (
     <div>
       {/* Header */}
@@ -332,6 +366,16 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
           </button>
         )}
       </div>
+
+      {/* Summary stats (same pattern as the Products/Marketing screens). */}
+      {!loading && orders.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <StatCard icon={<DollarSign size={20} style={{ color: '#10B981' }} />} tint="#10B981" label="Total Revenue" value={formatMoney(totalRevenue, store.currency)} />
+          <StatCard icon={<ShoppingBag size={20} style={{ color: '#3B82F6' }} />} tint="#3B82F6" label="Total Orders" value={String(orders.length)} />
+          <StatCard icon={<RotateCcw size={20} style={{ color: '#D97706' }} />} tint="#D97706" label="Refunded" value={formatMoney(refundedAmount, store.currency)} />
+          <StatCard icon={<XCircle size={20} style={{ color: '#DC2626' }} />} tint="#DC2626" label="Cancelled" value={String(cancelledCount)} />
+        </div>
+      )}
 
       {/* Search + filters */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
