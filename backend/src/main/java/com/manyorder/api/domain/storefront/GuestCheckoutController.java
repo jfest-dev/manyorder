@@ -24,6 +24,7 @@ import com.manyorder.api.domain.order.ModifierResolver;
 import com.manyorder.api.domain.order.OrderItem;
 import com.manyorder.api.domain.order.OrderItemModifier;
 import com.manyorder.api.domain.order.OrderItemRepository;
+import com.manyorder.api.domain.order.OrderNotificationMailer;
 import com.manyorder.api.domain.order.OrderRepository;
 import com.manyorder.api.domain.order.OrderService;
 import com.manyorder.api.domain.order.OrderSource;
@@ -43,6 +44,7 @@ public class GuestCheckoutController {
     private final OrderItemRepository orderItemRepository;
     private final OrderService orderService;
     private final DiscountService discountService;
+    private final OrderNotificationMailer orderNotificationMailer;
 
     public GuestCheckoutController(
             MerchantRepository merchantRepository,
@@ -50,13 +52,15 @@ public class GuestCheckoutController {
             OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
             OrderService orderService,
-            DiscountService discountService) {
+            DiscountService discountService,
+            OrderNotificationMailer orderNotificationMailer) {
         this.merchantRepository = merchantRepository;
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.orderService = orderService;
         this.discountService = discountService;
+        this.orderNotificationMailer = orderNotificationMailer;
     }
 
     @PostMapping("/checkout")
@@ -163,6 +167,17 @@ public class GuestCheckoutController {
             List<Line> all = ready.isEmpty() ? preorder : ready; // exactly one bucket is non-empty
             orders.add(persistOrder(merchant, customer, orderType, request, null,
                     all, combinedSubtotal, deliveryFee, deliveryFeePending, combinedDiscount, discountCode));
+        }
+
+        // Notify the merchant, if they've opted in. Best-effort and isolated: the
+        // mailer swallows its own failures, and we still guard here so nothing
+        // about notification can affect the customer's checkout result.
+        if (merchant.isNotifyNewOrderEmail()) {
+            try {
+                orderNotificationMailer.sendNewOrder(merchant, orders);
+            } catch (Exception ignored) {
+                // Never let a notification problem fail a paid-for checkout.
+            }
         }
 
         return mapResponse(merchant, orders);
