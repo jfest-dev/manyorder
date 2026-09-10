@@ -326,14 +326,22 @@ export function StorefrontView({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
             {visible.map((p) => {
             const orderable = isOrderable(p);
-            const inCart = quantities[p.id] ?? 0;
             // A product with ANY modifier group can't be blind quick-added - its "+"
             // opens the PDP so the customer sees and chooses its options first. Only
             // truly plain products get the inline quick-add / stepper.
             const hasModifiers = (p.modifierGroups ?? []).length > 0;
-            // Modifier products show their total cart quantity (across all option
-            // sets) so the customer can see how many they already have; 0 keeps "+".
-            const modifierTotal = productTotals[p.id] ?? 0;
+            // Quantity of the plain line (no options, no note) - what the inline
+            // stepper edits. Total is across ALL of the product's lines.
+            const plainQty = quantities[p.id] ?? 0;
+            const total = productTotals[p.id] ?? 0;
+            // Show the tap-to-open count badge for modifier products, and also for a
+            // plain product that has picked up note-bearing lines (total exceeds the
+            // plain line): the inline stepper can only edit the plain line, so it
+            // can't represent multiple lines. Such a product falls back to the badge
+            // that opens the PDP, exactly like a modifier product, and its count
+            // reflects every line rather than wrongly reverting to "+".
+            const useBadge = hasModifiers || total !== plainQty;
+            const badgeTotal = total;
             const readyLine = p.preOrder ? formatPreorderReady(p.preOrderReadyDate, p.preOrderReadyTimeStart, p.preOrderReadyTimeEnd) : null;
             return (
               <div
@@ -356,18 +364,24 @@ export function StorefrontView({
                       already in the cart (or "+"). Plain products: "+" quick-add until in
                       cart, then a stepper. */}
                   <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: '8px', bottom: '8px' }}>
-                    {hasModifiers ? (
+                    {useBadge ? (
                       <button
-                        aria-label={modifierTotal > 0 ? `${p.name}, ${modifierTotal} in cart, choose options` : `Choose options for ${p.name}`}
+                        aria-label={
+                          badgeTotal > 0
+                            ? (hasModifiers
+                                ? `${p.name}, ${badgeTotal} in cart, choose options`
+                                : `${p.name}, ${badgeTotal} in cart`)
+                            : `Choose options for ${p.name}`
+                        }
                         disabled={!orderable || !onProductClick}
                         onClick={() => onProductClick?.(p.id)}
-                        style={floatBtnStyle(orderable && !!onProductClick, modifierTotal > 0)}
+                        style={floatBtnStyle(orderable && !!onProductClick, badgeTotal > 0)}
                       >
-                        {modifierTotal > 0 ? modifierTotal : <Plus size={18} />}
+                        {badgeTotal > 0 ? badgeTotal : <Plus size={18} />}
                       </button>
-                    ) : inCart > 0 && onSetQuantity ? (
+                    ) : plainQty > 0 && onSetQuantity ? (
                       <div style={{ background: 'white', borderRadius: '999px', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>
-                        <QuantityStepper quantity={inCart} onChange={(q) => onSetQuantity(p.id, q)} min={0} size="sm" />
+                        <QuantityStepper quantity={plainQty} onChange={(q) => onSetQuantity(p.id, q)} min={0} size="sm" />
                       </div>
                     ) : (
                       <button
