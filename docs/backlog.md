@@ -16,7 +16,7 @@ Add an owner-initiated invite flow in the dashboard (e.g. under Settings) so a
 merchant can add staff to their own store, replacing the self-service
 store-code sign-up path.
 
-## Expired pre-order ready dates
+## Expired pre-order ready dates (priority bumped)
 
 Pre-order ready dates are now validated as today-or-later on save, but nothing
 handles a date that passes afterward. When a pre-order's ready date goes by
@@ -27,6 +27,14 @@ stale past date and the "Pre-order" badge until someone edits it.
 Handle expiry later, for example auto-hide the pre-order badge once the ready
 date is past (falling back to normal in-stock / out-of-stock display), and/or
 alert the merchant so they can update or clear the pre-order.
+
+Priority raised (2026-09-10): this is already biting in the test suite. Three
+ProductIntegrationTest cases hardcode a pre-order ready date of 2026-09-01 and
+now fail every run because that date is in the past, so the today-or-later
+validation rejects it (400). It will keep recurring and worsen as time passes.
+As part of this work, make the affected tests use a relative future date
+(e.g. today plus a margin) instead of a hardcoded one, so the suite stays green
+over time.
 
 ## Seller gamification to replace the raw sold count
 
