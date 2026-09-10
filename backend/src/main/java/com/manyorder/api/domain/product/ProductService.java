@@ -32,22 +32,32 @@ public class ProductService {
     private static final List<OrderStatus> SOLD_STATUSES =
             List.of(OrderStatus.COMPLETED, OrderStatus.DELIVERED);
 
+    /**
+     * Active, non-pre-order products at or below this on-hand quantity are "low
+     * stock". Mirrors the frontend LOW_STOCK_AT (ProductsList.tsx) that drives
+     * the Products low-stock stat card — keep the two in step.
+     */
+    static final int LOW_STOCK_AT = 5;
+
     private final ProductRepository productRepository;
     private final MerchantRepository merchantRepository;
     private final OrderItemRepository orderItemRepository;
     private final CategoryRepository categoryRepository;
     private final CloudinaryImageService imageService;
+    private final LowStockMailer lowStockMailer;
 
     public ProductService(ProductRepository productRepository,
                           MerchantRepository merchantRepository,
                           OrderItemRepository orderItemRepository,
                           CategoryRepository categoryRepository,
-                          CloudinaryImageService imageService) {
+                          CloudinaryImageService imageService,
+                          LowStockMailer lowStockMailer) {
         this.productRepository = productRepository;
         this.merchantRepository = merchantRepository;
         this.orderItemRepository = orderItemRepository;
         this.categoryRepository = categoryRepository;
         this.imageService = imageService;
+        this.lowStockMailer = lowStockMailer;
     }
 
     // Reads are transactional so the lazy Category can be resolved while mapping
@@ -120,6 +130,9 @@ public class ProductService {
     @Transactional
     public ProductResponse updateProduct(Merchant merchant, Long productId, UpdateProductRequest request) {
         Product product = requireStoreProduct(merchant, productId);
+        // Remember the stock the save started from, so we can tell a downward
+        // crossing into low territory from a save that was already low.
+        int stockBefore = product.getStock() != null ? product.getStock() : 0;
 
         if (request.getName() != null && !request.getName().isBlank()) {
             product.setName(request.getName());
@@ -184,7 +197,34 @@ public class ProductService {
         if (!isBlank(orphanedPhoto)) {
             imageService.deleteByUrl(orphanedPhoto);
         }
+
+        maybeAlertLowStock(merchant, product, stockBefore);
         return toResponse(product);
+    }
+
+    /**
+     * Email the merchant when a save drops a sellable product's stock into low
+     * territory. Fires only on the crossing (was above the threshold, now at or
+     * below it, 0 included), not on every save while already low, so a merchant
+     * isn't spammed. Restocking back above the threshold re-arms the next drop.
+     * Best-effort: gated on the store preference and isolated so a mail problem
+     * never fails the save.
+     */
+    private void maybeAlertLowStock(Merchant merchant, Product product, int stockBefore) {
+        if (!merchant.isNotifyLowStockEmail()) return;
+        // Only active, non-pre-order products count as live sellable stock —
+        // matches the Products low-stock stat card's definition.
+        if (!Boolean.TRUE.equals(product.getIsActive()) || product.isPreOrder()) return;
+
+        int stockAfter = product.getStock() != null ? product.getStock() : 0;
+        boolean crossedIntoLow = stockBefore > LOW_STOCK_AT && stockAfter <= LOW_STOCK_AT;
+        if (!crossedIntoLow) return;
+
+        try {
+            lowStockMailer.sendLowStock(merchant, product, stockAfter);
+        } catch (Exception ignored) {
+            // A low-stock alert must never break the merchant's product save.
+        }
     }
 
     /**

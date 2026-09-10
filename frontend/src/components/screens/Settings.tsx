@@ -576,14 +576,10 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
           />
           <Toggle
             title="Low inventory alerts"
-            description="Email me when products are running low"
+            description="Email me when a product drops to 5 or fewer in stock"
             checked={form.notifyLowStockEmail ?? true}
             onChange={(v) => set('notifyLowStockEmail', v)}
           />
-
-          <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '12px' }}>
-            Preferences are saved now; email delivery arrives in a later update.
-          </p>
 
           <SaveRow
             label="Save"
