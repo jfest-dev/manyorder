@@ -119,6 +119,60 @@ class LowStockAlertIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void gradualDepletionToZero_firesOutOfStockOnTheFinalStep() throws Exception {
+        String token = registerAndGetToken("ls-gradual@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "LS Gradual", "ls-gradual");
+        long productId = createProduct(token, storeId, Map.of("stock", 10));
+
+        patchProduct(token, storeId, productId, Map.of("stock", 5)); // 10->5 running low, fires (5)
+        patchProduct(token, storeId, productId, Map.of("stock", 3)); // 5->3 already low, silent
+        patchProduct(token, storeId, productId, Map.of("stock", 0)); // 3->0 crosses into empty, fires (0)
+
+        // The low nudge fires once (the 10->5 crossing), the out-of-stock once (3->0).
+        verify(mailer, times(1)).sendLowStock(any(), any(), eq(5));
+        verify(mailer, times(1)).sendLowStock(any(), any(), eq(0));
+        verify(mailer, times(2)).sendLowStock(any(), any(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void alreadyLowThenToZero_firesOutOfStock() throws Exception {
+        String token = registerAndGetToken("ls-low2zero@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "LS Low2Zero", "ls-low2zero");
+        // Create low but not empty (no alert on create), then deplete to 0.
+        long productId = createProduct(token, storeId, Map.of("stock", 2));
+
+        patchProduct(token, storeId, productId, Map.of("stock", 0)); // 2->0, crosses into empty
+
+        verify(mailer, times(1)).sendLowStock(any(), any(), eq(0));
+    }
+
+    @Test
+    void stayingAtZero_doesNotRefire() throws Exception {
+        String token = registerAndGetToken("ls-zero-stay@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "LS Zero Stay", "ls-zero-stay");
+        long productId = createProduct(token, storeId, Map.of("stock", 8));
+
+        patchProduct(token, storeId, productId, Map.of("stock", 0)); // 8->0, fires out-of-stock
+        patchProduct(token, storeId, productId, Map.of("name", "Renamed while empty")); // 0->0, silent
+        patchProduct(token, storeId, productId, Map.of("stock", 0)); // 0->0, silent
+
+        verify(mailer, times(1)).sendLowStock(any(), any(), eq(0));
+    }
+
+    @Test
+    void depleteRestockDepleteToZero_firesOutOfStockTwice() throws Exception {
+        String token = registerAndGetToken("ls-zero-rearm@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "LS Zero Rearm", "ls-zero-rearm");
+        long productId = createProduct(token, storeId, Map.of("stock", 12));
+
+        patchProduct(token, storeId, productId, Map.of("stock", 0));  // fires out-of-stock
+        patchProduct(token, storeId, productId, Map.of("stock", 20)); // restock above 0, silent, re-arms
+        patchProduct(token, storeId, productId, Map.of("stock", 0));  // fires out-of-stock again
+
+        verify(mailer, times(2)).sendLowStock(any(), any(), eq(0));
+    }
+
+    @Test
     void preferenceOff_neverFires() throws Exception {
         String token = registerAndGetToken("ls-off@test.com", "MERCHANT", null);
         long storeId = createStore(token, "LS Off", "ls-off");

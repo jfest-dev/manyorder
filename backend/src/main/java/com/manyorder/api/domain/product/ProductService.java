@@ -203,12 +203,20 @@ public class ProductService {
     }
 
     /**
-     * Email the merchant when a save drops a sellable product's stock into low
-     * territory. Fires only on the crossing (was above the threshold, now at or
-     * below it, 0 included), not on every save while already low, so a merchant
-     * isn't spammed. Restocking back above the threshold re-arms the next drop.
-     * Best-effort: gated on the store preference and isolated so a mail problem
-     * never fails the save.
+     * Email the merchant when a save drops a sellable product's stock into alert
+     * territory. Two independent crossings fire, so at most one email per save
+     * (the two are mutually exclusive by the resulting stock):
+     *
+     *  - Running low: was above the threshold, now 1..threshold. Fires only on
+     *    the crossing, not on every save while already low, so a slow decline
+     *    (5 -> 3 -> 1) doesn't spam.
+     *  - Out of stock: any drop to exactly 0 (was above 0, now 0), even from an
+     *    already-low level. Reaching empty is important enough to always tell
+     *    the merchant, so a gradual 10 -> 5 -> 3 -> 0 still sends the out-of-stock
+     *    alert on the final step. A later 0 -> 0 save stays silent.
+     *
+     * Both re-arm on a restock back above the relevant line. Gated on the store
+     * preference and isolated so a mail problem never fails the save.
      */
     private void maybeAlertLowStock(Merchant merchant, Product product, int stockBefore) {
         if (!merchant.isNotifyLowStockEmail()) return;
@@ -217,8 +225,9 @@ public class ProductService {
         if (!Boolean.TRUE.equals(product.getIsActive()) || product.isPreOrder()) return;
 
         int stockAfter = product.getStock() != null ? product.getStock() : 0;
-        boolean crossedIntoLow = stockBefore > LOW_STOCK_AT && stockAfter <= LOW_STOCK_AT;
-        if (!crossedIntoLow) return;
+        boolean crossedToZero = stockBefore > 0 && stockAfter == 0;
+        boolean crossedIntoLow = stockBefore > LOW_STOCK_AT && stockAfter >= 1 && stockAfter <= LOW_STOCK_AT;
+        if (!crossedToZero && !crossedIntoLow) return;
 
         try {
             lowStockMailer.sendLowStock(merchant, product, stockAfter);
