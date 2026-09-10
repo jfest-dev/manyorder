@@ -16,6 +16,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.ColumnDefault;
+
 @Entity
 @Table(name = "users")
 public class User {
@@ -35,6 +37,16 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
+
+    /**
+     * Whether the account's email address has been confirmed via a verification
+     * link. Unverified accounts can still sign in (verification is a nag, not a
+     * gate). The DB-level default lets the not-null column be added to a table
+     * that already has rows (Postgres backfills existing users with false).
+     */
+    @Column(nullable = false)
+    @ColumnDefault("false")
+    private boolean verified = false;
 
     /**
      * The single store a STAFF account is bound to.
@@ -64,6 +76,8 @@ public class User {
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public UserRole getRole() { return role; }
+    public boolean isVerified() { return verified; }
+    public void setVerified(boolean verified) { this.verified = verified; }
     public Merchant getStaffStore() { return staffStore; }
     public void setStaffStore(Merchant staffStore) { this.staffStore = staffStore; }
     public LocalDateTime getCreatedAt() { return createdAt; }

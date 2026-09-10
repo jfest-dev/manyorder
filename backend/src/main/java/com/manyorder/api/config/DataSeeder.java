@@ -92,10 +92,14 @@ public class DataSeeder implements CommandLineRunner {
 
         String hash = passwordEncoder.encode("password123");
 
-        User merchantUser = userRepository.save(
-                new User("Demo Merchant", "hello@manyorder.com", hash, UserRole.MERCHANT));
-        userRepository.save(
-                new User("Platform Admin", "admin@manyorder.com", hash, UserRole.PLATFORM_ADMIN));
+        // Demo accounts ship pre-verified so recruiters never see the nag banner.
+        User merchantUser = new User("Demo Merchant", "hello@manyorder.com", hash, UserRole.MERCHANT);
+        merchantUser.setVerified(true);
+        merchantUser = userRepository.save(merchantUser);
+
+        User adminUser = new User("Platform Admin", "admin@manyorder.com", hash, UserRole.PLATFORM_ADMIN);
+        adminUser.setVerified(true);
+        userRepository.save(adminUser);
 
         seedKiriBrew(merchantUser, hash);
         seedSeoulSakura(merchantUser);

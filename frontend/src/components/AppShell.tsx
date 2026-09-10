@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Menu, X, Eye, Link2 } from 'lucide-react';
+import { Menu, X, Eye, Link2, MailWarning } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useAuth } from '../context/AuthContext';
+import { authApi } from '../lib/api';
 import logoImage from '../assets/manyorder-logo.png';
 
 interface Store {
@@ -30,8 +32,26 @@ export function AppShell({
   onStoreChange,
 }: AppShellProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Email-verification nag: a non-blocking reminder shown until the account is
+  // verified, with a one-tap resend. State is local; the banner simply goes away
+  // once AuthContext refreshes the verified flag.
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const resendVerification = async () => {
+    if (resendState === 'sending') return;
+    setResendState('sending');
+    try {
+      await authApi.resendVerification();
+    } catch {
+      // The endpoint is intentionally generic; treat any outcome as "sent".
+    } finally {
+      setResendState('sent');
+    }
+  };
+  const showVerifyNag = user != null && !user.verified;
 
   const activeStore = stores.find((s) => s.id === activeStoreId);
 
@@ -362,6 +382,52 @@ export function AppShell({
             padding: '24px',
           }}
         >
+          {showVerifyNag && (
+            <div
+              role="status"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+                background: '#FEF3C7',
+                border: '1px solid #FCD34D',
+                color: '#92400E',
+                borderRadius: '10px',
+                padding: '12px 16px',
+                marginBottom: '20px',
+                fontSize: '13.5px',
+              }}
+            >
+              <MailWarning size={18} style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: '200px' }}>
+                {resendState === 'sent'
+                  ? `Verification email sent to ${user?.email}. Check your inbox and spam folder.`
+                  : `Please verify your email address (${user?.email}) to secure your account.`}
+              </span>
+              {resendState !== 'sent' && (
+                <button
+                  onClick={resendVerification}
+                  disabled={resendState === 'sending'}
+                  style={{
+                    flexShrink: 0,
+                    height: '32px',
+                    padding: '0 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #92400E',
+                    background: 'transparent',
+                    color: '#92400E',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: resendState === 'sending' ? 'default' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {resendState === 'sending' ? 'Sending…' : 'Resend verification email'}
+                </button>
+              )}
+            </div>
+          )}
           {children}
         </div>
       </div>

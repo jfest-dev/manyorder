@@ -11,6 +11,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.manyorder.api.config.JwtUtil;
+import com.manyorder.api.domain.emailverification.EmailVerificationService;
 import com.manyorder.api.domain.merchant.Merchant;
 import com.manyorder.api.domain.merchant.MerchantRepository;
 import com.manyorder.api.domain.user.User;
@@ -26,6 +27,7 @@ public class AuthService {
     private final MerchantRepository merchantRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final EmailVerificationService emailVerificationService;
     private final String googleClientId;
     private final RestClient restClient = RestClient.create();
 
@@ -33,11 +35,13 @@ public class AuthService {
                        MerchantRepository merchantRepository,
                        PasswordEncoder passwordEncoder,
                        JwtUtil jwtUtil,
+                       EmailVerificationService emailVerificationService,
                        @Value("${app.google.client-id:}") String googleClientId) {
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.emailVerificationService = emailVerificationService;
         this.googleClientId = googleClientId == null ? "" : googleClientId.trim();
     }
 
@@ -79,7 +83,16 @@ public class AuthService {
         user.setStaffStore(staffStore);
         userRepository.save(user);
 
+        // Fire the confirmation email. No-ops when Resend is unconfigured and
+        // never throws, so a send issue can't fail the registration.
+        emailVerificationService.sendVerification(user);
+
         return toLoginResponse(user);
+    }
+
+    /** Resend the confirmation email to the current account (silent when already verified). */
+    public void resendVerification(User user) {
+        emailVerificationService.sendVerification(user);
     }
 
     /**
@@ -118,7 +131,11 @@ public class AuthService {
 
         User user = userRepository.findByEmail(email).orElseGet(() -> {
             String randomPassword = passwordEncoder.encode(UUID.randomUUID().toString());
-            return userRepository.save(new User(name, email, randomPassword, UserRole.MERCHANT));
+            User created = new User(name, email, randomPassword, UserRole.MERCHANT);
+            // Google already confirmed this address (email_verified checked above),
+            // so the account starts verified and needs no confirmation email.
+            created.setVerified(true);
+            return userRepository.save(created);
         });
 
         return toLoginResponse(user);
@@ -133,12 +150,14 @@ public class AuthService {
                 "Role must be MERCHANT or STAFF");
     }
 
-    private LoginResponse toLoginResponse(User user) {
+    /** Build the session payload for a user, minting a fresh JWT. Public so the
+     *  authenticated /auth/me can re-serve current state (e.g. verified flag). */
+    public LoginResponse toLoginResponse(User user) {
         String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole().name());
         Long staffStoreId = user.getStaffStore() != null ? user.getStaffStore().getId() : null;
         return new LoginResponse(
                 user.getId(), user.getFullName(), user.getEmail(),
-                user.getRole(), staffStoreId, token);
+                user.getRole(), staffStoreId, user.isVerified(), token);
     }
 
     private ResponseStatusException badCredentials() {

@@ -96,6 +96,8 @@ export interface LoginResponse {
   email: string;
   role: 'MERCHANT' | 'STAFF' | 'PLATFORM_ADMIN';
   staffStoreId: number | null;
+  /** Whether the account's email has been confirmed (drives the verify nag). */
+  verified: boolean;
   token: string;
 }
 
@@ -378,6 +380,24 @@ export const authApi = {
       body: { token, newPassword },
       auth: false,
     }),
+
+  /**
+   * Confirm an email with the token from the verification link. Returns 204 on
+   * success; a 400 means the token is invalid, expired, or already used.
+   */
+  verifyEmail: (token: string) =>
+    request<void>('/auth/verify-email', {
+      method: 'POST',
+      body: { token },
+      auth: false,
+    }),
+
+  /** Resend the verification email to the signed-in account. Always 204. */
+  resendVerification: () =>
+    request<void>('/auth/resend-verification', { method: 'POST' }),
+
+  /** Current account snapshot for the signed-in user (refreshes the verified flag). */
+  me: () => request<LoginResponse>('/auth/me'),
 };
 
 export const accountApi = {

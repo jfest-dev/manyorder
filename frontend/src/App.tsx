@@ -22,6 +22,7 @@ import { SignIn } from './components/screens/SignIn';
 import { CreateAccount } from './components/screens/CreateAccount';
 import { ForgotPassword } from './components/screens/ForgotPassword';
 import { ResetPassword } from './components/screens/ResetPassword';
+import { VerifyEmail } from './components/screens/VerifyEmail';
 import { StorefrontApp } from './components/storefront/StorefrontApp';
 
 import { useAuth } from './context/AuthContext';
@@ -745,6 +746,7 @@ export default function App() {
       />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/verify-email" element={<VerifyEmail />} />
       <Route
         path="/app"
         element={

@@ -700,3 +700,6 @@ body {
 .mo-checkbox[data-state="checked"] { background: var(--primary-solid); border-color: var(--primary-solid); color: var(--text-on-dark); }
 .mo-checkbox:focus-visible { box-shadow: 0 0 0 3px var(--bg-card-subtle); }
 .mo-checkbox:disabled { opacity: 0.5; cursor: default; }
+
+/* Spinner used by loading states (e.g. the email-verification screen). */
+@keyframes spin { to { transform: rotate(360deg); } }
