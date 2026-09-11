@@ -2,6 +2,66 @@
 
 Planned work, not yet built.
 
+## Deployment note: adding a value to a database-backed enum under ddl-auto
+
+This is a recurring migration gotcha, not a one-off. It applies to **any** future
+enum value added to a `@Enumerated(EnumType.STRING)` column, not just the one
+instance below.
+
+When Hibernate first creates a table, it generates a CHECK constraint that
+enumerates the enum's current values (e.g. on `discounts.type`:
+`CHECK (type IN ('PERCENTAGE','FIXED'))`). Our schema management is
+`ddl-auto: update`, which adds new columns but does **not** alter or drop that
+existing check constraint. So after adding a new enum constant in Java, every
+environment whose table predates the change still has the old constraint and
+will reject rows using the new value with:
+`new row for relation "<table>" violates check constraint "<table>_<col>_check"`.
+
+Tests don't catch it: the H2 test database is rebuilt from scratch each run, so
+its constraint always includes the new value.
+
+**Whenever a new value is added to a DB-backed enum, do this per environment
+(dev, staging, prod) as part of the deploy:** drop (or update) the stale check
+constraint on that column, e.g.
+`ALTER TABLE <table> DROP CONSTRAINT <table>_<col>_check;`
+Hibernate does not re-add it on `update`, so dropping it is sufficient; the app
+still validates the enum. (First seen when adding `FREE_DELIVERY` to
+`DiscountType`; the dev `discounts_type_check` had to be dropped by hand.)
+
+Longer term, consider adopting real migrations (Flyway/Liquibase) or disabling
+Hibernate's enum check-constraint generation, so enum additions stop needing a
+manual per-environment step.
+
+## Tiered automatic delivery discount by cart spend
+
+A spend-scaled delivery discount that needs no code and no merchant action at
+checkout: as the cart subtotal grows it unlocks progressively bigger delivery
+savings across multiple tiers, e.g. spend $50 → 20% off delivery, spend $100 →
+delivery fully free, with as many tiers in between as the merchant configures.
+
+This is genuinely distinct from what already exists:
+
+- The **free-delivery threshold** (`Merchant.freeDeliveryThreshold`) is a single
+  on/off binary: below the amount you pay the full fee, at/above it delivery is
+  free. No intermediate steps, one threshold only.
+- The **FREE_DELIVERY voucher** (code-based, built this session) is always 100%
+  off, requires the customer to enter a code, and has no spend condition (only
+  the optional generic min-spend gate).
+
+The tiered version is automatic (no code), applies a percentage that scales, and
+supports multiple thresholds. Needs its own investigation and a dedicated
+session:
+
+- Data model for an ordered list of tiers per store (spend threshold →
+  delivery discount percent, 0-100), replacing or subsuming the single
+  freeDeliveryThreshold.
+- Checkout logic to pick the highest tier the cart subtotal qualifies for and
+  apply that percent to the delivery fee (interacting with the existing
+  fee / TBC / already-free states and the split-order allocation).
+- A Settings UI for the merchant to add, edit, order, and remove tiers.
+
+Not scoped in detail here.
+
 ## Multi-language support (i18n): English + Bahasa Indonesia
 
 Deliberately deferred until after the Sept 30 deadline, likely tied to actual
