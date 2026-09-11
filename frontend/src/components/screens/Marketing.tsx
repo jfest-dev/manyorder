@@ -8,7 +8,7 @@ import { Select } from '../Select';
 import { DatePicker } from '../DatePicker';
 import { Checkbox } from '../Checkbox';
 import { useConfirm } from '../ConfirmDialog';
-import { discountsApi, DiscountResponse, DiscountType, DiscountPayload, ApiError } from '../../lib/api';
+import { discountsApi, DiscountResponse, DiscountType, DiscountPayload, ApiError, productsApi, ProductResponse } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 
 interface MarketingProps {
@@ -35,6 +35,14 @@ const STATUS_META: Record<Status, { label: string; color: string }> = {
 
 function fmtDate(iso: string | null): string {
   return iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+}
+
+/** Short scope description for a discount row: store-wide, the single product's
+ *  name, or an N-products count. */
+function scopeLabel(d: DiscountResponse, names: Map<number, string>): string {
+  if (d.productIds.length === 0) return 'All products';
+  if (d.productIds.length === 1) return names.get(d.productIds[0]) ?? '1 product';
+  return `${d.productIds.length} products`;
 }
 
 function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string; label: string; value: string }) {
@@ -65,14 +73,19 @@ interface FormState {
   startDate: string;
   endDate: string;
   active: boolean;
+  /** ALL = store-wide (empty scope); SPECIFIC = limited to productIds. */
+  appliesTo: 'ALL' | 'SPECIFIC';
+  productIds: number[];
 }
 const BLANK: FormState = {
   name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', startDate: '', endDate: '', active: true,
+  appliesTo: 'ALL', productIds: [],
 };
 
 export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
   const confirm = useConfirm();
   const [discounts, setDiscounts] = useState<DiscountResponse[]>([]);
+  const [products, setProducts] = useState<ProductResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -95,6 +108,22 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
   };
   useEffect(load, [storeId]);
 
+  // Products power the "Applies to" multi-select. Loaded once per store; a
+  // failure just leaves the picker empty (the discount stays store-wide).
+  useEffect(() => {
+    let cancelled = false;
+    productsApi.list(storeId)
+      .then((res) => { if (!cancelled) setProducts(res); })
+      .catch(() => { /* non-fatal: picker simply has no options */ });
+    return () => { cancelled = true; };
+  }, [storeId]);
+
+  const productName = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const p of products) m.set(p.id, p.name);
+    return m;
+  }, [products]);
+
   // Summary stats, all derived from the fetched list (no extra backend call).
   const activeCount = useMemo(() => discounts.filter((d) => statusOf(d) === 'active').length, [discounts]);
   const totalRedemptions = useMemo(() => discounts.reduce((s, d) => s + d.usedCount, 0), [discounts]);
@@ -105,6 +134,10 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
   }, [discounts]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const toggleProduct = (id: number) => setForm((f) => ({
+    ...f,
+    productIds: f.productIds.includes(id) ? f.productIds.filter((x) => x !== id) : [...f.productIds, id],
+  }));
 
   const openAdd = () => { setForm(BLANK); setEditingId(null); setFormError(null); setFormOpen(true); };
   const openEdit = (d: DiscountResponse) => {
@@ -114,6 +147,8 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       startDate: d.startsAt ? d.startsAt.slice(0, 10) : '',
       endDate: d.endsAt ? d.endsAt.slice(0, 10) : '',
       active: d.active,
+      appliesTo: d.productIds.length > 0 ? 'SPECIFIC' : 'ALL',
+      productIds: d.productIds,
     });
     setEditingId(d.id);
     setFormError(null);
@@ -129,6 +164,9 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
     const usageLimit = form.usageLimit.trim() === '' ? null : Number(form.usageLimit);
     if (usageLimit != null && (Number.isNaN(usageLimit) || usageLimit < 0)) { setFormError('Usage limit must be 0 or more.'); return; }
     if (form.startDate && form.endDate && form.startDate > form.endDate) { setFormError('The start date must be before the end date.'); return; }
+    if (form.appliesTo === 'SPECIFIC' && form.productIds.length === 0) {
+      setFormError('Select at least one product, or set the discount to apply to all products.'); return;
+    }
 
     const payload: DiscountPayload = {
       code: form.code.trim(),
@@ -139,6 +177,8 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       startsAt: form.startDate ? `${form.startDate}T00:00:00` : null,
       endsAt: form.endDate ? `${form.endDate}T23:59:59` : null,
       active: form.active,
+      // Empty array = store-wide. On edit this also clears a previous scope.
+      productIds: form.appliesTo === 'SPECIFIC' ? form.productIds : [],
     };
     setSubmitting(true);
     try {
@@ -223,7 +263,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                         <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: `${meta.color}20`, color: meta.color, fontSize: '12px', fontWeight: 500 }}>{meta.label}</span>
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)}
+                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)} · {scopeLabel(d, productName)}
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>
                         Used {d.usedCount}{d.usageLimit != null ? ` / ${d.usageLimit}` : ' · unlimited'}
@@ -292,6 +332,50 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                 <Checkbox checked={form.active} onChange={(v) => set('active', v)} ariaLabel="Active" />
                 <span className="text-small">Active (customers can use this code now)</span>
               </label>
+
+              {/* Applies to: whole order (store-wide) or a chosen set of products. */}
+              <div>
+                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Applies to</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {(['ALL', 'SPECIFIC'] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => set('appliesTo', opt)}
+                      style={{
+                        flex: 1, height: '38px', borderRadius: 'var(--radius-field)', cursor: 'pointer',
+                        fontSize: '13px', fontWeight: 600,
+                        border: `1px solid ${form.appliesTo === opt ? 'var(--primary-solid)' : 'var(--border-subtle)'}`,
+                        background: form.appliesTo === opt ? 'var(--primary-solid)' : 'var(--bg-card)',
+                        color: form.appliesTo === opt ? 'var(--text-on-dark)' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {opt === 'ALL' ? 'All products' : 'Specific products'}
+                    </button>
+                  ))}
+                </div>
+
+                {form.appliesTo === 'SPECIFIC' && (
+                  <div style={{ marginTop: '10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)', maxHeight: '200px', overflowY: 'auto' }}>
+                    {products.length === 0 ? (
+                      <p className="text-small" style={{ color: 'var(--text-muted)', margin: 0, padding: '12px' }}>No products to choose from yet.</p>
+                    ) : (
+                      products.map((p) => (
+                        <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)' }}>
+                          <Checkbox checked={form.productIds.includes(p.id)} onChange={() => toggleProduct(p.id)} ariaLabel={`Include ${p.name}`} />
+                          <span className="text-small" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                          <span className="text-xs" style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{formatMoney(p.price, currency)}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+                <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>
+                  {form.appliesTo === 'ALL'
+                    ? 'The code discounts the whole order.'
+                    : `The code only discounts the selected products (${form.productIds.length} selected).`}
+                </p>
+              </div>
 
               {formError && <p className="text-small" style={{ color: 'var(--error-color)', margin: 0 }}>{formError}</p>}
             </div>

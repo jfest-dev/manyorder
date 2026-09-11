@@ -91,7 +91,13 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
     setCheckingCode(true);
     setDiscountError(null);
     try {
-      const res = await storefrontApi.validateDiscount({ merchantId: store.id, code: code.trim(), subtotal });
+      // Send the cart items (not a subtotal) so the server prices them and a
+      // product-specific code is measured against exactly its matching lines.
+      const res = await storefrontApi.validateDiscount({
+        merchantId: store.id,
+        code: code.trim(),
+        items: items.map(cartLineToCheckoutItem),
+      });
       setApplied({ code: res.code, amount: res.discountAmount });
     } catch (e) {
       setApplied(null);

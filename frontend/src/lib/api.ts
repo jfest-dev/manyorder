@@ -613,6 +613,8 @@ export interface DiscountResponse {
   startsAt: string | null;
   endsAt: string | null;
   active: boolean;
+  /** Products the discount is limited to; empty = store-wide. */
+  productIds: number[];
   createdAt: string;
 }
 
@@ -625,6 +627,9 @@ export interface DiscountPayload {
   startsAt?: string | null;
   endsAt?: string | null;
   active?: boolean;
+  /** Empty/omitted = store-wide; non-empty = limited to these products. On
+   *  update: null leaves the scope unchanged, an empty array clears to store-wide. */
+  productIds?: number[] | null;
 }
 
 export const discountsApi = {
@@ -808,7 +813,14 @@ export const storefrontApi = {
   checkout: (payload: GuestCheckoutPayload) =>
     request<GuestCheckoutResult>(`/public/checkout`, { method: 'POST', body: payload, auth: false }),
 
-  validateDiscount: (payload: { merchantId: number; code: string; subtotal: number }) =>
+  /** Preview a code against the current cart. Items are sent (not a subtotal) so
+   *  the server prices them and measures a product-specific code against exactly
+   *  the lines it applies to. */
+  validateDiscount: (payload: {
+    merchantId: number;
+    code: string;
+    items: { productId: number; quantity: number; modifierOptionIds?: number[] }[];
+  }) =>
     request<DiscountValidationResult>(`/public/discounts/validate`, { method: 'POST', body: payload, auth: false }),
 
   /** Re-open a saved order (and its split siblings) by number + phone. */
