@@ -130,12 +130,16 @@ class DiscountIntegrationTest extends IntegrationTestBase {
     void validate_returnsAmount_forPercentage() throws Exception {
         String token = registerAndGetToken("disc-val@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Val", "disc-val-store");
+        long productId = createProduct(token, storeId, "Item", 25.00);
         createDiscount(token, storeId, Map.of("code", "TEN", "type", "PERCENTAGE", "value", 10));
 
+        // The validate contract now takes the cart items and prices them
+        // server-side: 2 x 25.00 = 50.00 subtotal, 10% off -> 5.00.
         MvcResult r = mockMvc.perform(post("/public/discounts/validate")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(
-                                Map.of("merchantId", storeId, "code", "ten", "subtotal", 50.00))))
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "merchantId", storeId, "code", "ten",
+                                "items", List.of(Map.of("productId", productId, "quantity", 2))))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("TEN"))
                 .andReturn();

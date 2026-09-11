@@ -1,5 +1,6 @@
 package com.manyorder.api.domain.product;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,6 +16,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByMerchantOrderByDisplayOrderAscIdAsc(Merchant merchant);
     List<Product> findByMerchantAndIsActiveTrueOrderByDisplayOrderAscIdAsc(Merchant merchant);
     Optional<Product> findByMerchantAndId(Merchant merchant, Long id);
+
+    /** The subset of the given ids that are products owned by this store (used to
+     *  validate a discount's product scope). */
+    List<Product> findByMerchantAndIdIn(Merchant merchant, Collection<Long> ids);
 
     /** Product counts per category for a store: [categoryId, count]. */
     @Query("""

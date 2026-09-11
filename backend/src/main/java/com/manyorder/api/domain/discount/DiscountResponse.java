@@ -2,6 +2,7 @@ package com.manyorder.api.domain.discount;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class DiscountResponse {
 
@@ -15,6 +16,8 @@ public class DiscountResponse {
     private final LocalDateTime startsAt;
     private final LocalDateTime endsAt;
     private final boolean active;
+    /** Products the discount is limited to; empty = store-wide. Sorted for stable output. */
+    private final List<Long> productIds;
     private final LocalDateTime createdAt;
 
     public DiscountResponse(Discount d) {
@@ -28,6 +31,7 @@ public class DiscountResponse {
         this.startsAt = d.getStartsAt();
         this.endsAt = d.getEndsAt();
         this.active = d.isActive();
+        this.productIds = d.getProductIds().stream().sorted().toList();
         this.createdAt = d.getCreatedAt();
     }
 
@@ -41,5 +45,6 @@ public class DiscountResponse {
     public LocalDateTime getStartsAt() { return startsAt; }
     public LocalDateTime getEndsAt() { return endsAt; }
     public boolean isActive() { return active; }
+    public List<Long> getProductIds() { return productIds; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

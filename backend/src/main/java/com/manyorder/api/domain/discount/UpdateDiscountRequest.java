@@ -2,6 +2,7 @@ package com.manyorder.api.domain.discount;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -23,6 +24,10 @@ public class UpdateDiscountRequest {
     private LocalDateTime endsAt;
     private Boolean active;
 
+    /** Null = leave the product scope unchanged; empty list = clear to store-wide;
+     *  non-empty = replace with these products. */
+    private List<Long> productIds;
+
     public UpdateDiscountRequest() {}
 
     public String getCode() { return code; }
@@ -41,4 +46,6 @@ public class UpdateDiscountRequest {
     public void setEndsAt(LocalDateTime endsAt) { this.endsAt = endsAt; }
     public Boolean getActive() { return active; }
     public void setActive(Boolean active) { this.active = active; }
+    public List<Long> getProductIds() { return productIds; }
+    public void setProductIds(List<Long> productIds) { this.productIds = productIds; }
 }

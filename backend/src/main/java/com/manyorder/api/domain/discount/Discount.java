@@ -2,10 +2,14 @@ package com.manyorder.api.domain.discount;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 import com.manyorder.api.domain.merchant.Merchant;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -63,6 +67,17 @@ public class Discount {
     @Column(nullable = false, columnDefinition = "boolean default true not null")
     private boolean active = true;
 
+    /**
+     * Product ids this discount is limited to. Empty = store-wide (applies to
+     * the whole order, the original behaviour). Stored as plain ids rather than
+     * a Product association so deleting a product never breaks a discount or its
+     * join rows: a stale id simply stops matching anything in the cart.
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "discount_products", joinColumns = @JoinColumn(name = "discount_id"))
+    @Column(name = "product_id", nullable = false)
+    private Set<Long> productIds = new HashSet<>();
+
     private LocalDateTime createdAt;
 
     protected Discount() {
@@ -102,5 +117,11 @@ public class Discount {
     public void setEndsAt(LocalDateTime endsAt) { this.endsAt = endsAt; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    public Set<Long> getProductIds() { return productIds; }
+    public void setProductIds(Set<Long> productIds) {
+        this.productIds = productIds == null ? new HashSet<>() : new HashSet<>(productIds);
+    }
+    /** True when the discount applies to the whole order (no product limit set). */
+    public boolean isStoreWide() { return productIds == null || productIds.isEmpty(); }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

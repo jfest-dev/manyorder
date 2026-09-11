@@ -133,12 +133,18 @@ public class GuestCheckoutController {
             }
         }
 
-        // 3) Discount — validated + redeemed once against the combined subtotal.
+        // 3) Discount — validated + redeemed once. A store-wide code is measured
+        //    against the whole cart; a product-specific code only against its
+        //    matching lines (and is rejected if it matches nothing). The redemption
+        //    carries the scope so a split order can allocate by matching share.
         BigDecimal combinedDiscount = BigDecimal.ZERO;
         String discountCode = null;
+        DiscountService.Redemption redemption = null;
         if (request.getDiscountCode() != null && !request.getDiscountCode().isBlank()) {
-            DiscountService.Redemption redemption =
-                    discountService.redeemForCheckout(merchant, request.getDiscountCode(), combinedSubtotal);
+            List<DiscountService.LineAmount> lineAmounts = new ArrayList<>();
+            for (Line l : ready) lineAmounts.add(new DiscountService.LineAmount(l.product().getId(), l.lineTotal()));
+            for (Line l : preorder) lineAmounts.add(new DiscountService.LineAmount(l.product().getId(), l.lineTotal()));
+            redemption = discountService.redeemForCheckout(merchant, request.getDiscountCode(), lineAmounts);
             combinedDiscount = redemption.amount();
             discountCode = redemption.code();
         }
@@ -154,9 +160,21 @@ public class GuestCheckoutController {
         if (split) {
             String groupId = UUID.randomUUID().toString();
             BigDecimal readySubtotal = sumLines(ready);
-            BigDecimal readyDiscount = combinedDiscount.signum() == 0
-                    ? BigDecimal.ZERO
-                    : combinedDiscount.multiply(readySubtotal).divide(combinedSubtotal, 2, RoundingMode.HALF_UP);
+            // Allocate the discount across the two orders by each bucket's MATCHING
+            // subtotal (the lines the code actually applies to), not the full
+            // subtotal. So a code that only matches pre-order items puts the whole
+            // discount on the pre-order order. Store-wide codes match every line,
+            // which reduces to the original full-subtotal split.
+            BigDecimal readyDiscount;
+            if (combinedDiscount.signum() == 0) {
+                readyDiscount = BigDecimal.ZERO;
+            } else {
+                BigDecimal readyMatch = matchingSubtotal(ready, redemption);
+                BigDecimal combinedMatch = readyMatch.add(matchingSubtotal(preorder, redemption));
+                readyDiscount = combinedMatch.signum() == 0
+                        ? BigDecimal.ZERO
+                        : combinedDiscount.multiply(readyMatch).divide(combinedMatch, 2, RoundingMode.HALF_UP);
+            }
             BigDecimal preDiscount = combinedDiscount.subtract(readyDiscount); // remainder, so shares sum exactly
 
             orders.add(persistOrder(merchant, customer, orderType, request, groupId,
@@ -288,34 +306,89 @@ public class GuestCheckoutController {
         return sum;
     }
 
+    /** Subtotal of the lines in one bucket that the redeemed discount applies to
+     *  (all lines for a store-wide code, matching lines for a product-specific one). */
+    private static BigDecimal matchingSubtotal(List<Line> lines, DiscountService.Redemption redemption) {
+        BigDecimal sum = BigDecimal.ZERO;
+        for (Line l : lines) {
+            if (redemption.storeWide() || redemption.productIds().contains(l.product().getId())) {
+                sum = sum.add(l.lineTotal());
+            }
+        }
+        return sum;
+    }
+
     /** A resolved cart line (product + quantity + validated modifiers + note + line total). */
     private record Line(Product product, int quantity, ModifierResolver.Resolution resolution,
                         String notes, BigDecimal lineTotal) {}
 
-    /** Live check of a voucher code before submit; 400 with a reason when not valid. */
+    /**
+     * Live check of a voucher code before submit; 400 with a reason when not valid.
+     * Takes the cart items (not a client-trusted subtotal) so line prices are
+     * re-derived server-side and a product-specific code can be measured against
+     * exactly the lines it applies to.
+     */
     @PostMapping("/discounts/validate")
+    @Transactional(readOnly = true)
     public DiscountValidationResponse validateDiscount(@Valid @RequestBody DiscountValidationRequest request) {
         Merchant merchant = merchantRepository.findById(request.getMerchantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
         if (merchant.isArchived()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found");
         }
-        BigDecimal subtotal = request.getSubtotal() != null ? request.getSubtotal() : BigDecimal.ZERO;
-        BigDecimal amount = discountService.previewAmount(merchant, request.getCode(), subtotal);
-        return new DiscountValidationResponse(request.getCode().trim().toUpperCase(), amount);
+        List<DiscountService.LineAmount> lines = resolveLineAmounts(merchant, request.getItems());
+        DiscountService.Redemption preview =
+                discountService.previewForCheckout(merchant, request.getCode(), lines);
+        return new DiscountValidationResponse(preview.code(), preview.amount());
+    }
+
+    /** Re-price the given cart items server-side into discount line amounts. Ids
+     *  must belong to the store; modifiers are validated and priced as at checkout. */
+    private List<DiscountService.LineAmount> resolveLineAmounts(
+            Merchant merchant, List<DiscountValidationRequest.Item> items) {
+        List<DiscountService.LineAmount> out = new ArrayList<>();
+        if (items == null) return out;
+        for (DiscountValidationRequest.Item it : items) {
+            if (it.getProductId() == null || it.getQuantity() == null || it.getQuantity() <= 0) continue;
+            Product product = productRepository.findByMerchantAndId(merchant, it.getProductId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Product not found in this store: " + it.getProductId()));
+            ModifierResolver.Resolution resolution =
+                    ModifierResolver.resolve(product, it.getModifierOptionIds());
+            BigDecimal effectiveUnit = product.getPrice().add(resolution.totalPerUnit());
+            out.add(new DiscountService.LineAmount(
+                    product.getId(), effectiveUnit.multiply(BigDecimal.valueOf(it.getQuantity()))));
+        }
+        return out;
     }
 
     public static class DiscountValidationRequest {
+        @jakarta.validation.constraints.NotNull
         private Long merchantId;
+        @jakarta.validation.constraints.NotBlank
         private String code;
-        private BigDecimal subtotal;
+        /** The current cart, so the matching subtotal is computed from server prices. */
+        private List<Item> items;
 
         public Long getMerchantId() { return merchantId; }
         public void setMerchantId(Long merchantId) { this.merchantId = merchantId; }
         public String getCode() { return code; }
         public void setCode(String code) { this.code = code; }
-        public BigDecimal getSubtotal() { return subtotal; }
-        public void setSubtotal(BigDecimal subtotal) { this.subtotal = subtotal; }
+        public List<Item> getItems() { return items; }
+        public void setItems(List<Item> items) { this.items = items; }
+
+        public static class Item {
+            private Long productId;
+            private Integer quantity;
+            private List<Long> modifierOptionIds;
+
+            public Long getProductId() { return productId; }
+            public void setProductId(Long productId) { this.productId = productId; }
+            public Integer getQuantity() { return quantity; }
+            public void setQuantity(Integer quantity) { this.quantity = quantity; }
+            public List<Long> getModifierOptionIds() { return modifierOptionIds; }
+            public void setModifierOptionIds(List<Long> modifierOptionIds) { this.modifierOptionIds = modifierOptionIds; }
+        }
     }
 
     public record DiscountValidationResponse(String code, BigDecimal discountAmount) {}
