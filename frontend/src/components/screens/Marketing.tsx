@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Plus, Tag, Percent, X, Edit2, Trash2, TrendingUp, Award } from 'lucide-react';
+import { Plus, Tag, Percent, X, Edit2, Trash2, TrendingUp, Award, Search } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
@@ -94,6 +94,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
   const [form, setForm] = useState<FormState>(BLANK);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [productSearch, setProductSearch] = useState('');
 
   const load = () => {
     let cancelled = false;
@@ -139,7 +140,42 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
     productIds: f.productIds.includes(id) ? f.productIds.filter((x) => x !== id) : [...f.productIds, id],
   }));
 
-  const openAdd = () => { setForm(BLANK); setEditingId(null); setFormError(null); setFormOpen(true); };
+  // Categories present among the store's products, in their storefront order,
+  // for the "add a whole category at once" quick-select.
+  const categories = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; order: number }>();
+    for (const p of products) {
+      if (p.categoryId != null && !map.has(p.categoryId)) {
+        map.set(p.categoryId, { id: p.categoryId, name: p.categoryName ?? 'Category', order: p.categoryDisplayOrder ?? 0 });
+      }
+    }
+    return [...map.values()].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  }, [products]);
+
+  // The checklist, narrowed by the search box (matches product or category name).
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) =>
+      p.name.toLowerCase().includes(q) || (p.categoryName ?? '').toLowerCase().includes(q));
+  }, [products, productSearch]);
+
+  const productIdsInCategory = (catId: number) => products.filter((p) => p.categoryId === catId).map((p) => p.id);
+  const categoryFullySelected = (catId: number) => {
+    const ids = productIdsInCategory(catId);
+    return ids.length > 0 && ids.every((id) => form.productIds.includes(id));
+  };
+  // Add (or, if already all-selected, remove) every product in a category. Still
+  // stored as explicit product ids - the category is a shortcut, not a saved link.
+  const toggleCategory = (catId: number) => setForm((f) => {
+    const ids = productIdsInCategory(catId);
+    const allSelected = ids.length > 0 && ids.every((id) => f.productIds.includes(id));
+    const next = new Set(f.productIds);
+    ids.forEach((id) => (allSelected ? next.delete(id) : next.add(id)));
+    return { ...f, productIds: [...next] };
+  });
+
+  const openAdd = () => { setForm(BLANK); setEditingId(null); setFormError(null); setProductSearch(''); setFormOpen(true); };
   const openEdit = (d: DiscountResponse) => {
     setForm({
       name: d.name ?? '', code: d.code, type: d.type, value: String(d.value),
@@ -152,6 +188,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
     });
     setEditingId(d.id);
     setFormError(null);
+    setProductSearch('');
     setFormOpen(true);
   };
 
@@ -356,19 +393,66 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                 </div>
 
                 {form.appliesTo === 'SPECIFIC' && (
-                  <div style={{ marginTop: '10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)', maxHeight: '200px', overflowY: 'auto' }}>
-                    {products.length === 0 ? (
+                  products.length === 0 ? (
+                    <div style={{ marginTop: '10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)' }}>
                       <p className="text-small" style={{ color: 'var(--text-muted)', margin: 0, padding: '12px' }}>No products to choose from yet.</p>
-                    ) : (
-                      products.map((p) => (
-                        <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)' }}>
-                          <Checkbox checked={form.productIds.includes(p.id)} onChange={() => toggleProduct(p.id)} ariaLabel={`Include ${p.name}`} />
-                          <span className="text-small" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                          <span className="text-xs" style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{formatMoney(p.price, currency)}</span>
-                        </label>
-                      ))
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: '10px' }}>
+                      {/* Search over the checklist. */}
+                      <div style={{ position: 'relative', marginBottom: '8px' }}>
+                        <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                        <input
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          placeholder="Search products"
+                          aria-label="Search products"
+                          style={{ width: '100%', height: '36px', padding: '0 10px 0 30px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', fontSize: '13px', outline: 'none' }}
+                        />
+                      </div>
+
+                      {/* Quick-select whole categories. Toggles the category's products
+                          in/out of the explicit selection; a filled chip = all selected. */}
+                      {categories.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                          <span className="text-xs" style={{ color: 'var(--text-muted)', alignSelf: 'center' }}>Add a category:</span>
+                          {categories.map((c) => {
+                            const on = categoryFullySelected(c.id);
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => toggleCategory(c.id)}
+                                style={{
+                                  height: '28px', padding: '0 10px', borderRadius: '999px', cursor: 'pointer',
+                                  fontSize: '12px', fontWeight: 600,
+                                  border: `1px solid ${on ? 'var(--primary-solid)' : 'var(--border-subtle)'}`,
+                                  background: on ? 'var(--primary-solid)' : 'var(--bg-card)',
+                                  color: on ? 'var(--text-on-dark)' : 'var(--text-secondary)',
+                                }}
+                              >
+                                {on ? '✓ ' : '+ '}{c.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)', maxHeight: '200px', overflowY: 'auto' }}>
+                        {filteredProducts.length === 0 ? (
+                          <p className="text-small" style={{ color: 'var(--text-muted)', margin: 0, padding: '12px' }}>No products match "{productSearch.trim()}".</p>
+                        ) : (
+                          filteredProducts.map((p) => (
+                            <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)' }}>
+                              <Checkbox checked={form.productIds.includes(p.id)} onChange={() => toggleProduct(p.id)} ariaLabel={`Include ${p.name}`} />
+                              <span className="text-small" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                              <span className="text-xs" style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{formatMoney(p.price, currency)}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )
                 )}
                 <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>
                   {form.appliesTo === 'ALL'
