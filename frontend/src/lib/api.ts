@@ -609,6 +609,8 @@ export interface DiscountResponse {
   type: DiscountType;
   value: number;
   usageLimit: number | null;
+  /** Minimum cart subtotal required to use the code; null = no minimum. */
+  minSpend: number | null;
   usedCount: number;
   startsAt: string | null;
   endsAt: string | null;
@@ -624,6 +626,9 @@ export interface DiscountPayload {
   type: DiscountType;
   value: number;
   usageLimit?: number | null;
+  /** Minimum cart subtotal to use the code. On update: null/omitted leaves it
+   *  unchanged, 0 clears it, a positive value sets it. */
+  minSpend?: number | null;
   startsAt?: string | null;
   endsAt?: string | null;
   active?: boolean;

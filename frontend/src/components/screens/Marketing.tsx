@@ -71,6 +71,7 @@ interface FormState {
   type: DiscountType;
   value: string;
   usageLimit: string;
+  minSpend: string;
   startDate: string;
   endDate: string;
   active: boolean;
@@ -79,7 +80,7 @@ interface FormState {
   productIds: number[];
 }
 const BLANK: FormState = {
-  name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', startDate: '', endDate: '', active: true,
+  name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', minSpend: '', startDate: '', endDate: '', active: true,
   appliesTo: 'ALL', productIds: [],
 };
 
@@ -191,6 +192,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
     setForm({
       name: d.name ?? '', code: d.code, type: d.type, value: String(d.value),
       usageLimit: d.usageLimit != null ? String(d.usageLimit) : '',
+      minSpend: d.minSpend != null ? String(d.minSpend) : '',
       startDate: d.startsAt ? d.startsAt.slice(0, 10) : '',
       endDate: d.endsAt ? d.endsAt.slice(0, 10) : '',
       active: d.active,
@@ -211,6 +213,8 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
     if (form.type === 'PERCENTAGE' && value > 100) { setFormError('A percentage discount cannot exceed 100%.'); return; }
     const usageLimit = form.usageLimit.trim() === '' ? null : Number(form.usageLimit);
     if (usageLimit != null && (Number.isNaN(usageLimit) || usageLimit < 0)) { setFormError('Usage limit must be 0 or more.'); return; }
+    const minSpend = form.minSpend.trim() === '' ? null : Number(form.minSpend);
+    if (minSpend != null && (Number.isNaN(minSpend) || minSpend <= 0)) { setFormError('Minimum spend must be greater than 0, or left blank.'); return; }
     if (form.startDate && form.endDate && form.startDate > form.endDate) { setFormError('The start date must be before the end date.'); return; }
     if (form.appliesTo === 'SPECIFIC' && form.productIds.length === 0) {
       setFormError('Select at least one product, or set the discount to apply to all products.'); return;
@@ -222,6 +226,8 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       type: form.type,
       value,
       usageLimit,
+      // On edit, a blank field clears the minimum (0); on create it's simply omitted.
+      minSpend: minSpend ?? (editingId != null ? 0 : undefined),
       startsAt: form.startDate ? `${form.startDate}T00:00:00` : null,
       endsAt: form.endDate ? `${form.endDate}T23:59:59` : null,
       active: form.active,
@@ -313,7 +319,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                         <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: `${meta.color}20`, color: meta.color, fontSize: '12px', fontWeight: 500 }}>{meta.label}</span>
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)} · {scopeLabel(d, productName)}
+                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)} · {scopeLabel(d, productName)}{d.minSpend != null ? ` · min ${formatMoney(d.minSpend, currency)}` : ''}
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>
                         Used {d.usedCount}{d.usageLimit != null ? ` / ${d.usageLimit}` : ' · unlimited'}
@@ -366,6 +372,11 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
               </div>
 
               <FieldInput label="Usage limit" type="number" inputMode="numeric" placeholder="Leave blank for unlimited" value={form.usageLimit} onChange={(v) => set('usageLimit', v)} helperText="Total redemptions allowed." />
+
+              <div>
+                <MoneyField label="Minimum spend" currency={currency} value={form.minSpend === '' ? null : Number(form.minSpend)} onChange={(n) => set('minSpend', n == null ? '' : String(n))} />
+                <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>Optional. The code only applies when the cart subtotal reaches this amount.</p>
+              </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
