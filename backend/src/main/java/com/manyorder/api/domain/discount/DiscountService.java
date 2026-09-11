@@ -55,6 +55,7 @@ public class DiscountService {
                 request.getActive() == null || request.getActive());
         discount.setName(request.getName());
         discount.setProductIds(validateProductScope(merchant, request.getProductIds()));
+        discount.setMinSpend(request.getMinSpend());
         return new DiscountResponse(discountRepository.save(discount));
     }
 
@@ -80,6 +81,10 @@ public class DiscountService {
         // Null = leave scope unchanged; a list (even empty) replaces it.
         if (request.getProductIds() != null) {
             discount.setProductIds(validateProductScope(merchant, request.getProductIds()));
+        }
+        // Null = leave the minimum unchanged; 0 clears it; a positive value sets it.
+        if (request.getMinSpend() != null) {
+            discount.setMinSpend(request.getMinSpend().signum() == 0 ? null : request.getMinSpend());
         }
 
         validateShape(discount.getType(), discount.getValue(), discount.getStartsAt(), discount.getEndsAt());
@@ -168,6 +173,16 @@ public class DiscountService {
     /** Shared amount + scope resolution. Rejects a product-specific code that
      *  matches nothing in the cart, so it can't apply as a silent zero. */
     private Redemption resolve(Discount discount, List<LineAmount> lines) {
+        // Minimum spend gates on the WHOLE cart subtotal (all lines), independent
+        // of any product scope, so it must be checked before the scope match.
+        if (discount.getMinSpend() != null) {
+            BigDecimal fullSubtotal = BigDecimal.ZERO;
+            for (LineAmount line : lines) fullSubtotal = fullSubtotal.add(line.lineTotal());
+            if (fullSubtotal.compareTo(discount.getMinSpend()) < 0) {
+                throw reject("Spend at least " + money(discount) + " to use this code.");
+            }
+        }
+
         BigDecimal matching = matchingSubtotal(discount, lines);
         if (!discount.isStoreWide() && matching.signum() == 0) {
             throw reject("This code only applies to specific items, none of which are in your cart.");
@@ -175,6 +190,14 @@ public class DiscountService {
         BigDecimal amount = computeAmount(discount, matching);
         return new Redemption(discount.getCode(), amount, discount.isStoreWide(),
                 Set.copyOf(discount.getProductIds()));
+    }
+
+    /** Format the discount's minimum spend in the store's currency, for the
+     *  customer-facing reject message (SGD "$30.00", IDR "Rp 30000"). */
+    private String money(Discount discount) {
+        String currency = discount.getMerchant().getCurrency();
+        String symbol = "IDR".equalsIgnoreCase(currency) ? "Rp " : "$";
+        return symbol + discount.getMinSpend().toPlainString();
     }
 
     /**

@@ -294,4 +294,112 @@ class ProductDiscountIntegrationTest extends IntegrationTestBase {
                                 "items", List.of(Map.of("productId", b, "quantity", 1))))))
                 .andExpect(status().isBadRequest());
     }
+
+    // ---------- minimum spend ----------
+
+    private void validate(long storeId, String code, List<long[]> items, int expected) throws Exception {
+        List<Map<String, Object>> itemBodies = new ArrayList<>();
+        for (long[] it : items) itemBodies.add(Map.of("productId", it[0], "quantity", it[1]));
+        mockMvc.perform(post("/public/discounts/validate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "merchantId", storeId, "code", code, "items", itemBodies))))
+                .andExpect(status().is(expected));
+    }
+
+    @Test
+    void minSpend_belowThreshold_rejectedAtCheckoutAndValidate() throws Exception {
+        String token = registerAndGetToken("ms-below@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "MS Below", "ms-below-store");
+        long a = createProduct(token, storeId, "A", 10.00);
+        createDiscount(token, storeId, Map.of("code", "MIN30", "type", "PERCENTAGE", "value", 10, "minSpend", 30));
+
+        // 2 x 10 = 20 subtotal, under the 30 minimum.
+        checkout(storeId, List.of(new long[]{a, 2}), "MIN30", 400);
+        validate(storeId, "MIN30", List.of(new long[]{a, 2}), 400);
+    }
+
+    @Test
+    void minSpend_atThreshold_applies() throws Exception {
+        String token = registerAndGetToken("ms-at@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "MS At", "ms-at-store");
+        long a = createProduct(token, storeId, "A", 10.00);
+        createDiscount(token, storeId, Map.of("code", "MIN30", "type", "PERCENTAGE", "value", 10, "minSpend", 30));
+
+        // 3 x 10 = 30 exactly meets the minimum (>=). 10% of 30 = 3.
+        MvcResult r = checkout(storeId, List.of(new long[]{a, 3}), "MIN30", 201);
+        assertEquals(3.0, json(r).get("discountAmount").asDouble(), 0.001);
+        validate(storeId, "MIN30", List.of(new long[]{a, 3}), 200);
+    }
+
+    @Test
+    void minSpend_checksFullCart_notMatchingSubtotal() throws Exception {
+        String token = registerAndGetToken("ms-full@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "MS Full", "ms-full-store");
+        long a = createProduct(token, storeId, "A", 10.00);
+        long b = createProduct(token, storeId, "B", 25.00);
+        // Product-specific (A only) AND a 30 minimum.
+        createDiscount(token, storeId, Map.of(
+                "code", "AMIN", "type", "PERCENTAGE", "value", 50, "minSpend", 30, "productIds", List.of(a)));
+
+        // Full cart A(10)+B(25)=35 meets the 30 minimum, even though the MATCHING
+        // subtotal is only A's 10. So it applies: 50% off A's 10 = 5.
+        MvcResult r = checkout(storeId, List.of(new long[]{a, 1}, new long[]{b, 1}), "AMIN", 201);
+        assertEquals(5.0, json(r).get("discountAmount").asDouble(), 0.001);
+        assertEquals(30.0, json(r).get("totalAmount").asDouble(), 0.001);
+    }
+
+    @Test
+    void minSpend_fullCartBelow_rejectsEvenWithMatchingProduct() throws Exception {
+        String token = registerAndGetToken("ms-fullbelow@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "MS FullBelow", "ms-fullbelow-store");
+        long a = createProduct(token, storeId, "A", 10.00);
+        long b = createProduct(token, storeId, "B", 15.00);
+        createDiscount(token, storeId, Map.of(
+                "code", "AMIN", "type", "PERCENTAGE", "value", 50, "minSpend", 30, "productIds", List.of(a)));
+
+        // A is present, but the full cart 10+15=25 is under 30 -> rejected.
+        checkout(storeId, List.of(new long[]{a, 1}, new long[]{b, 1}), "AMIN", 400);
+    }
+
+    @Test
+    void minSpend_splitCart_usesCombinedSubtotal() throws Exception {
+        String token = registerAndGetToken("ms-split@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "MS Split", "ms-split-store");
+        long ready = createProduct(token, storeId, "Ready", 10.00);
+        long pre = createProduct(token, storeId, Map.of(
+                "name", "Pre", "price", 25.00, "preOrder", true, "preOrderReadyDate", "2099-01-01"));
+        createDiscount(token, storeId, Map.of("code", "MIN30", "type", "PERCENTAGE", "value", 10, "minSpend", 30));
+
+        // Combined ready(10) + pre(25) = 35 meets the 30 minimum across the split.
+        MvcResult r = checkout(storeId, List.of(new long[]{ready, 1}, new long[]{pre, 1}), "MIN30", 201);
+        assertEquals(3.5, json(r).get("discountAmount").asDouble(), 0.001); // 10% of 35
+
+        // A cheaper split (10 + 15 = 25) is under the minimum -> rejected.
+        long pre2 = createProduct(token, storeId, Map.of(
+                "name", "Pre2", "price", 15.00, "preOrder", true, "preOrderReadyDate", "2099-01-01"));
+        checkout(storeId, List.of(new long[]{ready, 1}, new long[]{pre2, 1}), "MIN30", 400);
+    }
+
+    @Test
+    void minSpend_roundTrips_andClearsWithZero() throws Exception {
+        String token = registerAndGetToken("ms-crud@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "MS Crud", "ms-crud-store");
+        long id = createDiscount(token, storeId, Map.of(
+                "code", "MIN30", "type", "PERCENTAGE", "value", 10, "minSpend", 30));
+
+        mockMvc.perform(get("/merchant/stores/" + storeId + "/discounts")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].minSpend").value(30));
+
+        // 0 clears the minimum back to none (null).
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch("/merchant/stores/" + storeId + "/discounts/" + id)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("minSpend", 0))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.minSpend").doesNotExist());
+    }
 }

@@ -12,6 +12,7 @@ public class DiscountResponse {
     private final DiscountType type;
     private final BigDecimal value;
     private final Integer usageLimit;
+    private final BigDecimal minSpend;
     private final int usedCount;
     private final LocalDateTime startsAt;
     private final LocalDateTime endsAt;
@@ -27,6 +28,7 @@ public class DiscountResponse {
         this.type = d.getType();
         this.value = d.getValue();
         this.usageLimit = d.getUsageLimit();
+        this.minSpend = d.getMinSpend();
         this.usedCount = d.getUsedCount();
         this.startsAt = d.getStartsAt();
         this.endsAt = d.getEndsAt();
@@ -41,6 +43,7 @@ public class DiscountResponse {
     public DiscountType getType() { return type; }
     public BigDecimal getValue() { return value; }
     public Integer getUsageLimit() { return usageLimit; }
+    public BigDecimal getMinSpend() { return minSpend; }
     public int getUsedCount() { return usedCount; }
     public LocalDateTime getStartsAt() { return startsAt; }
     public LocalDateTime getEndsAt() { return endsAt; }

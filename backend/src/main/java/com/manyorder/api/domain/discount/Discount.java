@@ -57,6 +57,14 @@ public class Discount {
     /** Total redemptions allowed. Null = unlimited. */
     private Integer usageLimit;
 
+    /**
+     * Minimum cart subtotal required to use the code. Null = no minimum. Checked
+     * against the whole cart's product subtotal (pre-discount, pre-delivery),
+     * independent of any product scope.
+     */
+    @Column(name = "min_spend")
+    private BigDecimal minSpend;
+
     @Column(nullable = false, columnDefinition = "integer default 0 not null")
     private int usedCount = 0;
 
@@ -109,6 +117,8 @@ public class Discount {
     public void setValue(BigDecimal value) { this.value = value; }
     public Integer getUsageLimit() { return usageLimit; }
     public void setUsageLimit(Integer usageLimit) { this.usageLimit = usageLimit; }
+    public BigDecimal getMinSpend() { return minSpend; }
+    public void setMinSpend(BigDecimal minSpend) { this.minSpend = minSpend; }
     public int getUsedCount() { return usedCount; }
     public void setUsedCount(int usedCount) { this.usedCount = usedCount; }
     public LocalDateTime getStartsAt() { return startsAt; }
