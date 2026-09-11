@@ -121,32 +121,34 @@ public class GuestCheckoutController {
         //    No fee configured (null) → "to be confirmed by seller": fee 0 + pending
         //    flag, resolved off-platform. A set fee is waived at/above the free-
         //    delivery threshold; an explicit 0 is genuinely free.
-        BigDecimal deliveryFee = BigDecimal.ZERO;
-        boolean deliveryFeePending = false;
-        if (orderType == OrderType.DELIVERY) {
-            if (merchant.getDeliveryFee() == null) {
-                deliveryFeePending = true;
-            } else {
-                BigDecimal threshold = merchant.getFreeDeliveryThreshold();
-                boolean freeByThreshold = threshold != null && combinedSubtotal.compareTo(threshold) >= 0;
-                deliveryFee = freeByThreshold ? BigDecimal.ZERO : merchant.getDeliveryFee();
-            }
-        }
+        DeliveryQuote quote = computeDeliveryFee(merchant, orderType, combinedSubtotal);
+        BigDecimal deliveryFee = quote.fee();
+        boolean deliveryFeePending = quote.pending();
 
         // 3) Discount — validated + redeemed once. A store-wide code is measured
         //    against the whole cart; a product-specific code only against its
-        //    matching lines (and is rejected if it matches nothing). The redemption
+        //    matching lines (rejected if it matches nothing). A FREE_DELIVERY code
+        //    waives the delivery fee instead of discounting products. The redemption
         //    carries the scope so a split order can allocate by matching share.
         BigDecimal combinedDiscount = BigDecimal.ZERO;
+        BigDecimal deliveryDiscount = BigDecimal.ZERO;
         String discountCode = null;
         DiscountService.Redemption redemption = null;
         if (request.getDiscountCode() != null && !request.getDiscountCode().isBlank()) {
             List<DiscountService.LineAmount> lineAmounts = new ArrayList<>();
             for (Line l : ready) lineAmounts.add(new DiscountService.LineAmount(l.product().getId(), l.lineTotal()));
             for (Line l : preorder) lineAmounts.add(new DiscountService.LineAmount(l.product().getId(), l.lineTotal()));
-            redemption = discountService.redeemForCheckout(merchant, request.getDiscountCode(), lineAmounts);
+            DiscountService.DeliveryContext ctx = new DiscountService.DeliveryContext(
+                    orderType == OrderType.DELIVERY, deliveryFee, deliveryFeePending);
+            redemption = discountService.redeemForCheckout(merchant, request.getDiscountCode(), lineAmounts, ctx);
             combinedDiscount = redemption.amount();
             discountCode = redemption.code();
+            if (redemption.freeDelivery()) {
+                // Waive delivery: the net fee is zero and nothing is left to confirm.
+                deliveryDiscount = redemption.deliveryDiscount();
+                deliveryFee = BigDecimal.ZERO;
+                deliveryFeePending = false;
+            }
         }
 
         // 4) One order, or a split into two linked orders when the cart mixes
@@ -177,14 +179,15 @@ public class GuestCheckoutController {
             }
             BigDecimal preDiscount = combinedDiscount.subtract(readyDiscount); // remainder, so shares sum exactly
 
+            // The delivery fee (and any free-delivery waiver) lives on the ready order.
             orders.add(persistOrder(merchant, customer, orderType, request, groupId,
-                    ready, readySubtotal, deliveryFee, deliveryFeePending, readyDiscount, discountCode));
+                    ready, readySubtotal, deliveryFee, deliveryFeePending, readyDiscount, deliveryDiscount, discountCode));
             orders.add(persistOrder(merchant, customer, orderType, request, groupId,
-                    preorder, sumLines(preorder), BigDecimal.ZERO, false, preDiscount, discountCode));
+                    preorder, sumLines(preorder), BigDecimal.ZERO, false, preDiscount, BigDecimal.ZERO, discountCode));
         } else {
             List<Line> all = ready.isEmpty() ? preorder : ready; // exactly one bucket is non-empty
             orders.add(persistOrder(merchant, customer, orderType, request, null,
-                    all, combinedSubtotal, deliveryFee, deliveryFeePending, combinedDiscount, discountCode));
+                    all, combinedSubtotal, deliveryFee, deliveryFeePending, combinedDiscount, deliveryDiscount, discountCode));
         }
 
         // Notify the merchant, if they've opted in. Best-effort and isolated: the
@@ -205,7 +208,7 @@ public class GuestCheckoutController {
     private Order persistOrder(Merchant merchant, Customer customer, OrderType orderType,
                                GuestCheckoutRequest request, String groupId, List<Line> lines,
                                BigDecimal subtotal, BigDecimal deliveryFee, boolean deliveryFeePending,
-                               BigDecimal discount, String discountCode) {
+                               BigDecimal discount, BigDecimal deliveryDiscount, String discountCode) {
         Order order = new Order(customer, merchant, orderType,
                 request.getCustomerName(), request.getCustomerPhone());
         order.setSource(OrderSource.STOREFRONT);
@@ -236,9 +239,27 @@ public class GuestCheckoutController {
         order.setDeliveryFee(deliveryFee);
         order.setDeliveryFeePending(deliveryFeePending);
         order.setDiscountAmount(discount);
-        if (discount.signum() > 0) order.setDiscountCode(discountCode);
+        order.setDeliveryDiscount(deliveryDiscount);
+        // Record the code when this order actually carries the discount's effect
+        // (a product discount, or a free-delivery waiver on the fee-bearing order).
+        if (discount.signum() > 0 || deliveryDiscount.signum() > 0) order.setDiscountCode(discountCode);
+        // deliveryFee is already the net charge (0 when waived), so the total
+        // formula is unchanged; deliveryDiscount is informational only.
         order.setTotalAmount(subtotal.add(deliveryFee).subtract(discount).max(BigDecimal.ZERO));
         return orderRepository.save(order);
+    }
+
+    private record DeliveryQuote(BigDecimal fee, boolean pending) {}
+
+    /** The delivery fee that applies to a checkout: none for pickup; to-be-confirmed
+     *  when the store has no fee set; waived at/above the free-delivery threshold;
+     *  otherwise the store's flat fee. Shared by checkout and the validate preview. */
+    private DeliveryQuote computeDeliveryFee(Merchant merchant, OrderType orderType, BigDecimal subtotal) {
+        if (orderType != OrderType.DELIVERY) return new DeliveryQuote(BigDecimal.ZERO, false);
+        if (merchant.getDeliveryFee() == null) return new DeliveryQuote(BigDecimal.ZERO, true);
+        BigDecimal threshold = merchant.getFreeDeliveryThreshold();
+        boolean freeByThreshold = threshold != null && subtotal.compareTo(threshold) >= 0;
+        return new DeliveryQuote(freeByThreshold ? BigDecimal.ZERO : merchant.getDeliveryFee(), false);
     }
 
     /**
@@ -254,7 +275,7 @@ public class GuestCheckoutController {
         List<GuestCheckoutResponse.OrderSummary> summaries = new ArrayList<>();
         List<GuestCheckoutResponse.ItemSummary> allItems = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO, deliveryFee = BigDecimal.ZERO,
-                discount = BigDecimal.ZERO, total = BigDecimal.ZERO;
+                discount = BigDecimal.ZERO, deliveryDiscount = BigDecimal.ZERO, total = BigDecimal.ZERO;
         boolean pending = false;
         String discountCode = null;
 
@@ -273,11 +294,13 @@ public class GuestCheckoutController {
             String kind = o.getOrderGroupId() == null ? "STANDARD" : (isPreorderOrder(o) ? "PREORDER" : "READY");
             summaries.add(new GuestCheckoutResponse.OrderSummary(
                     o.getId(), kind, o.getStatus().name(), o.getPaymentStatus().name(),
-                    o.getSubtotal(), o.getDeliveryFee(), o.getDiscountAmount(), o.getTotalAmount(), items));
+                    o.getSubtotal(), o.getDeliveryFee(), o.getDiscountAmount(), o.getDeliveryDiscount(),
+                    o.getTotalAmount(), items));
 
             subtotal = subtotal.add(o.getSubtotal());
             deliveryFee = deliveryFee.add(o.getDeliveryFee());
             discount = discount.add(o.getDiscountAmount());
+            deliveryDiscount = deliveryDiscount.add(o.getDeliveryDiscount());
             total = total.add(o.getTotalAmount());
             pending = pending || o.isDeliveryFeePending();
             if (discountCode == null && o.getDiscountCode() != null) discountCode = o.getDiscountCode();
@@ -289,7 +312,7 @@ public class GuestCheckoutController {
                 primary.getPaymentMethod(), primary.getContactName(), primary.getOrderType().name(),
                 primary.getDeliveryAddress(), primary.getNotes(),
                 primary.getStatus().name(), primary.getPaymentStatus().name(),
-                subtotal, deliveryFee, pending, discount, discountCode, total,
+                subtotal, deliveryFee, pending, discount, deliveryDiscount, discountCode, total,
                 primary.getCreatedAt(), allItems, summaries);
     }
 
@@ -337,9 +360,20 @@ public class GuestCheckoutController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found");
         }
         List<DiscountService.LineAmount> lines = resolveLineAmounts(merchant, request.getItems());
+        // Build the same delivery context the submit would, so a free-delivery
+        // code previews identically (waived amount, or a pickup/already-free reject).
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (DiscountService.LineAmount l : lines) subtotal = subtotal.add(l.lineTotal());
+        OrderType orderType = "DELIVERY".equalsIgnoreCase(request.getFulfilmentMethod())
+                ? OrderType.DELIVERY : OrderType.PICKUP;
+        DeliveryQuote quote = computeDeliveryFee(merchant, orderType, subtotal);
+        DiscountService.DeliveryContext ctx = new DiscountService.DeliveryContext(
+                orderType == OrderType.DELIVERY, quote.fee(), quote.pending());
+
         DiscountService.Redemption preview =
-                discountService.previewForCheckout(merchant, request.getCode(), lines);
-        return new DiscountValidationResponse(preview.code(), preview.amount());
+                discountService.previewForCheckout(merchant, request.getCode(), lines, ctx);
+        return new DiscountValidationResponse(
+                preview.code(), preview.amount(), preview.freeDelivery(), preview.deliveryDiscount());
     }
 
     /** Re-price the given cart items server-side into discount line amounts. Ids
@@ -369,6 +403,8 @@ public class GuestCheckoutController {
         private String code;
         /** The current cart, so the matching subtotal is computed from server prices. */
         private List<Item> items;
+        /** PICKUP or DELIVERY, so a free-delivery code previews against the real fee. */
+        private String fulfilmentMethod;
 
         public Long getMerchantId() { return merchantId; }
         public void setMerchantId(Long merchantId) { this.merchantId = merchantId; }
@@ -376,6 +412,8 @@ public class GuestCheckoutController {
         public void setCode(String code) { this.code = code; }
         public List<Item> getItems() { return items; }
         public void setItems(List<Item> items) { this.items = items; }
+        public String getFulfilmentMethod() { return fulfilmentMethod; }
+        public void setFulfilmentMethod(String fulfilmentMethod) { this.fulfilmentMethod = fulfilmentMethod; }
 
         public static class Item {
             private Long productId;
@@ -391,7 +429,10 @@ public class GuestCheckoutController {
         }
     }
 
-    public record DiscountValidationResponse(String code, BigDecimal discountAmount) {}
+    /** discountAmount is the product money off (0 for a free-delivery code);
+     *  freeDelivery + deliveryDiscount describe a delivery waiver preview. */
+    public record DiscountValidationResponse(String code, BigDecimal discountAmount,
+                                             boolean freeDelivery, BigDecimal deliveryDiscount) {}
 
     /**
      * Public order lookup by order number + phone, scoped to the store. Lets a

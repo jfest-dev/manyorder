@@ -30,6 +30,7 @@ public class OrderResponse {
     private BigDecimal deliveryFee;
     private boolean deliveryFeePending;
     private BigDecimal discountAmount;
+    private BigDecimal deliveryDiscount;
     private String discountCode;
     private String orderGroupId;
     private BigDecimal totalAmount;
@@ -58,6 +59,7 @@ public class OrderResponse {
             BigDecimal deliveryFee,
             boolean deliveryFeePending,
             BigDecimal discountAmount,
+            BigDecimal deliveryDiscount,
             String discountCode,
             String orderGroupId,
             BigDecimal totalAmount,
@@ -84,6 +86,7 @@ public class OrderResponse {
         this.deliveryFee = deliveryFee;
         this.deliveryFeePending = deliveryFeePending;
         this.discountAmount = discountAmount;
+        this.deliveryDiscount = deliveryDiscount;
         this.discountCode = discountCode;
         this.orderGroupId = orderGroupId;
         this.totalAmount = totalAmount;
@@ -112,6 +115,7 @@ public class OrderResponse {
     public BigDecimal getDeliveryFee() { return deliveryFee; }
     public boolean isDeliveryFeePending() { return deliveryFeePending; }
     public BigDecimal getDiscountAmount() { return discountAmount; }
+    public BigDecimal getDeliveryDiscount() { return deliveryDiscount; }
     public String getDiscountCode() { return discountCode; }
     public String getOrderGroupId() { return orderGroupId; }
     public BigDecimal getTotalAmount() { return totalAmount; }

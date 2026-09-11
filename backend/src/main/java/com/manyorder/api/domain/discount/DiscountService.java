@@ -48,13 +48,17 @@ public class DiscountService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A discount with that code already exists.");
         }
         validateShape(request.getType(), request.getValue(), request.getStartsAt(), request.getEndsAt());
+        // A free-delivery voucher has no percentage/amount value and no product
+        // scope (it waives delivery, not products) - normalise both away.
+        boolean freeDelivery = request.getType() == DiscountType.FREE_DELIVERY;
+        BigDecimal value = freeDelivery ? BigDecimal.ZERO : request.getValue();
 
         Discount discount = new Discount(
-                merchant, code, request.getType(), request.getValue(),
+                merchant, code, request.getType(), value,
                 request.getUsageLimit(), request.getStartsAt(), request.getEndsAt(),
                 request.getActive() == null || request.getActive());
         discount.setName(request.getName());
-        discount.setProductIds(validateProductScope(merchant, request.getProductIds()));
+        discount.setProductIds(freeDelivery ? new HashSet<>() : validateProductScope(merchant, request.getProductIds()));
         discount.setMinSpend(request.getMinSpend());
         return new DiscountResponse(discountRepository.save(discount));
     }
@@ -85,6 +89,12 @@ public class DiscountService {
         // Null = leave the minimum unchanged; 0 clears it; a positive value sets it.
         if (request.getMinSpend() != null) {
             discount.setMinSpend(request.getMinSpend().signum() == 0 ? null : request.getMinSpend());
+        }
+        // A free-delivery code carries no value or product scope, whichever way it
+        // was set - normalise so a type flip to FREE_DELIVERY can't leave stale data.
+        if (discount.getType() == DiscountType.FREE_DELIVERY) {
+            discount.setValue(BigDecimal.ZERO);
+            discount.setProductIds(new HashSet<>());
         }
 
         validateShape(discount.getType(), discount.getValue(), discount.getStartsAt(), discount.getEndsAt());
@@ -152,29 +162,35 @@ public class DiscountService {
         return sum;
     }
 
+    /** The order's delivery situation, needed to resolve a FREE_DELIVERY code:
+     *  whether it's a delivery order, the fee that would apply, and whether that
+     *  fee is still to-be-confirmed (the store had none configured). */
+    public record DeliveryContext(boolean delivery, BigDecimal fee, boolean pending) {}
+
     /** Preview a code against the given cart lines without redeeming it (powers the
      *  checkout "Apply" button). Prices are the server-derived line totals. */
     @Transactional(readOnly = true)
-    public Redemption previewForCheckout(Merchant merchant, String code, List<LineAmount> lines) {
-        return resolve(requireRedeemable(merchant, code), lines);
+    public Redemption previewForCheckout(Merchant merchant, String code, List<LineAmount> lines, DeliveryContext delivery) {
+        return resolve(requireRedeemable(merchant, code), lines, delivery);
     }
 
-    /** Validate + redeem at checkout: computes the amount against the matching
-     *  subtotal and increments usedCount. */
+    /** Validate + redeem at checkout: resolves the amount (or delivery waiver) and
+     *  increments usedCount. */
     @Transactional
-    public Redemption redeemForCheckout(Merchant merchant, String code, List<LineAmount> lines) {
+    public Redemption redeemForCheckout(Merchant merchant, String code, List<LineAmount> lines, DeliveryContext delivery) {
         Discount discount = requireRedeemable(merchant, code);
-        Redemption redemption = resolve(discount, lines);
+        Redemption redemption = resolve(discount, lines, delivery);
         discount.setUsedCount(discount.getUsedCount() + 1);
         discountRepository.save(discount);
         return redemption;
     }
 
-    /** Shared amount + scope resolution. Rejects a product-specific code that
-     *  matches nothing in the cart, so it can't apply as a silent zero. */
-    private Redemption resolve(Discount discount, List<LineAmount> lines) {
+    /** Shared resolution. Applies the minimum-spend gate (all types), then either
+     *  the free-delivery waiver or the product-discount amount. Rejections happen
+     *  here, before usedCount is bumped, so a rejected code is never counted. */
+    private Redemption resolve(Discount discount, List<LineAmount> lines, DeliveryContext delivery) {
         // Minimum spend gates on the WHOLE cart subtotal (all lines), independent
-        // of any product scope, so it must be checked before the scope match.
+        // of any product scope, so it's checked first for every discount type.
         if (discount.getMinSpend() != null) {
             BigDecimal fullSubtotal = BigDecimal.ZERO;
             for (LineAmount line : lines) fullSubtotal = fullSubtotal.add(line.lineTotal());
@@ -183,13 +199,34 @@ public class DiscountService {
             }
         }
 
+        if (discount.getType() == DiscountType.FREE_DELIVERY) {
+            return resolveFreeDelivery(discount, delivery);
+        }
+
         BigDecimal matching = matchingSubtotal(discount, lines);
         if (!discount.isStoreWide() && matching.signum() == 0) {
             throw reject("This code only applies to specific items, none of which are in your cart.");
         }
         BigDecimal amount = computeAmount(discount, matching);
         return new Redemption(discount.getCode(), amount, discount.isStoreWide(),
-                Set.copyOf(discount.getProductIds()));
+                Set.copyOf(discount.getProductIds()), false, BigDecimal.ZERO);
+    }
+
+    /**
+     * Resolve a FREE_DELIVERY code against the order's delivery situation. Rejects
+     * a pickup order (nothing to waive) and an order whose delivery is already
+     * free. A to-be-confirmed fee is forced to free (nothing quantifiable to
+     * waive yet). Otherwise the applicable fee is the waived amount.
+     */
+    private Redemption resolveFreeDelivery(Discount discount, DeliveryContext delivery) {
+        if (delivery == null || !delivery.delivery()) {
+            throw reject("This code applies to delivery orders only.");
+        }
+        if (!delivery.pending() && delivery.fee().signum() == 0) {
+            throw reject("Delivery is already free on this order.");
+        }
+        BigDecimal waived = delivery.pending() ? BigDecimal.ZERO : delivery.fee();
+        return new Redemption(discount.getCode(), BigDecimal.ZERO, true, Set.of(), true, waived);
     }
 
     /** Format the discount's minimum spend in the store's currency, for the
@@ -201,11 +238,13 @@ public class DiscountService {
     }
 
     /**
-     * Result of a redemption/preview: the canonical code, the money off, and the
-     * scope (store-wide, or the specific product ids) so the caller can allocate
-     * the amount across a split order by each bucket's matching share.
+     * Result of a redemption/preview: the canonical code, the product money off,
+     * the scope (store-wide, or the specific product ids) so the caller can
+     * allocate the amount across a split order by matching share, and - for a
+     * free-delivery code - a flag plus the delivery fee it waives.
      */
-    public record Redemption(String code, BigDecimal amount, boolean storeWide, Set<Long> productIds) {}
+    public record Redemption(String code, BigDecimal amount, boolean storeWide, Set<Long> productIds,
+                             boolean freeDelivery, BigDecimal deliveryDiscount) {}
 
     // ---------- helpers ----------
 
@@ -239,8 +278,14 @@ public class DiscountService {
     }
 
     private void validateShape(DiscountType type, BigDecimal value, LocalDateTime startsAt, LocalDateTime endsAt) {
-        if (type == DiscountType.PERCENTAGE && value.compareTo(HUNDRED) > 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A percentage discount cannot exceed 100%.");
+        // A percentage/fixed code needs a positive value; a free-delivery code has none.
+        if (type != DiscountType.FREE_DELIVERY) {
+            if (value == null || value.signum() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enter a value greater than 0.");
+            }
+            if (type == DiscountType.PERCENTAGE && value.compareTo(HUNDRED) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A percentage discount cannot exceed 100%.");
+            }
         }
         if (startsAt != null && endsAt != null && startsAt.isAfter(endsAt)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The start date must be before the end date.");

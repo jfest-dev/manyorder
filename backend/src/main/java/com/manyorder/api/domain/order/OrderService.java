@@ -323,6 +323,7 @@ public class OrderService {
                 order.getDeliveryFee(),
                 order.isDeliveryFeePending(),
                 order.getDiscountAmount(),
+                order.getDeliveryDiscount(),
                 order.getDiscountCode(),
                 order.getOrderGroupId(),
                 order.getTotalAmount(),

@@ -22,8 +22,8 @@ public class CreateDiscountRequest {
     @NotNull
     private DiscountType type;
 
-    @NotNull
-    @Positive
+    /** Percent or fixed amount. Required (and > 0) for PERCENTAGE/FIXED; unused
+     *  for FREE_DELIVERY. Enforced in the service so it can depend on the type. */
     private BigDecimal value;
 
     /** Null = unlimited redemptions. */
