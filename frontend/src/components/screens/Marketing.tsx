@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Plus, Tag, Percent, X, Edit2, Trash2, TrendingUp, Award, Search } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
@@ -8,6 +8,7 @@ import { Select } from '../Select';
 import { DatePicker } from '../DatePicker';
 import { Checkbox } from '../Checkbox';
 import { useConfirm } from '../ConfirmDialog';
+import { Toast } from '../Toast';
 import { discountsApi, DiscountResponse, DiscountType, DiscountPayload, ApiError, productsApi, ProductResponse } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 
@@ -95,6 +96,16 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
+
+  // Brief success confirmation after a save (the form otherwise just closes).
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<number | null>(null);
+  const showNotice = (message: string) => {
+    setNotice(message);
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 2200);
+  };
+  useEffect(() => () => { if (noticeTimer.current) window.clearTimeout(noticeTimer.current); }, []);
 
   const load = () => {
     let cancelled = false;
@@ -217,12 +228,14 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       // Empty array = store-wide. On edit this also clears a previous scope.
       productIds: form.appliesTo === 'SPECIFIC' ? form.productIds : [],
     };
+    const wasEdit = editingId != null;
     setSubmitting(true);
     try {
-      if (editingId != null) await discountsApi.update(storeId, editingId, payload);
+      if (wasEdit) await discountsApi.update(storeId, editingId!, payload);
       else await discountsApi.create(storeId, payload);
       setFormOpen(false);
       load();
+      showNotice(wasEdit ? 'Discount updated.' : 'Discount created.');
     } catch (e: any) {
       setFormError(e instanceof ApiError ? e.message : 'Could not save discount');
     } finally {
@@ -471,6 +484,8 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
           </div>
         </div>
       )}
+
+      {notice && <Toast message={notice} />}
     </div>
   );
 }
