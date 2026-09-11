@@ -61,7 +61,7 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
   }, [formKey, name, phone, email, fulfilment, address, notes, paymentMethod]);
 
   const [code, setCode] = useState('');
-  const [applied, setApplied] = useState<{ code: string; amount: number } | null>(null);
+  const [applied, setApplied] = useState<{ code: string; amount: number; freeDelivery: boolean } | null>(null);
   const [discountError, setDiscountError] = useState<string | null>(null);
   const [checkingCode, setCheckingCode] = useState(false);
 
@@ -84,7 +84,10 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
     && store.freeDeliveryThreshold != null && subtotal >= store.freeDeliveryThreshold;
   const deliveryFee = (isDelivery && store.deliveryFeeConfigured && !freeByThreshold)
     ? (store.deliveryFee ?? 0) : 0;
-  const total = Math.max(0, subtotal + deliveryFee - discount);
+  // A free-delivery voucher waives the (gross) delivery fee for this order.
+  const freeDelivery = applied?.freeDelivery ?? false;
+  const deliveryWaived = freeDelivery ? deliveryFee : 0;
+  const total = Math.max(0, subtotal + deliveryFee - discount - deliveryWaived);
 
   const applyCode = async () => {
     if (!code.trim()) return;
@@ -96,9 +99,10 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
       const res = await storefrontApi.validateDiscount({
         merchantId: store.id,
         code: code.trim(),
+        fulfilmentMethod: fulfilment,
         items: items.map(cartLineToCheckoutItem),
       });
-      setApplied({ code: res.code, amount: res.discountAmount });
+      setApplied({ code: res.code, amount: res.discountAmount, freeDelivery: res.freeDelivery });
     } catch (e) {
       setApplied(null);
       setDiscountError(e instanceof ApiError ? e.message : 'Could not apply that code.');
@@ -253,17 +257,22 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
         <section style={{ background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '14px' }}>
           <Row label="Subtotal" value={formatMoney(subtotal, currency)} />
           {isDelivery && (
-            deliveryPending
-              ? <Row label="Delivery fee" value="To be confirmed" accent="#92400E" />
-              : freeByThreshold
-                ? <Row label="Delivery fee" value="Free" accent="#065F46" />
-                : deliveryFee > 0 && <Row label="Delivery fee" value={formatMoney(deliveryFee, currency)} />
+            freeDelivery
+              ? (deliveryFee > 0
+                  ? <Row label="Delivery fee" value={formatMoney(deliveryFee, currency)} />
+                  : <Row label="Delivery fee" value="Free" accent="#065F46" />)
+              : deliveryPending
+                ? <Row label="Delivery fee" value="To be confirmed" accent="#92400E" />
+                : freeByThreshold
+                  ? <Row label="Delivery fee" value="Free" accent="#065F46" />
+                  : deliveryFee > 0 && <Row label="Delivery fee" value={formatMoney(deliveryFee, currency)} />
           )}
           {discount > 0 && <Row label={`Discount (${applied?.code})`} value={`− ${formatMoney(discount, currency)}`} accent="#065F46" />}
+          {freeDelivery && deliveryFee > 0 && <Row label={`Free delivery (${applied?.code})`} value={`− ${formatMoney(deliveryFee, currency)}`} accent="#065F46" />}
           <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '8px', paddingTop: '8px' }}>
-            <Row label={deliveryPending ? 'Estimated total' : 'Total'} value={formatMoney(total, currency)} bold />
+            <Row label={deliveryPending && !freeDelivery ? 'Estimated total' : 'Total'} value={formatMoney(total, currency)} bold />
           </div>
-          {deliveryPending && (
+          {deliveryPending && !freeDelivery && (
             <div style={{ marginTop: '8px', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '8px 10px' }}>
               <p style={{ fontSize: '12px', color: '#92400E', margin: 0, lineHeight: 1.45 }}>
                 {store.deliveryToBeConfirmedMessage?.trim() || DEFAULT_DELIVERY_TBC_MESSAGE}

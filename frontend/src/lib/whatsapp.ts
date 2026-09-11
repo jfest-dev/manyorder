@@ -18,6 +18,8 @@ export interface WaOrderSection {
   subtotal: number;
   deliveryFee: number;
   discountAmount: number;
+  /** Delivery fee waived by a free-delivery voucher; 0/omitted otherwise. */
+  deliveryDiscount?: number;
   totalAmount: number;
 }
 
@@ -30,6 +32,8 @@ export interface WaCombined {
    *  message matches the panel). Pickup orders leave this unset and omit the line. */
   isDelivery?: boolean;
   discountAmount: number;
+  /** Delivery fee waived by a free-delivery voucher; 0/omitted otherwise. */
+  deliveryDiscount?: number;
   discountCode?: string | null;
   totalAmount: number;
 }
@@ -57,12 +61,20 @@ export function orderSummaryLines(sections: WaOrderSection[], currency: string, 
     lines.push('');
   });
 
+  // deliveryFee is the net charge; deliveryDiscount is the amount a free-delivery
+  // voucher waived. Show the gross fee, then the waiver as its own "off" line so
+  // the message reconciles the same way the on-screen breakdown does.
+  const deliveryDiscount = combined.deliveryDiscount ?? 0;
+  const grossDelivery = combined.deliveryFee + deliveryDiscount;
   lines.push(`Subtotal: ${formatMoney(combined.subtotal, currency)}`);
   if (combined.deliveryFeePending) lines.push('Delivery fee: To be confirmed');
-  else if (combined.deliveryFee > 0) lines.push(`Delivery fee: ${formatMoney(combined.deliveryFee, currency)}`);
+  else if (grossDelivery > 0) lines.push(`Delivery fee: ${formatMoney(grossDelivery, currency)}`);
   else if (combined.isDelivery) lines.push('Delivery fee: Free');
   if (combined.discountAmount > 0) {
     lines.push(`Discount (${combined.discountCode}): ${formatMoney(combined.discountAmount, currency)} off`);
+  }
+  if (deliveryDiscount > 0) {
+    lines.push(`Free delivery (${combined.discountCode}): ${formatMoney(deliveryDiscount, currency)} off`);
   }
   const totalLabel = combined.deliveryFeePending ? 'Estimated total' : split ? 'Combined total' : 'Total';
   lines.push(`${totalLabel}: ${formatMoney(combined.totalAmount, currency)}`);

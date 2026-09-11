@@ -600,7 +600,7 @@ export const customersApi = {
     request<CustomerResponse>(`/merchant/stores/${storeId}/customers`, { method: 'POST', body: payload }),
 };
 
-export type DiscountType = 'PERCENTAGE' | 'FIXED';
+export type DiscountType = 'PERCENTAGE' | 'FIXED' | 'FREE_DELIVERY';
 
 export interface DiscountResponse {
   id: number;
@@ -770,6 +770,8 @@ export interface GuestCheckoutOrderSummary {
   subtotal: number;
   deliveryFee: number;
   discountAmount: number;
+  /** Delivery fee waived by a free-delivery voucher; 0 otherwise. */
+  deliveryDiscount: number;
   totalAmount: number;
   items: GuestCheckoutItemSummary[];
 }
@@ -795,6 +797,8 @@ export interface GuestCheckoutResult {
   subtotal: number;
   deliveryFee: number;
   discountAmount: number;
+  /** Delivery fee waived by a free-delivery voucher; 0 otherwise. */
+  deliveryDiscount: number;
   discountCode: string | null;
   totalAmount: number;
   createdAt: string;
@@ -806,6 +810,10 @@ export interface GuestCheckoutResult {
 export interface DiscountValidationResult {
   code: string;
   discountAmount: number;
+  /** True when the code waives delivery instead of discounting products. */
+  freeDelivery: boolean;
+  /** The delivery fee that would be waived (0 when not quantifiable). */
+  deliveryDiscount: number;
 }
 
 export const storefrontApi = {
@@ -824,6 +832,7 @@ export const storefrontApi = {
   validateDiscount: (payload: {
     merchantId: number;
     code: string;
+    fulfilmentMethod: FulfilmentMethod;
     items: { productId: number; quantity: number; modifierOptionIds?: number[] }[];
   }) =>
     request<DiscountValidationResult>(`/public/discounts/validate`, { method: 'POST', body: payload, auth: false }),

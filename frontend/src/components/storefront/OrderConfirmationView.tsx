@@ -41,6 +41,7 @@ function resolveOrders(result: GuestCheckoutResult): GuestCheckoutOrderSummary[]
     subtotal: result.subtotal,
     deliveryFee: result.deliveryFee,
     discountAmount: result.discountAmount,
+    deliveryDiscount: result.deliveryDiscount,
     totalAmount: result.totalAmount,
     items: result.items ?? [],
   }];
@@ -58,6 +59,7 @@ function whatsappUrl(result: GuestCheckoutResult, store: PublicStoreResponse): s
     subtotal: o.subtotal,
     deliveryFee: o.deliveryFee,
     discountAmount: o.discountAmount,
+    deliveryDiscount: o.deliveryDiscount,
     totalAmount: o.totalAmount,
   }));
   const lines = [`Hi ${result.storeName}! I've placed an order.`, ''];
@@ -66,6 +68,7 @@ function whatsappUrl(result: GuestCheckoutResult, store: PublicStoreResponse): s
     deliveryFee: result.deliveryFee,
     deliveryFeePending: result.deliveryFeePending,
     discountAmount: result.discountAmount,
+    deliveryDiscount: result.deliveryDiscount,
     discountCode: result.discountCode,
     totalAmount: result.totalAmount,
   }));
@@ -158,8 +161,9 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
               {split && (
                 <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '6px', paddingTop: '6px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
                   <Row label="Subtotal" value={formatMoney(o.subtotal, currency)} />
-                  {o.deliveryFee > 0 && <Row label="Delivery fee" value={formatMoney(o.deliveryFee, currency)} />}
+                  {o.deliveryFee + o.deliveryDiscount > 0 && <Row label="Delivery fee" value={formatMoney(o.deliveryFee + o.deliveryDiscount, currency)} />}
                   {o.discountAmount > 0 && <Row label={`Discount${result.discountCode ? ` (${result.discountCode})` : ''}`} value={`− ${formatMoney(o.discountAmount, currency)}`} accent="#065F46" />}
+                  {o.deliveryDiscount > 0 && <Row label={`Free delivery${result.discountCode ? ` (${result.discountCode})` : ''}`} value={`− ${formatMoney(o.deliveryDiscount, currency)}`} accent="#065F46" />}
                   <Row label="Order total" value={formatMoney(o.totalAmount, currency)} bold />
                 </div>
               )}
@@ -172,8 +176,9 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
           <Row label="Subtotal" value={formatMoney(result.subtotal, currency)} />
           {result.deliveryFeePending
             ? <Row label="Delivery fee" value="To be confirmed" accent="#92400E" />
-            : result.deliveryFee > 0 && <Row label="Delivery fee" value={formatMoney(result.deliveryFee, currency)} />}
+            : result.deliveryFee + result.deliveryDiscount > 0 && <Row label="Delivery fee" value={formatMoney(result.deliveryFee + result.deliveryDiscount, currency)} />}
           {result.discountAmount > 0 && <Row label={`Discount (${result.discountCode})`} value={`− ${formatMoney(result.discountAmount, currency)}`} accent="#065F46" />}
+          {result.deliveryDiscount > 0 && <Row label={`Free delivery (${result.discountCode})`} value={`− ${formatMoney(result.deliveryDiscount, currency)}`} accent="#065F46" />}
           <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '4px', paddingTop: '8px' }}>
             <Row label={result.deliveryFeePending ? 'Estimated total' : split ? 'Combined total' : 'Total'} value={formatMoney(result.totalAmount, currency)} bold />
           </div>

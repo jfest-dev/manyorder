@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Plus, Tag, Percent, X, Edit2, Trash2, TrendingUp, Award, Search } from 'lucide-react';
+import { Plus, Tag, Percent, X, Edit2, Trash2, TrendingUp, Award, Search, Truck } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
@@ -207,16 +207,18 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
 
   const submit = async () => {
     setFormError(null);
-    const value = Number(form.value);
+    const freeDelivery = form.type === 'FREE_DELIVERY';
+    // Free delivery carries no percent/amount value; every other type needs one.
+    const value = freeDelivery ? 0 : Number(form.value);
     if (!form.code.trim()) { setFormError('Code is required.'); return; }
-    if (form.value.trim() === '' || Number.isNaN(value) || value <= 0) { setFormError('Enter a value greater than 0.'); return; }
+    if (!freeDelivery && (form.value.trim() === '' || Number.isNaN(value) || value <= 0)) { setFormError('Enter a value greater than 0.'); return; }
     if (form.type === 'PERCENTAGE' && value > 100) { setFormError('A percentage discount cannot exceed 100%.'); return; }
     const usageLimit = form.usageLimit.trim() === '' ? null : Number(form.usageLimit);
     if (usageLimit != null && (Number.isNaN(usageLimit) || usageLimit < 0)) { setFormError('Usage limit must be 0 or more.'); return; }
     const minSpend = form.minSpend.trim() === '' ? null : Number(form.minSpend);
     if (minSpend != null && (Number.isNaN(minSpend) || minSpend <= 0)) { setFormError('Minimum spend must be greater than 0, or left blank.'); return; }
     if (form.startDate && form.endDate && form.startDate > form.endDate) { setFormError('The start date must be before the end date.'); return; }
-    if (form.appliesTo === 'SPECIFIC' && form.productIds.length === 0) {
+    if (!freeDelivery && form.appliesTo === 'SPECIFIC' && form.productIds.length === 0) {
       setFormError('Select at least one product, or set the discount to apply to all products.'); return;
     }
 
@@ -231,8 +233,9 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       startsAt: form.startDate ? `${form.startDate}T00:00:00` : null,
       endsAt: form.endDate ? `${form.endDate}T23:59:59` : null,
       active: form.active,
-      // Empty array = store-wide. On edit this also clears a previous scope.
-      productIds: form.appliesTo === 'SPECIFIC' ? form.productIds : [],
+      // Empty array = store-wide (and always empty for free delivery). On edit
+      // this also clears a previous scope.
+      productIds: !freeDelivery && form.appliesTo === 'SPECIFIC' ? form.productIds : [],
     };
     const wasEdit = editingId != null;
     setSubmitting(true);
@@ -266,7 +269,9 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
   };
 
   const valueLabel = (d: DiscountResponse) =>
-    d.type === 'PERCENTAGE' ? `${d.value}% off` : `${formatMoney(d.value, currency)} off`;
+    d.type === 'FREE_DELIVERY' ? 'Free delivery'
+      : d.type === 'PERCENTAGE' ? `${d.value}% off`
+        : `${formatMoney(d.value, currency)} off`;
 
   return (
     <div>
@@ -311,7 +316,9 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
                   <div style={{ minWidth: 0, display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                     <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: `${meta.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {d.type === 'PERCENTAGE' ? <Percent size={18} style={{ color: meta.color }} /> : <Tag size={18} style={{ color: meta.color }} />}
+                      {d.type === 'PERCENTAGE' ? <Percent size={18} style={{ color: meta.color }} />
+                        : d.type === 'FREE_DELIVERY' ? <Truck size={18} style={{ color: meta.color }} />
+                          : <Tag size={18} style={{ color: meta.color }} />}
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -319,7 +326,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                         <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: `${meta.color}20`, color: meta.color, fontSize: '12px', fontWeight: 500 }}>{meta.label}</span>
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)} · {scopeLabel(d, productName)}{d.minSpend != null ? ` · min ${formatMoney(d.minSpend, currency)}` : ''}
+                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)}{d.type !== 'FREE_DELIVERY' ? ` · ${scopeLabel(d, productName)}` : ''}{d.minSpend != null ? ` · min ${formatMoney(d.minSpend, currency)}` : ''}
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>
                         Used {d.usedCount}{d.usageLimit != null ? ` / ${d.usageLimit}` : ' · unlimited'}
@@ -362,9 +369,15 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                   <Select value={form.type} onChange={(v) => set('type', v as DiscountType)} ariaLabel="Discount type" options={[
                     { value: 'PERCENTAGE', label: 'Percentage (%)' },
                     { value: 'FIXED', label: 'Fixed amount' },
+                    { value: 'FREE_DELIVERY', label: 'Free delivery' },
                   ]} />
                 </div>
-                {form.type === 'FIXED' ? (
+                {/* Free delivery carries no amount - it waives the delivery fee. */}
+                {form.type === 'FREE_DELIVERY' ? (
+                  <div style={{ alignSelf: 'end' }}>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '0 0 10px' }}>Waives the delivery fee at checkout. No amount needed.</p>
+                  </div>
+                ) : form.type === 'FIXED' ? (
                   <MoneyField label="Amount off" currency={currency} value={form.value === '' ? null : Number(form.value)} onChange={(n) => set('value', n == null ? '' : String(n))} />
                 ) : (
                   <FieldInput label="Percent off" type="number" inputMode="numeric" placeholder="10" value={form.value} onChange={(v) => set('value', v)} />
@@ -394,7 +407,9 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                 <span className="text-small">Active (customers can use this code now)</span>
               </label>
 
-              {/* Applies to: whole order (store-wide) or a chosen set of products. */}
+              {/* Applies to: whole order (store-wide) or a chosen set of products.
+                  Not shown for a free-delivery voucher (it waives delivery, not products). */}
+              {form.type !== 'FREE_DELIVERY' && (
               <div>
                 <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Applies to</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -484,6 +499,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                     : `The code only discounts the selected products (${form.productIds.length} selected).`}
                 </p>
               </div>
+              )}
 
               {formError && <p className="text-small" style={{ color: 'var(--error-color)', margin: 0 }}>{formError}</p>}
             </div>
