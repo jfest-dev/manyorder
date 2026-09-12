@@ -100,6 +100,10 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
         merchantId: store.id,
         code: code.trim(),
         fulfilmentMethod: fulfilment,
+        // Forward the entered contact so a first-order-only code previews against
+        // real history; blank is tolerated (assumed first-order, enforced at submit).
+        customerPhone: phone.trim() || undefined,
+        customerEmail: email.trim() || undefined,
         items: items.map(cartLineToCheckoutItem),
       });
       setApplied({ code: res.code, amount: res.discountAmount, freeDelivery: res.freeDelivery });

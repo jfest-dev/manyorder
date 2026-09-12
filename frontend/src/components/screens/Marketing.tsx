@@ -75,13 +75,14 @@ interface FormState {
   startDate: string;
   endDate: string;
   active: boolean;
+  firstOrderOnly: boolean;
   /** ALL = store-wide (empty scope); SPECIFIC = limited to productIds. */
   appliesTo: 'ALL' | 'SPECIFIC';
   productIds: number[];
 }
 const BLANK: FormState = {
   name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', minSpend: '', startDate: '', endDate: '', active: true,
-  appliesTo: 'ALL', productIds: [],
+  firstOrderOnly: false, appliesTo: 'ALL', productIds: [],
 };
 
 export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
@@ -196,6 +197,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       startDate: d.startsAt ? d.startsAt.slice(0, 10) : '',
       endDate: d.endsAt ? d.endsAt.slice(0, 10) : '',
       active: d.active,
+      firstOrderOnly: d.firstOrderOnly,
       appliesTo: d.productIds.length > 0 ? 'SPECIFIC' : 'ALL',
       productIds: d.productIds,
     });
@@ -233,6 +235,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       startsAt: form.startDate ? `${form.startDate}T00:00:00` : null,
       endsAt: form.endDate ? `${form.endDate}T23:59:59` : null,
       active: form.active,
+      firstOrderOnly: form.firstOrderOnly,
       // Empty array = store-wide (and always empty for free delivery). On edit
       // this also clears a previous scope.
       productIds: !freeDelivery && form.appliesTo === 'SPECIFIC' ? form.productIds : [],
@@ -326,7 +329,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                         <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: `${meta.color}20`, color: meta.color, fontSize: '12px', fontWeight: 500 }}>{meta.label}</span>
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)}{d.type !== 'FREE_DELIVERY' ? ` · ${scopeLabel(d, productName)}` : ''}{d.minSpend != null ? ` · min ${formatMoney(d.minSpend, currency)}` : ''}
+                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)}{d.type !== 'FREE_DELIVERY' ? ` · ${scopeLabel(d, productName)}` : ''}{d.minSpend != null ? ` · min ${formatMoney(d.minSpend, currency)}` : ''}{d.firstOrderOnly ? ' · first order only' : ''}
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>
                         Used {d.usedCount}{d.usageLimit != null ? ` / ${d.usageLimit}` : ' · unlimited'}
@@ -405,6 +408,11 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <Checkbox checked={form.active} onChange={(v) => set('active', v)} ariaLabel="Active" />
                 <span className="text-small">Active (customers can use this code now)</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <Checkbox checked={form.firstOrderOnly} onChange={(v) => set('firstOrderOnly', v)} ariaLabel="First order only" />
+                <span className="text-small">First order only (new customers with no previous order)</span>
               </label>
 
               {/* Applies to: whole order (store-wide) or a chosen set of products.

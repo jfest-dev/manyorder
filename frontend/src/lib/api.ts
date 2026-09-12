@@ -615,6 +615,8 @@ export interface DiscountResponse {
   startsAt: string | null;
   endsAt: string | null;
   active: boolean;
+  /** When true, valid only for a customer with no prior order. */
+  firstOrderOnly: boolean;
   /** Products the discount is limited to; empty = store-wide. */
   productIds: number[];
   createdAt: string;
@@ -632,6 +634,8 @@ export interface DiscountPayload {
   startsAt?: string | null;
   endsAt?: string | null;
   active?: boolean;
+  /** When true, valid only for a customer with no prior order. */
+  firstOrderOnly?: boolean;
   /** Empty/omitted = store-wide; non-empty = limited to these products. On
    *  update: null leaves the scope unchanged, an empty array clears to store-wide. */
   productIds?: number[] | null;
@@ -833,6 +837,9 @@ export const storefrontApi = {
     merchantId: number;
     code: string;
     fulfilmentMethod: FulfilmentMethod;
+    /** Optional contact so a first-order-only code previews against real history. */
+    customerPhone?: string;
+    customerEmail?: string;
     items: { productId: number; quantity: number; modifierOptionIds?: number[] }[];
   }) =>
     request<DiscountValidationResult>(`/public/discounts/validate`, { method: 'POST', body: payload, auth: false }),
