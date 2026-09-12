@@ -253,6 +253,33 @@ public class OrderService {
         return customer;
     }
 
+    /**
+     * Whether this customer has no prior (non-cancelled) order at the store - the
+     * "first order only" discount condition. Call this BEFORE persisting the new
+     * order so the in-progress order can't disqualify a genuine first-timer.
+     */
+    public boolean isFirstOrder(Merchant merchant, Customer customer) {
+        return orderRepository.countByMerchantAndCustomerAndStatusNot(
+                merchant, customer, OrderStatus.CANCELLED) == 0;
+    }
+
+    /**
+     * First-order check for a contact that may not yet be a saved customer
+     * (the validate preview). Resolves find-only by phone then email; an unknown
+     * or blank contact is assumed to be a first-timer, and enforced for real at
+     * checkout once the customer is resolved.
+     */
+    public boolean isFirstOrderForContact(Merchant merchant, String email, String phone) {
+        Customer customer = null;
+        if (phone != null && !phone.isBlank()) {
+            customer = customerRepository.findByMerchantAndPhoneNumber(merchant, phone).orElse(null);
+        }
+        if (customer == null && email != null && !email.isBlank()) {
+            customer = customerRepository.findByMerchantAndEmail(merchant, email).orElse(null);
+        }
+        return customer == null || isFirstOrder(merchant, customer);
+    }
+
     // ---- Admin (PLATFORM_ADMIN, cross-store view layer) ----
 
     public List<Order> getAllOrders() {

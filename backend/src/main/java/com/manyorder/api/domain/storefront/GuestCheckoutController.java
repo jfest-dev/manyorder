@@ -140,7 +140,11 @@ public class GuestCheckoutController {
             for (Line l : preorder) lineAmounts.add(new DiscountService.LineAmount(l.product().getId(), l.lineTotal()));
             DiscountService.DeliveryContext ctx = new DiscountService.DeliveryContext(
                     orderType == OrderType.DELIVERY, deliveryFee, deliveryFeePending);
-            redemption = discountService.redeemForCheckout(merchant, request.getDiscountCode(), lineAmounts, ctx);
+            // First-order check runs here, BEFORE persistOrder below, so the
+            // in-progress order isn't counted and can't disqualify a first-timer.
+            boolean firstOrder = orderService.isFirstOrder(merchant, customer);
+            redemption = discountService.redeemForCheckout(
+                    merchant, request.getDiscountCode(), lineAmounts, ctx, firstOrder);
             combinedDiscount = redemption.amount();
             discountCode = redemption.code();
             if (redemption.freeDelivery()) {
@@ -369,9 +373,13 @@ public class GuestCheckoutController {
         DeliveryQuote quote = computeDeliveryFee(merchant, orderType, subtotal);
         DiscountService.DeliveryContext ctx = new DiscountService.DeliveryContext(
                 orderType == OrderType.DELIVERY, quote.fee(), quote.pending());
+        // First-order preview: use the entered contact if any; an unknown/blank
+        // contact is assumed first-order and enforced for real at submit.
+        boolean firstOrder = orderService.isFirstOrderForContact(
+                merchant, request.getCustomerEmail(), request.getCustomerPhone());
 
         DiscountService.Redemption preview =
-                discountService.previewForCheckout(merchant, request.getCode(), lines, ctx);
+                discountService.previewForCheckout(merchant, request.getCode(), lines, ctx, firstOrder);
         return new DiscountValidationResponse(
                 preview.code(), preview.amount(), preview.freeDelivery(), preview.deliveryDiscount());
     }
@@ -405,6 +413,9 @@ public class GuestCheckoutController {
         private List<Item> items;
         /** PICKUP or DELIVERY, so a free-delivery code previews against the real fee. */
         private String fulfilmentMethod;
+        /** Optional contact, so a first-order-only code previews against real history. */
+        private String customerPhone;
+        private String customerEmail;
 
         public Long getMerchantId() { return merchantId; }
         public void setMerchantId(Long merchantId) { this.merchantId = merchantId; }
@@ -414,6 +425,10 @@ public class GuestCheckoutController {
         public void setItems(List<Item> items) { this.items = items; }
         public String getFulfilmentMethod() { return fulfilmentMethod; }
         public void setFulfilmentMethod(String fulfilmentMethod) { this.fulfilmentMethod = fulfilmentMethod; }
+        public String getCustomerPhone() { return customerPhone; }
+        public void setCustomerPhone(String customerPhone) { this.customerPhone = customerPhone; }
+        public String getCustomerEmail() { return customerEmail; }
+        public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
 
         public static class Item {
             private Long productId;

@@ -76,6 +76,13 @@ public class Discount {
     private boolean active = true;
 
     /**
+     * When true, the code is valid only for a customer with no prior (non-cancelled)
+     * order at this store. SQL default backfills existing rows as false.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean firstOrderOnly = false;
+
+    /**
      * Product ids this discount is limited to. Empty = store-wide (applies to
      * the whole order, the original behaviour). Stored as plain ids rather than
      * a Product association so deleting a product never breaks a discount or its
@@ -127,6 +134,8 @@ public class Discount {
     public void setEndsAt(LocalDateTime endsAt) { this.endsAt = endsAt; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    public boolean isFirstOrderOnly() { return firstOrderOnly; }
+    public void setFirstOrderOnly(boolean firstOrderOnly) { this.firstOrderOnly = firstOrderOnly; }
     public Set<Long> getProductIds() { return productIds; }
     public void setProductIds(Set<Long> productIds) {
         this.productIds = productIds == null ? new HashSet<>() : new HashSet<>(productIds);

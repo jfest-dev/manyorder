@@ -60,6 +60,7 @@ public class DiscountService {
         discount.setName(request.getName());
         discount.setProductIds(freeDelivery ? new HashSet<>() : validateProductScope(merchant, request.getProductIds()));
         discount.setMinSpend(request.getMinSpend());
+        discount.setFirstOrderOnly(request.getFirstOrderOnly() != null && request.getFirstOrderOnly());
         return new DiscountResponse(discountRepository.save(discount));
     }
 
@@ -90,6 +91,7 @@ public class DiscountService {
         if (request.getMinSpend() != null) {
             discount.setMinSpend(request.getMinSpend().signum() == 0 ? null : request.getMinSpend());
         }
+        if (request.getFirstOrderOnly() != null) discount.setFirstOrderOnly(request.getFirstOrderOnly());
         // A free-delivery code carries no value or product scope, whichever way it
         // was set - normalise so a type flip to FREE_DELIVERY can't leave stale data.
         if (discount.getType() == DiscountType.FREE_DELIVERY) {
@@ -168,27 +170,38 @@ public class DiscountService {
     public record DeliveryContext(boolean delivery, BigDecimal fee, boolean pending) {}
 
     /** Preview a code against the given cart lines without redeeming it (powers the
-     *  checkout "Apply" button). Prices are the server-derived line totals. */
+     *  checkout "Apply" button). Prices are the server-derived line totals.
+     *  {@code firstOrder} says whether the shopper has no prior order (assume true
+     *  when unknown, e.g. no contact entered yet - enforced for real at submit). */
     @Transactional(readOnly = true)
-    public Redemption previewForCheckout(Merchant merchant, String code, List<LineAmount> lines, DeliveryContext delivery) {
-        return resolve(requireRedeemable(merchant, code), lines, delivery);
+    public Redemption previewForCheckout(Merchant merchant, String code, List<LineAmount> lines,
+                                         DeliveryContext delivery, boolean firstOrder) {
+        return resolve(requireRedeemable(merchant, code), lines, delivery, firstOrder);
     }
 
     /** Validate + redeem at checkout: resolves the amount (or delivery waiver) and
-     *  increments usedCount. */
+     *  increments usedCount. {@code firstOrder} is computed from the customer's
+     *  prior (non-cancelled) orders, counted before the new order is persisted. */
     @Transactional
-    public Redemption redeemForCheckout(Merchant merchant, String code, List<LineAmount> lines, DeliveryContext delivery) {
+    public Redemption redeemForCheckout(Merchant merchant, String code, List<LineAmount> lines,
+                                        DeliveryContext delivery, boolean firstOrder) {
         Discount discount = requireRedeemable(merchant, code);
-        Redemption redemption = resolve(discount, lines, delivery);
+        Redemption redemption = resolve(discount, lines, delivery, firstOrder);
         discount.setUsedCount(discount.getUsedCount() + 1);
         discountRepository.save(discount);
         return redemption;
     }
 
-    /** Shared resolution. Applies the minimum-spend gate (all types), then either
-     *  the free-delivery waiver or the product-discount amount. Rejections happen
-     *  here, before usedCount is bumped, so a rejected code is never counted. */
-    private Redemption resolve(Discount discount, List<LineAmount> lines, DeliveryContext delivery) {
+    /** Shared resolution. Applies the first-order and minimum-spend gates (all
+     *  types), then either the free-delivery waiver or the product-discount
+     *  amount. Rejections happen here, before usedCount is bumped, so a rejected
+     *  code is never counted. */
+    private Redemption resolve(Discount discount, List<LineAmount> lines, DeliveryContext delivery, boolean firstOrder) {
+        // First-order-only: valid only when the customer has no prior order.
+        if (discount.isFirstOrderOnly() && !firstOrder) {
+            throw reject("This code is valid on your first order only.");
+        }
+
         // Minimum spend gates on the WHOLE cart subtotal (all lines), independent
         // of any product scope, so it's checked first for every discount type.
         if (discount.getMinSpend() != null) {

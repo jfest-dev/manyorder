@@ -17,6 +17,7 @@ public class DiscountResponse {
     private final LocalDateTime startsAt;
     private final LocalDateTime endsAt;
     private final boolean active;
+    private final boolean firstOrderOnly;
     /** Products the discount is limited to; empty = store-wide. Sorted for stable output. */
     private final List<Long> productIds;
     private final LocalDateTime createdAt;
@@ -33,6 +34,7 @@ public class DiscountResponse {
         this.startsAt = d.getStartsAt();
         this.endsAt = d.getEndsAt();
         this.active = d.isActive();
+        this.firstOrderOnly = d.isFirstOrderOnly();
         this.productIds = d.getProductIds().stream().sorted().toList();
         this.createdAt = d.getCreatedAt();
     }
@@ -48,6 +50,7 @@ public class DiscountResponse {
     public LocalDateTime getStartsAt() { return startsAt; }
     public LocalDateTime getEndsAt() { return endsAt; }
     public boolean isActive() { return active; }
+    public boolean isFirstOrderOnly() { return firstOrderOnly; }
     public List<Long> getProductIds() { return productIds; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

@@ -27,6 +27,7 @@ public class UpdateDiscountRequest {
     private LocalDateTime startsAt;
     private LocalDateTime endsAt;
     private Boolean active;
+    private Boolean firstOrderOnly;
 
     /** Null = leave the product scope unchanged; empty list = clear to store-wide;
      *  non-empty = replace with these products. */
@@ -52,6 +53,8 @@ public class UpdateDiscountRequest {
     public void setEndsAt(LocalDateTime endsAt) { this.endsAt = endsAt; }
     public Boolean getActive() { return active; }
     public void setActive(Boolean active) { this.active = active; }
+    public Boolean getFirstOrderOnly() { return firstOrderOnly; }
+    public void setFirstOrderOnly(Boolean firstOrderOnly) { this.firstOrderOnly = firstOrderOnly; }
     public List<Long> getProductIds() { return productIds; }
     public void setProductIds(List<Long> productIds) { this.productIds = productIds; }
 }

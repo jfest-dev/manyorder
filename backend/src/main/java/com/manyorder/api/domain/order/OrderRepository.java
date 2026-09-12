@@ -19,6 +19,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByMerchantAndStatusOrderByCreatedAtDesc(Merchant merchant, OrderStatus status);
     List<Order> findByMerchantAndCreatedAtBetween(Merchant merchant, LocalDateTime start, LocalDateTime end);
 
+    /** How many orders this customer has at the store, excluding one status
+     *  (cancelled) - drives the "first order only" discount check. */
+    long countByMerchantAndCustomerAndStatusNot(Merchant merchant, Customer customer, OrderStatus excludedStatus);
+
     /** Per-customer order aggregate for a store, excluding one status (cancelled). */
     @Query("""
         SELECT o.customer.id AS customerId, COUNT(o) AS orderCount,

@@ -40,6 +40,9 @@ public class CreateDiscountRequest {
     /** Defaults to true when omitted. */
     private Boolean active;
 
+    /** When true, only valid for a customer with no prior order. Defaults to false. */
+    private Boolean firstOrderOnly;
+
     /** Products this discount is limited to. Null/empty = store-wide. */
     private List<Long> productIds;
 
@@ -63,6 +66,8 @@ public class CreateDiscountRequest {
     public void setEndsAt(LocalDateTime endsAt) { this.endsAt = endsAt; }
     public Boolean getActive() { return active; }
     public void setActive(Boolean active) { this.active = active; }
+    public Boolean getFirstOrderOnly() { return firstOrderOnly; }
+    public void setFirstOrderOnly(Boolean firstOrderOnly) { this.firstOrderOnly = firstOrderOnly; }
     public List<Long> getProductIds() { return productIds; }
     public void setProductIds(List<Long> productIds) { this.productIds = productIds; }
 }
