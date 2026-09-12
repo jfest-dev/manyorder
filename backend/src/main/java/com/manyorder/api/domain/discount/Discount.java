@@ -83,6 +83,14 @@ public class Discount {
     private boolean firstOrderOnly = false;
 
     /**
+     * Whether this code may combine with an active product sale price. Default
+     * false (safe): the discount skips on-sale lines unless the merchant opts in.
+     * Ignored for FREE_DELIVERY (it discounts delivery, not products).
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean canStackWithSale = false;
+
+    /**
      * Product ids this discount is limited to. Empty = store-wide (applies to
      * the whole order, the original behaviour). Stored as plain ids rather than
      * a Product association so deleting a product never breaks a discount or its
@@ -136,6 +144,8 @@ public class Discount {
     public void setActive(boolean active) { this.active = active; }
     public boolean isFirstOrderOnly() { return firstOrderOnly; }
     public void setFirstOrderOnly(boolean firstOrderOnly) { this.firstOrderOnly = firstOrderOnly; }
+    public boolean isCanStackWithSale() { return canStackWithSale; }
+    public void setCanStackWithSale(boolean canStackWithSale) { this.canStackWithSale = canStackWithSale; }
     public Set<Long> getProductIds() { return productIds; }
     public void setProductIds(Set<Long> productIds) {
         this.productIds = productIds == null ? new HashSet<>() : new HashSet<>(productIds);

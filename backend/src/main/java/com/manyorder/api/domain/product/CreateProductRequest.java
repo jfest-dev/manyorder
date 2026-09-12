@@ -2,6 +2,7 @@ package com.manyorder.api.domain.product;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import jakarta.validation.constraints.NotBlank;
@@ -22,6 +23,13 @@ public class CreateProductRequest {
     @NotNull
     @Positive
     private BigDecimal price;
+
+    /** Optional temporary sale price + window. Null salePrice = no sale.
+     *  Validated in the service (must be > 0 and below the base price). */
+    @Positive
+    private BigDecimal salePrice;
+    private LocalDateTime saleStartsAt;
+    private LocalDateTime saleEndsAt;
 
     /** Reference to a per-store category; null/0 = uncategorized. */
     private Long categoryId;
@@ -54,6 +62,12 @@ public class CreateProductRequest {
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
     public BigDecimal getPrice() { return price; }
+    public BigDecimal getSalePrice() { return salePrice; }
+    public void setSalePrice(BigDecimal salePrice) { this.salePrice = salePrice; }
+    public LocalDateTime getSaleStartsAt() { return saleStartsAt; }
+    public void setSaleStartsAt(LocalDateTime saleStartsAt) { this.saleStartsAt = saleStartsAt; }
+    public LocalDateTime getSaleEndsAt() { return saleEndsAt; }
+    public void setSaleEndsAt(LocalDateTime saleEndsAt) { this.saleEndsAt = saleEndsAt; }
     public void setPrice(BigDecimal price) { this.price = price; }
     public Long getCategoryId() { return categoryId; }
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }

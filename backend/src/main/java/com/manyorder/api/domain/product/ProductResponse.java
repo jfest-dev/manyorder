@@ -21,6 +21,14 @@ public class ProductResponse {
     private final String name;
     private final String description;
     private final BigDecimal price;
+    /** Configured sale price and window. On the public view these are null unless
+     *  the sale is active now (customers never see a not-yet-active sale). */
+    private final BigDecimal salePrice;
+    private final LocalDateTime saleStartsAt;
+    private final LocalDateTime saleEndsAt;
+    /** Whether the sale is active now, and the price in force (sale or base). */
+    private final boolean onSale;
+    private final BigDecimal effectivePrice;
     private final Boolean isActive;
     private final Long categoryId;
     private final String categoryName;
@@ -40,6 +48,20 @@ public class ProductResponse {
     private final LocalDateTime createdAt;
 
     public ProductResponse(Product p, long unitsSold) {
+        this(p, unitsSold, false);
+    }
+
+    /** @param publicView when true, a not-yet-active sale is hidden (customers only
+     *                    ever see a sale while it is live). */
+    public ProductResponse(Product p, long unitsSold, boolean publicView) {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        this.onSale = p.isOnSaleAt(now);
+        this.effectivePrice = p.effectivePriceAt(now);
+        // Public view: expose the sale price only while active, and never the raw
+        // window. Merchant view: always show the configured sale for management.
+        this.salePrice = publicView ? (onSale ? p.getSalePrice() : null) : p.getSalePrice();
+        this.saleStartsAt = publicView ? null : p.getSaleStartsAt();
+        this.saleEndsAt = publicView ? null : p.getSaleEndsAt();
         this.id = p.getId();
         this.merchantId = p.getMerchant().getId();
         this.name = p.getName();
@@ -73,6 +95,11 @@ public class ProductResponse {
     public String getName() { return name; }
     public String getDescription() { return description; }
     public BigDecimal getPrice() { return price; }
+    public BigDecimal getSalePrice() { return salePrice; }
+    public LocalDateTime getSaleStartsAt() { return saleStartsAt; }
+    public LocalDateTime getSaleEndsAt() { return saleEndsAt; }
+    public boolean isOnSale() { return onSale; }
+    public BigDecimal getEffectivePrice() { return effectivePrice; }
     public Boolean getIsActive() { return isActive; }
     public Long getCategoryId() { return categoryId; }
     public String getCategoryName() { return categoryName; }

@@ -176,7 +176,9 @@ public class OrderService {
                         "Product not found in this store: " + itemReq.getProductId()));
         ModifierResolver.Resolution resolution =
                 ModifierResolver.resolve(product, itemReq.getModifierOptionIds());
-        OrderItem item = new OrderItem(order, product, itemReq.getQuantity(), product.getPrice());
+        // Honour an active sale on manual orders too, snapshotting the effective base.
+        OrderItem item = new OrderItem(order, product, itemReq.getQuantity(),
+                product.effectivePriceAt(java.time.LocalDateTime.now()));
         if (itemReq.getNotes() != null && !itemReq.getNotes().isBlank()) {
             item.setNotes(itemReq.getNotes().trim());
         }

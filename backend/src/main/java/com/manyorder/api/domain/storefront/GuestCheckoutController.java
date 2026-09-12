@@ -94,6 +94,10 @@ public class GuestCheckoutController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This store offers delivery only.");
         }
 
+        // A single "now" for the whole checkout, so sale windows and the prices
+        // snapshotted onto the order are all evaluated against one instant.
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+
         // 1) Resolve + classify each line into ready (in-stock) vs pre-order, and
         //    tally the combined subtotal (discount is computed against the whole cart).
         List<Line> ready = new ArrayList<>();
@@ -108,12 +112,15 @@ public class GuestCheckoutController {
             // only ids, never prices.
             ModifierResolver.Resolution resolution =
                     ModifierResolver.resolve(product, itemReq.getModifierOptionIds());
-            BigDecimal effectiveUnit = product.getPrice().add(resolution.totalPerUnit());
+            // Effective base price honours an active sale; modifiers ride on top.
+            BigDecimal effectiveBase = product.effectivePriceAt(now);
+            BigDecimal effectiveUnit = effectiveBase.add(resolution.totalPerUnit());
             BigDecimal lineTotal = effectiveUnit.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
             String lineNotes = itemReq.getNotes() != null && !itemReq.getNotes().isBlank()
                     ? itemReq.getNotes().trim() : null;
             (product.isPreOrder() ? preorder : ready)
-                    .add(new Line(product, itemReq.getQuantity(), resolution, lineNotes, lineTotal));
+                    .add(new Line(product, itemReq.getQuantity(), resolution, lineNotes, lineTotal,
+                            effectiveBase, product.isOnSaleAt(now)));
             combinedSubtotal = combinedSubtotal.add(lineTotal);
         }
 
@@ -136,8 +143,8 @@ public class GuestCheckoutController {
         DiscountService.Redemption redemption = null;
         if (request.getDiscountCode() != null && !request.getDiscountCode().isBlank()) {
             List<DiscountService.LineAmount> lineAmounts = new ArrayList<>();
-            for (Line l : ready) lineAmounts.add(new DiscountService.LineAmount(l.product().getId(), l.lineTotal()));
-            for (Line l : preorder) lineAmounts.add(new DiscountService.LineAmount(l.product().getId(), l.lineTotal()));
+            for (Line l : ready) lineAmounts.add(new DiscountService.LineAmount(l.product().getId(), l.lineTotal(), l.onSale()));
+            for (Line l : preorder) lineAmounts.add(new DiscountService.LineAmount(l.product().getId(), l.lineTotal(), l.onSale()));
             DiscountService.DeliveryContext ctx = new DiscountService.DeliveryContext(
                     orderType == OrderType.DELIVERY, deliveryFee, deliveryFeePending);
             // First-order check runs here, BEFORE persistOrder below, so the
@@ -230,7 +237,9 @@ public class GuestCheckoutController {
         orderRepository.save(order);
 
         for (Line l : lines) {
-            OrderItem item = new OrderItem(order, l.product(), l.quantity(), l.product().getPrice());
+            // Snapshot the effective base price (sale-aware) so history reflects
+            // what was actually charged, immune to later price/sale changes.
+            OrderItem item = new OrderItem(order, l.product(), l.quantity(), l.effectiveBase());
             item.setNotes(l.notes());
             for (ModifierResolver.Selection s : l.resolution().selections()) {
                 item.addModifier(new OrderItemModifier(
@@ -333,21 +342,26 @@ public class GuestCheckoutController {
         return sum;
     }
 
-    /** Subtotal of the lines in one bucket that the redeemed discount applies to
-     *  (all lines for a store-wide code, matching lines for a product-specific one). */
+    /** Subtotal of the lines in one bucket the redeemed discount actually discounts:
+     *  in-scope lines (all for store-wide, matching for product-specific), minus
+     *  on-sale lines when the code can't stack with a sale. Drives the split
+     *  allocation so each order gets its true share of the discount. */
     private static BigDecimal matchingSubtotal(List<Line> lines, DiscountService.Redemption redemption) {
         BigDecimal sum = BigDecimal.ZERO;
         for (Line l : lines) {
-            if (redemption.storeWide() || redemption.productIds().contains(l.product().getId())) {
-                sum = sum.add(l.lineTotal());
-            }
+            boolean inScope = redemption.storeWide() || redemption.productIds().contains(l.product().getId());
+            if (!inScope) continue;
+            if (l.onSale() && !redemption.canStackWithSale()) continue;
+            sum = sum.add(l.lineTotal());
         }
         return sum;
     }
 
-    /** A resolved cart line (product + quantity + validated modifiers + note + line total). */
+    /** A resolved cart line: product, quantity, validated modifiers, note, line
+     *  total, the effective base price snapshotted onto the order (sale-aware),
+     *  and whether the product was on sale at checkout time. */
     private record Line(Product product, int quantity, ModifierResolver.Resolution resolution,
-                        String notes, BigDecimal lineTotal) {}
+                        String notes, BigDecimal lineTotal, BigDecimal effectiveBase, boolean onSale) {}
 
     /**
      * Live check of a voucher code before submit; 400 with a reason when not valid.
@@ -390,6 +404,7 @@ public class GuestCheckoutController {
             Merchant merchant, List<DiscountValidationRequest.Item> items) {
         List<DiscountService.LineAmount> out = new ArrayList<>();
         if (items == null) return out;
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
         for (DiscountValidationRequest.Item it : items) {
             if (it.getProductId() == null || it.getQuantity() == null || it.getQuantity() <= 0) continue;
             Product product = productRepository.findByMerchantAndId(merchant, it.getProductId())
@@ -397,9 +412,10 @@ public class GuestCheckoutController {
                             "Product not found in this store: " + it.getProductId()));
             ModifierResolver.Resolution resolution =
                     ModifierResolver.resolve(product, it.getModifierOptionIds());
-            BigDecimal effectiveUnit = product.getPrice().add(resolution.totalPerUnit());
+            BigDecimal effectiveUnit = product.effectivePriceAt(now).add(resolution.totalPerUnit());
             out.add(new DiscountService.LineAmount(
-                    product.getId(), effectiveUnit.multiply(BigDecimal.valueOf(it.getQuantity()))));
+                    product.getId(), effectiveUnit.multiply(BigDecimal.valueOf(it.getQuantity())),
+                    product.isOnSaleAt(now)));
         }
         return out;
     }

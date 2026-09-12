@@ -29,9 +29,10 @@ public class DiscountService {
         this.productRepository = productRepository;
     }
 
-    /** One resolved cart line the discount is measured against: which product, and
-     *  its priced line total (unit price plus modifiers, times quantity). */
-    public record LineAmount(long productId, BigDecimal lineTotal) {}
+    /** One resolved cart line the discount is measured against: which product, its
+     *  priced line total (effective unit price plus modifiers, times quantity), and
+     *  whether that product is on sale (so a non-stacking code can skip it). */
+    public record LineAmount(long productId, BigDecimal lineTotal, boolean onSale) {}
 
     // ---------- merchant CRUD ----------
 
@@ -61,6 +62,7 @@ public class DiscountService {
         discount.setProductIds(freeDelivery ? new HashSet<>() : validateProductScope(merchant, request.getProductIds()));
         discount.setMinSpend(request.getMinSpend());
         discount.setFirstOrderOnly(request.getFirstOrderOnly() != null && request.getFirstOrderOnly());
+        discount.setCanStackWithSale(request.getCanStackWithSale() != null && request.getCanStackWithSale());
         return new DiscountResponse(discountRepository.save(discount));
     }
 
@@ -92,6 +94,7 @@ public class DiscountService {
             discount.setMinSpend(request.getMinSpend().signum() == 0 ? null : request.getMinSpend());
         }
         if (request.getFirstOrderOnly() != null) discount.setFirstOrderOnly(request.getFirstOrderOnly());
+        if (request.getCanStackWithSale() != null) discount.setCanStackWithSale(request.getCanStackWithSale());
         // A free-delivery code carries no value or product scope, whichever way it
         // was set - normalise so a type flip to FREE_DELIVERY can't leave stale data.
         if (discount.getType() == DiscountType.FREE_DELIVERY) {
@@ -149,21 +152,6 @@ public class DiscountService {
         return amount.min(discountableSubtotal).max(BigDecimal.ZERO);
     }
 
-    /**
-     * The portion of the cart the discount is measured against: every line for a
-     * store-wide code, or only the lines whose product is in the code's set for a
-     * product-specific one.
-     */
-    public BigDecimal matchingSubtotal(Discount discount, List<LineAmount> lines) {
-        BigDecimal sum = BigDecimal.ZERO;
-        for (LineAmount line : lines) {
-            if (discount.isStoreWide() || discount.getProductIds().contains(line.productId())) {
-                sum = sum.add(line.lineTotal());
-            }
-        }
-        return sum;
-    }
-
     /** The order's delivery situation, needed to resolve a FREE_DELIVERY code:
      *  whether it's a delivery order, the fee that would apply, and whether that
      *  fee is still to-be-confirmed (the store had none configured). */
@@ -216,13 +204,27 @@ public class DiscountService {
             return resolveFreeDelivery(discount, delivery);
         }
 
-        BigDecimal matching = matchingSubtotal(discount, lines);
-        if (!discount.isStoreWide() && matching.signum() == 0) {
+        // In-scope subtotal (store-wide = all lines; product-specific = matching
+        // lines). The discountable subtotal further excludes on-sale lines unless
+        // this code may stack with a sale.
+        BigDecimal inScope = BigDecimal.ZERO;
+        BigDecimal discountable = BigDecimal.ZERO;
+        boolean excludedSaleLine = false;
+        for (LineAmount line : lines) {
+            if (!(discount.isStoreWide() || discount.getProductIds().contains(line.productId()))) continue;
+            inScope = inScope.add(line.lineTotal());
+            if (line.onSale() && !discount.isCanStackWithSale()) { excludedSaleLine = true; continue; }
+            discountable = discountable.add(line.lineTotal());
+        }
+        if (!discount.isStoreWide() && inScope.signum() == 0) {
             throw reject("This code only applies to specific items, none of which are in your cart.");
         }
-        BigDecimal amount = computeAmount(discount, matching);
+        if (discountable.signum() == 0 && excludedSaleLine) {
+            throw reject("This code can't be combined with sale-priced items.");
+        }
+        BigDecimal amount = computeAmount(discount, discountable);
         return new Redemption(discount.getCode(), amount, discount.isStoreWide(),
-                Set.copyOf(discount.getProductIds()), false, BigDecimal.ZERO);
+                Set.copyOf(discount.getProductIds()), false, BigDecimal.ZERO, discount.isCanStackWithSale());
     }
 
     /**
@@ -239,7 +241,8 @@ public class DiscountService {
             throw reject("Delivery is already free on this order.");
         }
         BigDecimal waived = delivery.pending() ? BigDecimal.ZERO : delivery.fee();
-        return new Redemption(discount.getCode(), BigDecimal.ZERO, true, Set.of(), true, waived);
+        return new Redemption(discount.getCode(), BigDecimal.ZERO, true, Set.of(), true, waived,
+                discount.isCanStackWithSale());
     }
 
     /** Format the discount's minimum spend in the store's currency, for the
@@ -257,7 +260,7 @@ public class DiscountService {
      * free-delivery code - a flag plus the delivery fee it waives.
      */
     public record Redemption(String code, BigDecimal amount, boolean storeWide, Set<Long> productIds,
-                             boolean freeDelivery, BigDecimal deliveryDiscount) {}
+                             boolean freeDelivery, BigDecimal deliveryDiscount, boolean canStackWithSale) {}
 
     // ---------- helpers ----------
 

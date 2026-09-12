@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -109,6 +110,8 @@ public class ProductService {
         product.setPreOrderReadyTimeStart(request.getPreOrderReadyTimeStart());
         product.setPreOrderReadyTimeEnd(request.getPreOrderReadyTimeEnd());
         product.setPreOrderNote(request.getPreOrderNote());
+        // Optional sale (null salePrice = no sale). Validated against the base price.
+        applySale(product, merchant, request.getSalePrice(), request.getSaleStartsAt(), request.getSaleEndsAt());
         // A new product always takes the sent modifier set (empty when omitted).
         applyModifierGroups(product, request.getModifierGroups(), merchant.getCurrency());
         return toResponse(productRepository.save(product));
@@ -141,6 +144,13 @@ public class ProductService {
         if (request.getPrice() != null) {
             MoneyValidation.requireValidScale(request.getPrice(), merchant.getCurrency(), "Price");
             product.setPrice(request.getPrice());
+        }
+        // Sale sentinel: null = leave unchanged, 0 = clear the sale, >0 = set it
+        // (validated against the current base price, so this runs after the price).
+        if (request.getSalePrice() != null) {
+            BigDecimal sp = request.getSalePrice();
+            applySale(product, merchant, sp.signum() == 0 ? null : sp,
+                    request.getSaleStartsAt(), request.getSaleEndsAt());
         }
         // Category sentinel: null = unchanged, 0 = clear to none, >0 = set.
         if (request.getCategoryId() != null) {
@@ -364,6 +374,38 @@ public class ProductService {
         }
     }
 
+    /**
+     * Validate and apply a temporary sale. A null salePrice clears the sale; a
+     * positive one must be below the current base price and have a sane window
+     * (start before end, end in the future). The window bounds are optional
+     * (null = open-ended on that side).
+     */
+    private void applySale(Product product, Merchant merchant, BigDecimal salePrice,
+                           LocalDateTime start, LocalDateTime end) {
+        if (salePrice == null) {
+            product.setSalePrice(null);
+            product.setSaleStartsAt(null);
+            product.setSaleEndsAt(null);
+            return;
+        }
+        MoneyValidation.requireValidScale(salePrice, merchant.getCurrency(), "Sale price");
+        if (salePrice.compareTo(product.getPrice()) >= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "The sale price must be below the regular price.");
+        }
+        if (start != null && end != null && start.isAfter(end)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "The sale start must be before the sale end.");
+        }
+        if (end != null && end.isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "The sale end must be in the future.");
+        }
+        product.setSalePrice(salePrice);
+        product.setSaleStartsAt(start);
+        product.setSaleEndsAt(end);
+    }
+
     /** One past the current highest displayOrder, so a new product appends to the end. */
     private int nextDisplayOrder(Merchant merchant) {
         return productRepository.findByMerchantOrderByDisplayOrderAscIdAsc(merchant).stream()
@@ -405,7 +447,7 @@ public class ProductService {
             sold.put((Long) row[0], ((Number) row[1]).longValue());
         }
         return products.stream()
-                .map(p -> new ProductResponse(p, sold.getOrDefault(p.getId(), 0L)))
+                .map(p -> new ProductResponse(p, sold.getOrDefault(p.getId(), 0L), true)) // public view: hide inactive sale
                 .toList();
     }
 

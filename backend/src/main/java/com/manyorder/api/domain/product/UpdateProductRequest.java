@@ -2,6 +2,7 @@ package com.manyorder.api.domain.product;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import jakarta.validation.constraints.Positive;
@@ -19,6 +20,13 @@ public class UpdateProductRequest {
 
     @Positive
     private BigDecimal price;
+
+    /** Sale: null = leave unchanged, 0 = clear the sale, >0 = set the sale price
+     *  (with the window below). Applied as a unit when salePrice is present. */
+    @PositiveOrZero
+    private BigDecimal salePrice;
+    private LocalDateTime saleStartsAt;
+    private LocalDateTime saleEndsAt;
 
     /** Category reference: null = leave unchanged, 0 = clear to none, >0 = set. */
     private Long categoryId;
@@ -55,6 +63,12 @@ public class UpdateProductRequest {
     public void setDescription(String description) { this.description = description; }
     public BigDecimal getPrice() { return price; }
     public void setPrice(BigDecimal price) { this.price = price; }
+    public BigDecimal getSalePrice() { return salePrice; }
+    public void setSalePrice(BigDecimal salePrice) { this.salePrice = salePrice; }
+    public LocalDateTime getSaleStartsAt() { return saleStartsAt; }
+    public void setSaleStartsAt(LocalDateTime saleStartsAt) { this.saleStartsAt = saleStartsAt; }
+    public LocalDateTime getSaleEndsAt() { return saleEndsAt; }
+    public void setSaleEndsAt(LocalDateTime saleEndsAt) { this.saleEndsAt = saleEndsAt; }
     public Long getCategoryId() { return categoryId; }
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
     public Integer getStock() { return stock; }

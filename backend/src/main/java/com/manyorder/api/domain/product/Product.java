@@ -45,6 +45,17 @@ public class Product {
     @Column(nullable = false)
     private BigDecimal price;
 
+    /**
+     * Optional temporary sale price and its window. When {@code salePrice} is set
+     * and now is within [saleStartsAt, saleEndsAt] (null bound = open-ended), the
+     * product sells at the sale price automatically — no code needed. Evaluated
+     * live at read/checkout time (see {@link #effectivePriceAt}); nothing flips a
+     * stored flag, so the sale reverts on its own once the window passes.
+     */
+    private BigDecimal salePrice;
+    private LocalDateTime saleStartsAt;
+    private LocalDateTime saleEndsAt;
+
     @Column(nullable = false)
     private Boolean isActive;
 
@@ -140,6 +151,27 @@ public class Product {
 
     public void setPrice(BigDecimal price) {
         this.price = price;
+    }
+
+    public BigDecimal getSalePrice() { return salePrice; }
+    public void setSalePrice(BigDecimal salePrice) { this.salePrice = salePrice; }
+    public LocalDateTime getSaleStartsAt() { return saleStartsAt; }
+    public void setSaleStartsAt(LocalDateTime saleStartsAt) { this.saleStartsAt = saleStartsAt; }
+    public LocalDateTime getSaleEndsAt() { return saleEndsAt; }
+    public void setSaleEndsAt(LocalDateTime saleEndsAt) { this.saleEndsAt = saleEndsAt; }
+
+    /** Whether a sale price is configured and active at {@code now}. */
+    public boolean isOnSaleAt(LocalDateTime now) {
+        if (salePrice == null) return false;
+        if (saleStartsAt != null && now.isBefore(saleStartsAt)) return false;
+        if (saleEndsAt != null && now.isAfter(saleEndsAt)) return false;
+        return true;
+    }
+
+    /** The price in force at {@code now}: the sale price while the sale is active,
+     *  otherwise the base price. The single source of truth for sale-aware pricing. */
+    public BigDecimal effectivePriceAt(LocalDateTime now) {
+        return isOnSaleAt(now) ? salePrice : price;
     }
 
     public void setIsActive(Boolean isActive) {
