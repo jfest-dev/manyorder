@@ -193,6 +193,14 @@ export interface ProductResponse {
   name: string;
   description: string | null;
   price: number;
+  /** Configured sale. On the public view these are null unless the sale is active
+   *  now; on the merchant view they are always the configured values. */
+  salePrice: number | null;
+  saleStartsAt: string | null; // ISO datetime
+  saleEndsAt: string | null;
+  /** Whether the sale is active now, and the price in force (sale or base). */
+  onSale: boolean;
+  effectivePrice: number;
   isActive: boolean;
   categoryId: number | null;
   categoryName: string | null;
@@ -235,6 +243,10 @@ export interface CreateProductPayload {
   name: string;
   description?: string;
   price: number;
+  /** Optional temporary sale price + window; omit salePrice for no sale. */
+  salePrice?: number;
+  saleStartsAt?: string; // ISO datetime
+  saleEndsAt?: string;
   categoryId?: number; // reference to a per-store category; omit/0 = none
   stock?: number;
   sku?: string;
@@ -251,6 +263,10 @@ export interface UpdateProductPayload {
   name?: string;
   description?: string;
   price?: number;
+  /** Sale: null/omitted = unchanged, 0 = clear the sale, >0 = set (with window). */
+  salePrice?: number;
+  saleStartsAt?: string | null; // ISO datetime
+  saleEndsAt?: string | null;
   categoryId?: number; // null = unchanged, 0 = clear to none, >0 = set
   stock?: number;
   sku?: string;
@@ -617,6 +633,8 @@ export interface DiscountResponse {
   active: boolean;
   /** When true, valid only for a customer with no prior order. */
   firstOrderOnly: boolean;
+  /** When true, may combine with an active product sale price. */
+  canStackWithSale: boolean;
   /** Products the discount is limited to; empty = store-wide. */
   productIds: number[];
   createdAt: string;
@@ -636,6 +654,8 @@ export interface DiscountPayload {
   active?: boolean;
   /** When true, valid only for a customer with no prior order. */
   firstOrderOnly?: boolean;
+  /** When true, may combine with an active product sale price. */
+  canStackWithSale?: boolean;
   /** Empty/omitted = store-wide; non-empty = limited to these products. On
    *  update: null leaves the scope unchanged, an empty array clears to store-wide. */
   productIds?: number[] | null;

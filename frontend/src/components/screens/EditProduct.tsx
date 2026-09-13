@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload, X, ArrowLeft } from 'lucide-react';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
+import { DatePicker } from '../DatePicker';
 import { PreorderScheduleFields } from '../PreorderScheduleFields';
 import { Button } from '../Button';
 import { Card } from '../Card';
@@ -61,6 +62,9 @@ export function EditProduct({
 
   const [name, setName] = useState('');
   const [price, setPrice] = useState<number | null>(null);
+  const [salePrice, setSalePrice] = useState<number | null>(null);
+  const [saleStart, setSaleStart] = useState(''); // yyyy-MM-dd, '' = open-ended
+  const [saleEnd, setSaleEnd] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(''); // '' = no category
   const [categoryName, setCategoryName] = useState(''); // resolved name, for the preview badge
@@ -107,6 +111,9 @@ export function EditProduct({
         if (cancelled) return;
         setName(p.name);
         setPrice(p.price);
+        setSalePrice(p.salePrice);
+        setSaleStart(p.saleStartsAt ? p.saleStartsAt.slice(0, 10) : '');
+        setSaleEnd(p.saleEndsAt ? p.saleEndsAt.slice(0, 10) : '');
         setDescription(p.description ?? '');
         setCategoryId(p.categoryId != null ? String(p.categoryId) : '');
         setStock(String(p.stock ?? 0));
@@ -207,6 +214,8 @@ export function EditProduct({
     if (!name.trim()) { setError('Product name is required.'); return false; }
     const priceNum = price;
     if (priceNum === null || priceNum <= 0) { setError('Enter a valid price.'); return false; }
+    if (salePrice != null && salePrice >= priceNum) { setError('Sale price must be below the regular price.'); return false; }
+    if (salePrice != null && saleStart && saleEnd && saleStart > saleEnd) { setError('Sale start must be before the sale end.'); return false; }
     const stockNum = stock.trim() === '' ? 0 : parseInt(stock, 10);
     if (Number.isNaN(stockNum) || stockNum < 0) { setError('Stock must be 0 or more.'); return false; }
     const modifierError = validateEditorGroups(modifierGroups);
@@ -224,6 +233,10 @@ export function EditProduct({
         name: name.trim(),
         description: description.trim(),
         price: priceNum,
+        // Sale: send the price when set, or 0 to clear. Window sent only when a sale is set.
+        salePrice: salePrice != null ? salePrice : 0,
+        saleStartsAt: salePrice != null && saleStart ? `${saleStart}T00:00:00` : undefined,
+        saleEndsAt: salePrice != null && saleEnd ? `${saleEnd}T23:59:59` : undefined,
         categoryId: categoryId ? Number(categoryId) : 0, // 0 clears to no category
         stock: stockNum,
         sku: sku.trim(),
@@ -369,6 +382,23 @@ export function EditProduct({
                   This item will show as Out of Stock until you add inventory.
                 </p>
               )}
+
+              {/* Sale price (optional): a temporary reduced price shown automatically. */}
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
+                <MoneyField label="Sale price (optional)" currency={currency} value={salePrice} onChange={setSalePrice} min={priceLimits(currency).min} max={priceLimits(currency).max} helperText="Shown automatically to customers during the sale window. Clear it to end the sale." />
+                {salePrice != null && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
+                    <div>
+                      <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Sale starts</label>
+                      <DatePicker value={saleStart} onChange={setSaleStart} placeholder="Now" ariaLabel="Sale start date" />
+                    </div>
+                    <div>
+                      <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Sale ends</label>
+                      <DatePicker value={saleEnd} onChange={setSaleEnd} placeholder="No end" ariaLabel="Sale end date" />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <FieldInput label="SKU" placeholder="e.g. HDPH-001" value={sku} onChange={setSku} helperText="Optional stock-keeping unit" maxLength={255} />
 

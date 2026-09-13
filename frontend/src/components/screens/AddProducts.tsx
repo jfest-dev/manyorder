@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Upload, X, Check, Package } from 'lucide-react';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
+import { DatePicker } from '../DatePicker';
 import { PreorderScheduleFields } from '../PreorderScheduleFields';
 import { ToggleSwitch } from '../ToggleSwitch';
 import { Button } from '../Button';
@@ -19,6 +20,9 @@ interface Product {
   id: string; // local form id
   name: string;
   price: number | null;
+  salePrice: number | null;
+  saleStart: string; // yyyy-MM-dd, '' = open-ended
+  saleEnd: string;   // yyyy-MM-dd, '' = open-ended
   description: string;
   categoryId: string; // selected category id as string; '' = no category
   quantity: string;
@@ -33,7 +37,7 @@ interface Product {
   photoPreview?: string;
 }
 
-type FieldErrors = { name?: string; price?: string; quantity?: string };
+type FieldErrors = { name?: string; price?: string; salePrice?: string; quantity?: string };
 
 interface AddProductsProps {
   /** The store products are created against. Always present now - onboarding
@@ -54,7 +58,7 @@ interface AddProductsProps {
 }
 
 const blank = (id: string): Product => ({
-  id, name: '', price: null, description: '', categoryId: '', quantity: '',
+  id, name: '', price: null, salePrice: null, saleStart: '', saleEnd: '', description: '', categoryId: '', quantity: '',
   sku: '', preOrder: false, readyDate: '', readyTimeStart: '', readyTimeEnd: '', note: '', modifierGroups: [],
   photoFile: undefined, photoPreview: undefined,
 });
@@ -112,6 +116,12 @@ export function AddProducts({
     if (p.price === null) errs.price = 'Price is required.';
     else if (p.price < limits.min) errs.price = 'Price must be greater than 0.';
     else if (p.price > limits.max) errs.price = `Price can't exceed ${formatMoney(limits.max, currency)}.`;
+    if (p.salePrice != null && p.price != null && p.salePrice >= p.price) {
+      errs.salePrice = 'Sale price must be below the regular price.';
+    }
+    if (p.salePrice != null && p.saleStart && p.saleEnd && p.saleStart > p.saleEnd) {
+      errs.salePrice = 'Sale start must be before the sale end.';
+    }
     if (p.quantity.trim() !== '') {
       const qty = Number(p.quantity);
       if (!Number.isInteger(qty) || qty < 0) errs.quantity = 'Stock must be a whole number of 0 or more.';
@@ -166,6 +176,9 @@ export function AddProducts({
         name: product.name.trim(),
         description: product.description.trim() || undefined,
         price: product.price ?? 0, // validated non-null before we reach here
+        salePrice: product.salePrice ?? undefined,
+        saleStartsAt: product.salePrice != null && product.saleStart ? `${product.saleStart}T00:00:00` : undefined,
+        saleEndsAt: product.salePrice != null && product.saleEnd ? `${product.saleEnd}T23:59:59` : undefined,
         categoryId: product.categoryId ? Number(product.categoryId) : undefined,
         stock: product.quantity.trim() === '' ? 0 : parseInt(product.quantity, 10),
         sku: product.sku.trim() || undefined,
@@ -319,6 +332,23 @@ export function AddProducts({
                     )}
 
                     <FieldInput label="SKU" placeholder="e.g. ICW-001" value={product.sku} onChange={(v) => update(product.id, 'sku', v)} helperText="Optional stock-keeping unit" maxLength={255} />
+
+                    {/* Sale price (optional): a temporary reduced price shown automatically. */}
+                    <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
+                      <MoneyField label="Sale price (optional)" currency={currency} value={product.salePrice} onChange={(v) => patch(product.id, { salePrice: v })} min={limits.min} max={limits.max} error={errors[product.id]?.salePrice} helperText="Shown automatically to customers during the sale window. Leave blank for no sale." />
+                      {product.salePrice != null && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '10px' }}>
+                          <div>
+                            <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Sale starts</label>
+                            <DatePicker value={product.saleStart} onChange={(v) => update(product.id, 'saleStart', v)} placeholder="Now" ariaLabel="Sale start date" />
+                          </div>
+                          <div>
+                            <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Sale ends</label>
+                            <DatePicker value={product.saleEnd} onChange={(v) => update(product.id, 'saleEnd', v)} placeholder="No end" ariaLabel="Sale end date" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Pre-order */}
                     <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>

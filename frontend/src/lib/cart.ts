@@ -221,7 +221,11 @@ export function hydrateCart(cart: CartItem[], products: ProductResponse[]): Cart
     if (!product) continue;
 
     const { selectedOptions, modifiersTotal } = resolveSelectedOptions(product, it.modifierOptionIds);
-    const unitPrice = product.price + modifiersTotal;
+    // Effective price honours an active sale; modifiers ride on top. Falls back to
+    // the base price for an older response without the field. The server re-prices
+    // at checkout, so this is display/estimate only.
+    const basePrice = product.effectivePrice ?? product.price;
+    const unitPrice = basePrice + modifiersTotal;
 
     lines.push({
       signature: lineSignature(it),

@@ -94,7 +94,9 @@ export function ProductDetailView({
     () => groups.flatMap((g) => g.options.filter((o) => selected.includes(o.id))),
     [groups, selected],
   );
-  const unitPrice = product.price + selectedOptions.reduce((s, o) => s + o.priceDelta, 0);
+  // Effective base honours an active sale; modifiers ride on top.
+  const basePrice = product.effectivePrice ?? product.price;
+  const unitPrice = basePrice + selectedOptions.reduce((s, o) => s + o.priceDelta, 0);
   const allSatisfied = useMemo(() => groups.every((g) => groupSatisfied(g, selected)), [groups, selected]);
   // The first unmet required group, to nudge the customer toward what's missing.
   const firstUnmet = useMemo(
@@ -146,8 +148,15 @@ export function ProductDetailView({
               <span style={{ fontSize: '10px', color: 'var(--text-secondary)', background: 'var(--bg-card-subtle)', padding: '2px 8px', borderRadius: '999px' }}>{product.categoryName}</span>
             )}
           </div>
-          <div style={{ fontSize: '18px', fontWeight: 700, marginTop: '6px', color: 'var(--text-primary)' }}>
-            {formatMoney(product.price, currency)}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '6px' }}>
+            {product.onSale ? (
+              <>
+                <span style={{ fontSize: '18px', fontWeight: 700, color: '#DC2626' }}>{formatMoney(product.effectivePrice, currency)}</span>
+                <span style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'line-through' }}>{formatMoney(product.price, currency)}</span>
+              </>
+            ) : (
+              <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>{formatMoney(product.price, currency)}</span>
+            )}
           </div>
         </div>
 

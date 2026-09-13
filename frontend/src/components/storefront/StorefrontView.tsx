@@ -82,7 +82,7 @@ export function StorefrontView({
 
   // Prefer the true subtotal (incl. modifiers) from the hydrated cart; fall back
   // to a plain estimate for preview surfaces that don't pass one.
-  const barTotal = cartTotal ?? products.reduce((sum, p) => sum + p.price * (quantities[p.id] ?? 0), 0);
+  const barTotal = cartTotal ?? products.reduce((sum, p) => sum + (p.effectivePrice ?? p.price) * (quantities[p.id] ?? 0), 0);
 
   // Category chips, ordered by the merchant's displayOrder (then name), not by
   // the order products happen to load in.
@@ -403,7 +403,14 @@ export function StorefrontView({
                     <div className="shop-card-desc" style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>{p.description}</div>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{formatMoney(p.price, currency)}</span>
+                    {p.onSale ? (
+                      <>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#DC2626' }}>{formatMoney(p.effectivePrice, currency)}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', textDecoration: 'line-through' }}>{formatMoney(p.price, currency)}</span>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{formatMoney(p.price, currency)}</span>
+                    )}
                     {p.preOrder && <span style={{ fontSize: '9px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', padding: '2px 6px', borderRadius: '4px' }}>Pre-order</span>}
                     {!orderable && <span style={{ fontSize: '9px', fontWeight: 600, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: '4px' }}>Sold Out</span>}
                   </div>

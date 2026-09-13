@@ -7,6 +7,7 @@ import { MoneyField } from '../MoneyField';
 import { Select } from '../Select';
 import { DatePicker } from '../DatePicker';
 import { Checkbox } from '../Checkbox';
+import { ToggleSwitch } from '../ToggleSwitch';
 import { useConfirm } from '../ConfirmDialog';
 import { Toast } from '../Toast';
 import { discountsApi, DiscountResponse, DiscountType, DiscountPayload, ApiError, productsApi, ProductResponse } from '../../lib/api';
@@ -76,13 +77,14 @@ interface FormState {
   endDate: string;
   active: boolean;
   firstOrderOnly: boolean;
+  canStackWithSale: boolean;
   /** ALL = store-wide (empty scope); SPECIFIC = limited to productIds. */
   appliesTo: 'ALL' | 'SPECIFIC';
   productIds: number[];
 }
 const BLANK: FormState = {
   name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', minSpend: '', startDate: '', endDate: '', active: true,
-  firstOrderOnly: false, appliesTo: 'ALL', productIds: [],
+  firstOrderOnly: false, canStackWithSale: false, appliesTo: 'ALL', productIds: [],
 };
 
 export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
@@ -198,6 +200,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       endDate: d.endsAt ? d.endsAt.slice(0, 10) : '',
       active: d.active,
       firstOrderOnly: d.firstOrderOnly,
+      canStackWithSale: d.canStackWithSale,
       appliesTo: d.productIds.length > 0 ? 'SPECIFIC' : 'ALL',
       productIds: d.productIds,
     });
@@ -236,6 +239,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       endsAt: form.endDate ? `${form.endDate}T23:59:59` : null,
       active: form.active,
       firstOrderOnly: form.firstOrderOnly,
+      canStackWithSale: form.canStackWithSale,
       // Empty array = store-wide (and always empty for free delivery). On edit
       // this also clears a previous scope.
       productIds: !freeDelivery && form.appliesTo === 'SPECIFIC' ? form.productIds : [],
@@ -405,14 +409,16 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                 </div>
               </div>
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                <Checkbox checked={form.active} onChange={(v) => set('active', v)} ariaLabel="Active" />
-                <span className="text-small">Active (customers can use this code now)</span>
-              </label>
+              <ToggleSwitch checked={form.active} onChange={(v) => set('active', v)} label="Active" />
 
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <Checkbox checked={form.firstOrderOnly} onChange={(v) => set('firstOrderOnly', v)} ariaLabel="First order only" />
-                <span className="text-small">First order only (new customers with no previous order)</span>
+                <span className="text-small">First order only</span>
+              </label>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                <Checkbox checked={form.canStackWithSale} onChange={(v) => set('canStackWithSale', v)} ariaLabel="Stack with sale prices" />
+                <span className="text-small">Stack with sale prices</span>
               </label>
 
               {/* Applies to: whole order (store-wide) or a chosen set of products.
