@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Search, Download, Plus, X, Filter } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Search, Download, Plus, X, Filter, Trash2 } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
 import { Select } from '../Select';
+import { Toast } from '../Toast';
+import { useConfirm } from '../ConfirmDialog';
 import { WhatsAppIcon } from '../icons/WhatsAppIcon';
 import { customersApi, CustomerResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
@@ -39,9 +41,19 @@ function StatusTag({ active }: { active: boolean }) {
 }
 
 export function Customers({ storeId, currency }: CustomersProps) {
+  const confirm = useConfirm();
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<number | null>(null);
+  const showNotice = (message: string) => {
+    setNotice(message);
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 2200);
+  };
+  useEffect(() => () => { if (noticeTimer.current) window.clearTimeout(noticeTimer.current); }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -122,6 +134,23 @@ export function Customers({ storeId, currency }: CustomersProps) {
       setAddError(e instanceof ApiError ? e.message : 'Could not add customer');
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleDelete = async (c: CustomerResponse) => {
+    const ok = await confirm({
+      title: 'Delete customer',
+      message: `Permanently delete ${c.fullName} and their personal details? This cannot be undone. Past orders are kept, with the name and contact recorded at the time of each order.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await customersApi.delete(storeId, c.id);
+      setCustomers((prev) => prev.filter((x) => x.id !== c.id));
+      showNotice('Customer deleted.');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not delete customer');
     }
   };
 
@@ -226,12 +255,18 @@ export function Customers({ storeId, currency }: CustomersProps) {
                       <td style={{ padding: '12px 16px' }}><StatusTag active={isActive(c)} /></td>
                       <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{fmtDate(c.createdAt)}</td>
                       <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                        {c.phoneNumber && (
-                          <a href={waLink(c.phoneNumber)} target="_blank" rel="noopener noreferrer" aria-label={`Message ${c.fullName} on WhatsApp`}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '12px', fontWeight: 600 }}>
-                            <WhatsAppIcon size={16} color="#6B7280" /> Message
-                          </a>
-                        )}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '16px' }}>
+                          {c.phoneNumber && (
+                            <a href={waLink(c.phoneNumber)} target="_blank" rel="noopener noreferrer" aria-label={`Message ${c.fullName} on WhatsApp`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '12px', fontWeight: 600 }}>
+                              <WhatsAppIcon size={16} color="#6B7280" /> Message
+                            </a>
+                          )}
+                          <button onClick={() => handleDelete(c)} aria-label={`Delete ${c.fullName}`} title="Delete customer"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -252,12 +287,18 @@ export function Customers({ storeId, currency }: CustomersProps) {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.ordersCount} orders · {formatMoney(c.totalSpent, currency)}</span>
-                    {c.phoneNumber && (
-                      <a href={waLink(c.phoneNumber)} target="_blank" rel="noopener noreferrer" aria-label={`Message ${c.fullName} on WhatsApp`}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '12px', fontWeight: 600 }}>
-                        <WhatsAppIcon size={16} color="#6B7280" /> Message
-                      </a>
-                    )}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '16px' }}>
+                      {c.phoneNumber && (
+                        <a href={waLink(c.phoneNumber)} target="_blank" rel="noopener noreferrer" aria-label={`Message ${c.fullName} on WhatsApp`}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '12px', fontWeight: 600 }}>
+                          <WhatsAppIcon size={16} color="#6B7280" /> Message
+                        </a>
+                      )}
+                      <button onClick={() => handleDelete(c)} aria-label={`Delete ${c.fullName}`} title="Delete customer"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -299,6 +340,8 @@ export function Customers({ storeId, currency }: CustomersProps) {
           </div>
         </div>
       )}
+
+      {notice && <Toast message={notice} />}
     </div>
   );
 }

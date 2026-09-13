@@ -614,6 +614,10 @@ export const customersApi = {
   /** Add a customer manually. 409 if the phone/email already exists. */
   create: (storeId: number, payload: { fullName: string; phoneNumber: string; email?: string }) =>
     request<CustomerResponse>(`/merchant/stores/${storeId}/customers`, { method: 'POST', body: payload }),
+
+  /** Permanently delete a customer (data erasure). Past orders survive detached. */
+  delete: (storeId: number, customerId: number) =>
+    request<void>(`/merchant/stores/${storeId}/customers/${customerId}`, { method: 'DELETE' }),
 };
 
 export type DiscountType = 'PERCENTAGE' | 'FIXED' | 'FREE_DELIVERY';
