@@ -3,6 +3,7 @@ import { Package, ShoppingBag, Plus, MapPin, Clock, Search, X, Share2, Check } f
 import { WhatsAppIcon } from '../icons/WhatsAppIcon';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
+import { bestsellerProductIds } from '../../lib/bestsellers';
 import type { ProductResponse } from '../../lib/api';
 import { StorefrontStore, isOrderable, initialsOf } from './storefrontTypes';
 import { QuantityStepper } from './QuantityStepper';
@@ -121,6 +122,11 @@ export function StorefrontView({
         .some((field) => (field as string).toLowerCase().includes(q));
     });
   }, [products, activeCategory, search]);
+
+  // Bestseller badge: computed over the whole catalogue (not the filtered view),
+  // so a leader stays flagged regardless of the active category or search. Uses
+  // the storefront-only, fulfilled unitsSold the API already returns.
+  const bestsellerIds = useMemo(() => bestsellerProductIds(products), [products]);
 
   const filtering = search.trim() !== '' || activeCategory !== ALL;
 
@@ -411,6 +417,7 @@ export function StorefrontView({
                     ) : (
                       <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{formatMoney(p.price, currency)}</span>
                     )}
+                    {bestsellerIds.has(p.id) && <span style={{ fontSize: '9px', fontWeight: 600, color: '#1D4ED8', background: '#EFF6FF', padding: '2px 6px', borderRadius: '4px' }}>Bestseller</span>}
                     {p.preOrder && <span style={{ fontSize: '9px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', padding: '2px 6px', borderRadius: '4px' }}>Pre-order</span>}
                     {!orderable && <span style={{ fontSize: '9px', fontWeight: 600, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: '4px' }}>Sold Out</span>}
                   </div>
