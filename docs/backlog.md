@@ -127,6 +127,15 @@ for example earned badges or tiers such as "Bestseller", rather than surfacing
 a raw number. Decide the thresholds and tiers, then show the earned badge on
 the storefront in place of the old count.
 
+This should also extend to individual product cards on the storefront, for
+example a "Bestseller" badge on popular products, driven by the real per-product
+unitsSold data (already available). Same reasoning as hiding the raw sold count:
+badges and tiers only ever show when they flatter the store, never a raw number
+that could look weak on a small or brand-new store. So the badge appears only
+once a product clears a real threshold, and is simply absent otherwise. The
+merchant-facing Dashboard "Top products" list (built, real unitsSold-style data)
+is the natural internal counterpart to this public badge.
+
 ## Inventory needs a genuinely distinct purpose
 
 The Inventory screen is now wired to real data (read-only stock levels, value,

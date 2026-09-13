@@ -6,6 +6,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ordersApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { orderSummaryLines, waLink, type WaOrderSection } from '../../lib/whatsapp';
+import { computeOrderStats } from '../../lib/orderStats';
 import type { Store } from '../../App';
 import { useConfirm } from '../ConfirmDialog';
 
@@ -305,18 +306,9 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
   };
 
   // Summary stats over ALL orders (already fetched; the tab filter is client-side).
-  // Revenue matches the units-sold rule: only fulfilled orders count, so unfulfilled
-  // ones can't inflate it. Refunded/cancelled are shown separately as context.
-  const totalRevenue = useMemo(
-    () => orders.filter((o) => o.status === 'COMPLETED' || o.status === 'DELIVERED')
-      .reduce((s, o) => s + o.totalAmount, 0),
-    [orders],
-  );
-  const refundedAmount = useMemo(
-    () => orders.filter((o) => o.paymentStatus === 'REFUNDED').reduce((s, o) => s + o.totalAmount, 0),
-    [orders],
-  );
-  const cancelledCount = useMemo(() => orders.filter((o) => o.status === 'CANCELLED').length, [orders]);
+  // Shared with the Dashboard via computeOrderStats so the two can't drift: revenue
+  // counts only fulfilled orders, refunded/cancelled are context.
+  const { totalRevenue, refundedAmount, cancelledCount } = useMemo(() => computeOrderStats(orders), [orders]);
 
   return (
     <div>

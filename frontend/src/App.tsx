@@ -521,9 +521,24 @@ function MerchantApp() {
       );
     }
 
+    // The Dashboard needs an active store; when none is selected (a defensive
+    // edge, since a merchant with no stores is routed to onboarding) show a
+    // neutral placeholder instead of a store-scoped screen.
+    const noStoreFallback = (
+      <div style={{ minHeight: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '8px', padding: '24px' }}>
+        <h2>No store selected</h2>
+        <p className="text-small" style={{ color: 'var(--text-secondary)', maxWidth: '420px' }}>
+          Pick or create a store to see its dashboard.
+        </p>
+      </div>
+    );
+    const dashboardScreen = activeStore
+      ? <Dashboard store={activeStore} onNavigate={navigateScreen} />
+      : noStoreFallback;
+
     switch (activeScreen) {
       case 'dashboard':
-        return <Dashboard />;
+        return dashboardScreen;
 
       case 'onboarding-1':
         return (
@@ -553,7 +568,7 @@ function MerchantApp() {
             />
           </OnboardingStep2>
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
 
       case 'orders-all':
@@ -575,19 +590,19 @@ function MerchantApp() {
             }}
           />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
       case 'orders-add':
         return activeStore ? (
           <AddOrder store={activeStore} onNavigate={navigateScreen as any} />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
       case 'orders-edit':
         return activeStore && editingOrderId != null ? (
           <EditOrder store={activeStore} orderId={editingOrderId} onNavigate={navigateScreen as any} />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
 
       case 'stores-all':
@@ -616,7 +631,7 @@ function MerchantApp() {
             }}
           />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
       case 'products-add':
         return activeStore ? (
@@ -629,7 +644,7 @@ function MerchantApp() {
             registerLeaveGuard={registerLeaveGuard}
           />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
       case 'products-edit':
         return activeStore && editingProductId != null ? (
@@ -644,21 +659,21 @@ function MerchantApp() {
             registerLeaveGuard={registerLeaveGuard}
           />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
       case 'products-categories':
-        return activeStore ? <Categories storeId={Number(activeStore.id)} /> : <Dashboard />;
+        return activeStore ? <Categories storeId={Number(activeStore.id)} /> : noStoreFallback;
       case 'customers':
         return activeStore ? (
           <Customers storeId={Number(activeStore.id)} currency={activeStore.currency} />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
       case 'marketing':
         return activeStore ? (
           <Marketing storeId={Number(activeStore.id)} currency={activeStore.currency} />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
 
       case 'delivery':
@@ -669,7 +684,7 @@ function MerchantApp() {
             onSaved={() => refreshStores(true)}
           />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
 
       case 'settings':
@@ -680,11 +695,11 @@ function MerchantApp() {
             onArchived={handleStoreArchived}
           />
         ) : (
-          <Dashboard />
+          noStoreFallback
         );
 
       default:
-        return <Dashboard />;
+        return dashboardScreen;
     }
   };
 
