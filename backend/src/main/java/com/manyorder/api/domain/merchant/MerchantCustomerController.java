@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,7 +22,7 @@ import com.manyorder.api.security.StoreAccessService;
 
 import jakarta.validation.Valid;
 
-/** Staff may view a store's customers; only the owner may add one manually. */
+/** Staff may view a store's customers; only the owner may add or delete one. */
 @RestController
 @RequestMapping("/merchant/stores/{storeId}/customers")
 public class MerchantCustomerController {
@@ -53,5 +54,18 @@ public class MerchantCustomerController {
         User user = currentUserService.require(authentication);
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
         return customerService.createCustomer(merchant, request);
+    }
+
+    /**
+     * Permanently delete a customer (their personal data), detaching past orders
+     * so history survives. Owner-only. 204 on success; 404 if not in this store.
+     */
+    @DeleteMapping("/{customerId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteCustomer(@PathVariable Long storeId, @PathVariable Long customerId,
+                               Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+        customerService.deleteCustomer(merchant, customerId);
     }
 }

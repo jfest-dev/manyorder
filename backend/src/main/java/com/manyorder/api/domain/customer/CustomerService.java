@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.manyorder.api.domain.merchant.Merchant;
@@ -63,5 +64,18 @@ public class CustomerService {
         Customer saved = customerRepository.save(
                 new Customer(merchant, req.getFullName(), email != null ? email : "", phone));
         return new CustomerResponse(saved, 0, BigDecimal.ZERO, null, null);
+    }
+
+    /**
+     * Permanently delete a customer (a genuine erasure, e.g. for a PDPA request).
+     * Their past orders are detached (customer_id nulled) and survive via the
+     * contact snapshot already on each order, mirroring product hard-delete.
+     */
+    @Transactional
+    public void deleteCustomer(Merchant merchant, Long customerId) {
+        Customer customer = customerRepository.findByMerchantAndId(merchant, customerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+        orderRepository.detachCustomer(customer); // null out customer_id on any past orders
+        customerRepository.delete(customer);
     }
 }

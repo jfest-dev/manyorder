@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,6 +23,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     /** How many orders this customer has at the store, excluding one status
      *  (cancelled) - drives the "first order only" discount check. */
     long countByMerchantAndCustomerAndStatusNot(Merchant merchant, Customer customer, OrderStatus excludedStatus);
+
+    /** Null out the customer FK on this customer's orders before the customer row
+     *  is deleted, so past orders survive (their contact snapshot stays intact),
+     *  mirroring how deleting a product detaches its order lines. */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE Order o SET o.customer = null WHERE o.customer = :customer")
+    int detachCustomer(@Param("customer") Customer customer);
 
     /** Per-customer order aggregate for a store, excluding one status (cancelled). */
     @Query("""
