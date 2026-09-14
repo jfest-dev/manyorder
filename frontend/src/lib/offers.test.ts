@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { PublicOffer } from './api';
-import { offerValueLabel, offerConditions } from './offers';
+import { offerValueLabel, offerConditions, offerExpiry } from './offers';
 
 function offer(overrides: Partial<PublicOffer> = {}): PublicOffer {
   return {
     code: 'SAVE', name: null, type: 'PERCENTAGE', value: 10,
     minSpend: null, firstOrderOnly: false, storeWide: true, productIds: [],
+    scopeLabel: 'All products', endsAt: null,
     ...overrides,
   };
 }
@@ -24,20 +25,36 @@ describe('offerConditions', () => {
     expect(offerConditions(offer(), 'SGD')).toBe('');
   });
 
-  it('lists min spend, first-order-only, and product scope in order', () => {
-    const s = offerConditions(offer({ minSpend: 20, firstOrderOnly: true, storeWide: false }), 'SGD');
-    expect(s).toContain('min');
-    expect(s).toContain('first order only');
-    expect(s).toContain('selected items');
-    // dot-separated
-    expect(s.split(' · ')).toHaveLength(3);
+  it('lists min spend and first-order-only (scope handled separately)', () => {
+    const s = offerConditions(offer({ minSpend: 20, firstOrderOnly: true }), 'SGD');
+    expect(s).toContain('Min spend');
+    expect(s).toContain('First order only');
+    expect(s.split(' · ')).toHaveLength(2);
+    // scope is NOT part of conditions
+    expect(s).not.toContain('products');
   });
 
   it('ignores a zero/absent min spend', () => {
     expect(offerConditions(offer({ minSpend: 0 }), 'SGD')).toBe('');
   });
 
-  it('omits the product-scope note for a store-wide offer', () => {
-    expect(offerConditions(offer({ storeWide: true, firstOrderOnly: true }), 'SGD')).toBe('first order only');
+  it('shows only first-order-only when that is the sole condition', () => {
+    expect(offerConditions(offer({ firstOrderOnly: true }), 'SGD')).toBe('First order only');
+  });
+});
+
+describe('offerExpiry', () => {
+  it('is empty when there is no end date', () => {
+    expect(offerExpiry(offer({ endsAt: null }))).toBe('');
+  });
+
+  it('formats an end date as "Valid until …"', () => {
+    const s = offerExpiry(offer({ endsAt: '2026-09-30T23:59:59' }));
+    expect(s.startsWith('Valid until')).toBe(true);
+    expect(s).toContain('2026');
+  });
+
+  it('ignores an unparseable end date', () => {
+    expect(offerExpiry(offer({ endsAt: 'nope' }))).toBe('');
   });
 });

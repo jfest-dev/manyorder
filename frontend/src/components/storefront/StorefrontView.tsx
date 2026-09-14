@@ -4,7 +4,7 @@ import { WhatsAppIcon } from '../icons/WhatsAppIcon';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { bestsellerProductIds } from '../../lib/bestsellers';
-import { offerValueLabel, offerConditions } from '../../lib/offers';
+import { offerValueLabel, offerConditions, offerExpiry } from '../../lib/offers';
 import type { ProductResponse, PublicOffer } from '../../lib/api';
 import { StorefrontStore, isOrderable, initialsOf } from './storefrontTypes';
 import { QuantityStepper } from './QuantityStepper';
@@ -337,12 +337,15 @@ export function StorefrontView({
           <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
             {offers.map((o) => {
               const conditions = offerConditions(o, store.currency);
+              const expiry = offerExpiry(o);
               return (
-                <div key={o.code} style={{ flexShrink: 0, width: '190px', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '12px', background: 'white' }}>
+                <div key={o.code} style={{ flexShrink: 0, width: '210px', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '12px', background: 'white' }}>
                   <div style={{ fontSize: '15px', fontWeight: 700, color: BRAND }}>{offerValueLabel(o, store.currency)}</div>
                   {o.name && <div style={{ fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>{o.name}</div>}
-                  <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px', minHeight: '14px' }}>
-                    {conditions || 'Apply at checkout'}
+                  <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span>{o.scopeLabel}</span>
+                    {conditions && <span>{conditions}</span>}
+                    {expiry && <span>{expiry}</span>}
                   </div>
                 </div>
               );

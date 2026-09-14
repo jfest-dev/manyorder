@@ -9,13 +9,21 @@ export function offerValueLabel(o: PublicOffer, currency: string): string {
 }
 
 /**
- * Short, dot-separated conditions for an offer, e.g. "min $20 · first order only
- * · selected items". Empty string when the offer has no conditions to note.
+ * Short, dot-separated conditions for an offer, e.g. "Min spend $20 · First order
+ * only". Scope is handled separately (o.scopeLabel), so it's not repeated here.
+ * Empty string when the offer has no conditions to note.
  */
 export function offerConditions(o: PublicOffer, currency: string): string {
   const parts: string[] = [];
-  if (o.minSpend != null && o.minSpend > 0) parts.push(`min ${formatMoney(o.minSpend, currency)}`);
-  if (o.firstOrderOnly) parts.push('first order only');
-  if (!o.storeWide) parts.push('selected items');
+  if (o.minSpend != null && o.minSpend > 0) parts.push(`Min spend ${formatMoney(o.minSpend, currency)}`);
+  if (o.firstOrderOnly) parts.push('First order only');
   return parts.join(' · ');
+}
+
+/** "Valid until 30 Sep 2026" from the offer's end date, or '' when there's none. */
+export function offerExpiry(o: PublicOffer): string {
+  if (!o.endsAt) return '';
+  const d = new Date(o.endsAt);
+  if (Number.isNaN(d.getTime())) return '';
+  return `Valid until ${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 }

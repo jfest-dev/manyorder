@@ -4,7 +4,7 @@ import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { saveRecentOrder } from '../../lib/orderRecall';
 import { DEFAULT_DELIVERY_TBC_MESSAGE } from '../../lib/delivery';
-import { offerValueLabel, offerConditions } from '../../lib/offers';
+import { offerValueLabel, offerConditions, offerExpiry } from '../../lib/offers';
 import { NoteBlock } from '../NoteBlock';
 import {
   storefrontApi, ApiError,
@@ -266,13 +266,17 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {offers.map((o) => {
                   const conditions = offerConditions(o, currency);
+                  const expiry = offerExpiry(o);
                   const isApplied = applied?.code?.toUpperCase() === o.code.toUpperCase();
                   return (
                     <div key={o.code} style={{ display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '10px' }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 600 }}>{o.name || offerValueLabel(o, currency)}</div>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                          {offerValueLabel(o, currency)}{conditions ? ` · ${conditions}` : ''}
+                        <div style={{ fontSize: '13px', fontWeight: 600 }}>
+                          {offerValueLabel(o, currency)}{o.name ? ` · ${o.name}` : ''}
+                        </div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                          <span>{o.scopeLabel}{conditions ? ` · ${conditions}` : ''}</span>
+                          {expiry && <span>{expiry}</span>}
                         </div>
                       </div>
                       <button

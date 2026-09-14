@@ -862,6 +862,10 @@ export interface PublicOffer {
   firstOrderOnly: boolean;
   storeWide: boolean;
   productIds: number[];
+  /** Human "applies to" label: "All products", a category, a product name, "N products". */
+  scopeLabel: string;
+  /** When the offer stops being valid; null = no end date. */
+  endsAt: string | null;
 }
 
 export const storefrontApi = {
