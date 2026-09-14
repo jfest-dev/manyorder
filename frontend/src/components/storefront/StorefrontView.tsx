@@ -336,16 +336,18 @@ export function StorefrontView({
           </div>
           <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
             {offers.map((o) => {
-              const conditions = offerConditions(o, store.currency);
-              const expiry = offerExpiry(o);
+              // Consistent card shape: every card renders the same lines, with
+              // fallbacks so a sparse offer doesn't leave an empty gap.
+              const conditions = offerConditions(o, store.currency) || 'No conditions';
+              const expiry = offerExpiry(o) || 'No expiry';
               return (
                 <div key={o.code} style={{ flexShrink: 0, width: '210px', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '12px', background: 'white' }}>
                   <div style={{ fontSize: '15px', fontWeight: 700, color: BRAND }}>{offerValueLabel(o, store.currency)}</div>
-                  {o.name && <div style={{ fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>{o.name}</div>}
+                  <div style={{ fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>{o.name || o.code}</div>
                   <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                     <span>{o.scopeLabel}</span>
-                    {conditions && <span>{conditions}</span>}
-                    {expiry && <span>{expiry}</span>}
+                    <span>{conditions}</span>
+                    <span>{expiry}</span>
                   </div>
                 </div>
               );

@@ -265,18 +265,19 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {offers.map((o) => {
-                  const conditions = offerConditions(o, currency);
-                  const expiry = offerExpiry(o);
+                  // Consistent shape: same lines and fallbacks as the shop carousel.
+                  const conditions = offerConditions(o, currency) || 'No conditions';
+                  const expiry = offerExpiry(o) || 'No expiry';
                   const isApplied = applied?.code?.toUpperCase() === o.code.toUpperCase();
                   return (
                     <div key={o.code} style={{ display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '10px' }}>
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ fontSize: '13px', fontWeight: 600 }}>
-                          {offerValueLabel(o, currency)}{o.name ? ` · ${o.name}` : ''}
+                          {offerValueLabel(o, currency)} · {o.name || o.code}
                         </div>
                         <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                          <span>{o.scopeLabel}{conditions ? ` · ${conditions}` : ''}</span>
-                          {expiry && <span>{expiry}</span>}
+                          <span>{o.scopeLabel} · {conditions}</span>
+                          <span>{expiry}</span>
                         </div>
                       </div>
                       <button
