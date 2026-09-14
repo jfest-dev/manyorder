@@ -67,6 +67,41 @@ public class CustomerService {
     }
 
     /**
+     * Edit a customer's live details (full-record replace). Dedupes like create,
+     * but excludes the customer being edited so re-saving an unchanged phone/email
+     * is not a self-collision; a match against a DIFFERENT customer is a conflict.
+     * Past orders are untouched: each keeps its own contact snapshot.
+     */
+    @Transactional
+    public CustomerResponse updateCustomer(Merchant merchant, Long customerId, UpdateCustomerRequest req) {
+        Customer customer = customerRepository.findByMerchantAndId(merchant, customerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+
+        String phone = req.getPhoneNumber();
+        String email = req.getEmail();
+        boolean phoneClash = phone != null && !phone.isBlank()
+                && customerRepository.findByMerchantAndPhoneNumber(merchant, phone)
+                        .filter(other -> !other.getId().equals(customerId)).isPresent();
+        boolean emailClash = email != null && !email.isBlank()
+                && customerRepository.findByMerchantAndEmail(merchant, email)
+                        .filter(other -> !other.getId().equals(customerId)).isPresent();
+        if (phoneClash || emailClash) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Another customer with this phone or email already exists.");
+        }
+
+        customer.updateDetails(req.getFullName(), email != null ? email : "", phone);
+        Customer saved = customerRepository.save(customer);
+
+        // Return the row with its derived order stats, consistent with the list.
+        CustomerOrderStats s = orderRepository.aggregateCustomerStats(merchant, OrderStatus.CANCELLED).stream()
+                .filter(row -> row.getCustomerId().equals(saved.getId()))
+                .findFirst().orElse(null);
+        return s == null
+                ? new CustomerResponse(saved, 0, BigDecimal.ZERO, null, null)
+                : new CustomerResponse(saved, s.getOrderCount(), s.getTotalSpent(), s.getFirstOrderAt(), s.getLastOrderAt());
+    }
+
+    /**
      * Permanently delete a customer (a genuine erasure, e.g. for a PDPA request).
      * Their past orders are detached (customer_id nulled) and survive via the
      * contact snapshot already on each order, mirroring product hard-delete.

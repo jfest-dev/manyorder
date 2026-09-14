@@ -71,4 +71,12 @@ public class Customer {
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
+
+    /** Replace the editable contact details (a manual edit of the live record;
+     *  past orders keep their own point-in-time contact snapshot). */
+    public void updateDetails(String fullName, String email, String phoneNumber) {
+        this.fullName = fullName;
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+    }
 }
