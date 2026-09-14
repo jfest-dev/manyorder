@@ -11,7 +11,8 @@ import type { ProductResponse } from './api';
  * over the floor yields an empty set and shows no badge at all.
  *
  * `unitsSold` here is the storefront-only, fulfilled-only count the public API
- * already returns, so it can't be inflated by a merchant's manual orders.
+ * returns, windowed to a rolling 30 days server-side, so the badge reflects
+ * recent popularity and can't be inflated by a merchant's manual orders.
  */
 export function bestsellerProductIds(
   products: ProductResponse[],

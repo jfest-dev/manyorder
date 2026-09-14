@@ -1,11 +1,17 @@
 package com.manyorder.api;
 
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MvcResult;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,6 +26,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * store projection (fee/logo/phone/totalItemsSold), and reserved-slug rejection.
  */
 class StorefrontCheckoutIntegrationTest extends IntegrationTestBase {
+
+    @Autowired JdbcTemplate jdbcTemplate;
 
     // ---------- helpers ----------
 
@@ -74,6 +82,16 @@ class StorefrontCheckoutIntegrationTest extends IntegrationTestBase {
         for (String s : List.of("CONFIRMED", "PREPARING", "READY", "COMPLETED")) {
             patchStatus(token, storeId, orderId, s, 200);
         }
+    }
+
+    /** The public storefront's (rolling-window) unitsSold for one product. */
+    private long publicUnitsSold(long storeId, long productId) throws Exception {
+        MvcResult res = mockMvc.perform(get("/public/storefront/" + storeId + "/products"))
+                .andExpect(status().isOk()).andReturn();
+        for (JsonNode p : json(res)) {
+            if (p.get("id").asLong() == productId) return p.get("unitsSold").asLong();
+        }
+        return -1;
     }
 
     // ---------- delivery fee ----------
@@ -197,5 +215,37 @@ class StorefrontCheckoutIntegrationTest extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"slug\":\"admin\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ---------- Bestseller badge: rolling 30-day storefront units ----------
+
+    @Test
+    void publicUnitsSold_isRollingThirtyDayStorefrontCount() throws Exception {
+        String token = registerAndGetToken("sf-bs@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "BS Store", "sf-bs-store");
+        long productId = createProduct(token, storeId, "Croissant", 5.00);
+
+        // A fulfilled STOREFRONT order of 11 units, recent -> counts now.
+        MvcResult guest = guestCheckout(storeId, productId, 11, "PICKUP", null);
+        long orderId = json(guest).get("orderId").asLong();
+        advanceToCompleted(token, storeId, orderId);
+        assertEquals(11, publicUnitsSold(storeId, productId), "recent fulfilled storefront sale counts");
+
+        // Age it past the 30-day window -> it falls out of the count.
+        jdbcTemplate.update("UPDATE orders SET created_at = ? WHERE id = ?",
+                Timestamp.valueOf(LocalDateTime.now().minusDays(40)), orderId);
+        assertEquals(0, publicUnitsSold(storeId, productId), "a sale older than 30 days no longer counts");
+    }
+
+    @Test
+    void publicUnitsSold_excludesManualOrders() throws Exception {
+        String token = registerAndGetToken("sf-bs2@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "BS2 Store", "sf-bs2-store");
+        long productId = createProduct(token, storeId, "Tart", 6.00);
+
+        // A recent, fulfilled MANUAL order must not feed the public (storefront) count.
+        long manualId = createManualOrderWithItems(token, storeId, productId, 15);
+        advanceToCompleted(token, storeId, manualId);
+        assertEquals(0, publicUnitsSold(storeId, productId), "manual orders are excluded from the public count");
     }
 }

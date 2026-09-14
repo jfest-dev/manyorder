@@ -43,7 +43,9 @@ public class ProductResponse {
     private final LocalTime preOrderReadyTimeEnd;
     private final String preOrderNote;
     private final List<ModifierGroupView> modifierGroups;
-    /** Units sold, derived from order history (see ProductService). */
+    /** Units sold, derived from order history (see ProductService). On the public
+     *  storefront this is a rolling 30-day, STOREFRONT-only count (drives the
+     *  Bestseller badge); the merchant view keeps the all-time count. */
     private final long unitsSold;
     private final LocalDateTime createdAt;
 

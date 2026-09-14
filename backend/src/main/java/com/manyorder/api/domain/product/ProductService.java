@@ -33,6 +33,9 @@ public class ProductService {
     private static final List<OrderStatus> SOLD_STATUSES =
             List.of(OrderStatus.COMPLETED, OrderStatus.DELIVERED);
 
+    /** Rolling window for the public storefront "sold" count (drives the Bestseller badge). */
+    private static final int BESTSELLER_WINDOW_DAYS = 30;
+
     /**
      * Active, non-pre-order products at or below this on-hand quantity are "low
      * stock". Mirrors the frontend LOW_STOCK_AT (ProductsList.tsx) that drives
@@ -440,10 +443,17 @@ public class ProductService {
         return map;
     }
 
-    /** Public variant: fold in units-sold counting STOREFRONT orders only. */
+    /**
+     * Public variant: fold in units-sold counting STOREFRONT orders only, over a
+     * rolling 30-day window (by order createdAt). This is what drives the public
+     * "Bestseller" badge, so a product's recent popularity is what counts and
+     * old sales fall out automatically. The merchant-facing count
+     * ({@link #withUnitsSold}) stays all-time and is unaffected.
+     */
     private List<ProductResponse> withStorefrontUnitsSold(Merchant merchant, List<Product> products) {
+        java.time.LocalDateTime since = java.time.LocalDateTime.now().minusDays(BESTSELLER_WINDOW_DAYS);
         Map<Long, Long> sold = new HashMap<>();
-        for (Object[] row : orderItemRepository.sumSoldByMerchantAndSource(merchant, SOLD_STATUSES, OrderSource.STOREFRONT)) {
+        for (Object[] row : orderItemRepository.sumSoldByMerchantAndSourceSince(merchant, SOLD_STATUSES, OrderSource.STOREFRONT, since)) {
             sold.put((Long) row[0], ((Number) row[1]).longValue());
         }
         return products.stream()

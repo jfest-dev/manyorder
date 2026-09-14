@@ -79,4 +79,18 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     long sumAllSoldByMerchantAndSource(@Param("merchant") Merchant merchant,
                                        @Param("statuses") Collection<OrderStatus> statuses,
                                        @Param("source") OrderSource source);
+
+    /** Storefront units sold per product since a cutoff (order createdAt). Drives
+     *  the rolling-window Bestseller badge; older sales fall out automatically. */
+    @Query("""
+            SELECT oi.product.id, SUM(oi.quantity)
+            FROM OrderItem oi
+            WHERE oi.order.merchant = :merchant AND oi.order.status IN :statuses
+              AND oi.order.source = :source AND oi.order.createdAt >= :since
+            GROUP BY oi.product.id
+            """)
+    List<Object[]> sumSoldByMerchantAndSourceSince(@Param("merchant") Merchant merchant,
+                                                   @Param("statuses") Collection<OrderStatus> statuses,
+                                                   @Param("source") OrderSource source,
+                                                   @Param("since") java.time.LocalDateTime since);
 }
