@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Plus, Tag, Percent, X, Edit2, Trash2, TrendingUp, Award, Search, Truck } from 'lucide-react';
 import { Card } from '../Card';
+import { ReorderableList } from '../ReorderableList';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
@@ -111,6 +112,19 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
     noticeTimer.current = window.setTimeout(() => setNotice(null), 2200);
   };
   useEffect(() => () => { if (noticeTimer.current) window.clearTimeout(noticeTimer.current); }, []);
+
+  // Persist a drag-reordered list; optimistic, reverting on failure. This order
+  // is also what customers see in the storefront offers.
+  const handleReorder = async (reordered: DiscountResponse[]) => {
+    const previous = discounts;
+    setDiscounts(reordered);
+    try {
+      await discountsApi.reorder(storeId, reordered.map((d) => d.id));
+    } catch (e) {
+      setDiscounts(previous);
+      setError(e instanceof ApiError ? e.message : 'Could not save the new order');
+    }
+  };
 
   const load = () => {
     let cancelled = false;
@@ -318,44 +332,55 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
           </div>
         </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {discounts.map((d) => {
-            const meta = STATUS_META[statusOf(d)];
-            return (
-              <Card key={d.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
-                  <div style={{ minWidth: 0, display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: `${meta.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {d.type === 'PERCENTAGE' ? <Percent size={18} style={{ color: meta.color }} />
-                        : d.type === 'FREE_DELIVERY' ? <Truck size={18} style={{ color: meta.color }} />
-                          : <Tag size={18} style={{ color: meta.color }} />}
+        <>
+          <p className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>
+            Drag the grip to reorder. This is the order customers see your offers on the storefront.
+          </p>
+          <ReorderableList
+            items={discounts}
+            getKey={(d) => d.id}
+            onReorder={handleReorder}
+            renderRow={(d, { handle, setNodeRef, dragging }) => {
+              const meta = STATUS_META[statusOf(d)];
+              return (
+                <div ref={setNodeRef as (el: HTMLDivElement | null) => void} style={{ marginBottom: '12px', opacity: dragging ? 0.6 : 1 }}>
+                  <Card>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                      <div style={{ minWidth: 0, display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', height: '40px', color: 'var(--text-muted)' }}>{handle}</div>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: `${meta.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {d.type === 'PERCENTAGE' ? <Percent size={18} style={{ color: meta.color }} />
+                            : d.type === 'FREE_DELIVERY' ? <Truck size={18} style={{ color: meta.color }} />
+                              : <Tag size={18} style={{ color: meta.color }} />}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 600 }}>{d.name || d.code}</span>
+                            <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: `${meta.color}20`, color: meta.color, fontSize: '12px', fontWeight: 500 }}>{meta.label}</span>
+                            {d.isPublic && (
+                              <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: '#EFF6FF', color: '#1D4ED8', fontSize: '12px', fontWeight: 500 }}>Public</span>
+                            )}
+                          </div>
+                          <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
+                            Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)}{d.type !== 'FREE_DELIVERY' ? ` · ${scopeLabel(d, productName)}` : ''}{d.minSpend != null ? ` · min ${formatMoney(d.minSpend, currency)}` : ''}{d.firstOrderOnly ? ' · first order only' : ''}
+                          </div>
+                          <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>
+                            Used {d.usedCount}{d.usageLimit != null ? ` / ${d.usageLimit}` : ' · unlimited'}
+                            {(d.startsAt || d.endsAt) ? ` · ${fmtDate(d.startsAt) || 'now'} to ${fmtDate(d.endsAt) || 'no end'}` : ' · no date limit'}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                        <button onClick={() => openEdit(d)} aria-label={`Edit ${d.code}`} style={iconBtn}><Edit2 size={16} /></button>
+                        <button onClick={() => handleDelete(d)} aria-label={`Delete ${d.code}`} style={{ ...iconBtn, color: '#DC2626' }}><Trash2 size={16} /></button>
+                      </div>
                     </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 600 }}>{d.name || d.code}</span>
-                        <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: `${meta.color}20`, color: meta.color, fontSize: '12px', fontWeight: 500 }}>{meta.label}</span>
-                        {d.isPublic && (
-                          <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: '#EFF6FF', color: '#1D4ED8', fontSize: '12px', fontWeight: 500 }}>Public</span>
-                        )}
-                      </div>
-                      <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
-                        Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)}{d.type !== 'FREE_DELIVERY' ? ` · ${scopeLabel(d, productName)}` : ''}{d.minSpend != null ? ` · min ${formatMoney(d.minSpend, currency)}` : ''}{d.firstOrderOnly ? ' · first order only' : ''}
-                      </div>
-                      <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>
-                        Used {d.usedCount}{d.usageLimit != null ? ` / ${d.usageLimit}` : ' · unlimited'}
-                        {(d.startsAt || d.endsAt) ? ` · ${fmtDate(d.startsAt) || 'now'} to ${fmtDate(d.endsAt) || 'no end'}` : ' · no date limit'}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                    <button onClick={() => openEdit(d)} aria-label={`Edit ${d.code}`} style={iconBtn}><Edit2 size={16} /></button>
-                    <button onClick={() => handleDelete(d)} aria-label={`Delete ${d.code}`} style={{ ...iconBtn, color: '#DC2626' }}><Trash2 size={16} /></button>
-                  </div>
+                  </Card>
                 </div>
-              </Card>
-            );
-          })}
-        </div>
+              );
+            }}
+          />
+        </>
       )}
 
       {/* Add / Edit modal */}

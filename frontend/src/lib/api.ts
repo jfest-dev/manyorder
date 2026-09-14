@@ -647,6 +647,8 @@ export interface DiscountResponse {
   isPublic: boolean;
   /** Products the discount is limited to; empty = store-wide. */
   productIds: number[];
+  /** Merchant-controlled sort position (drag-to-reorder). */
+  displayOrder: number;
   createdAt: string;
 }
 
@@ -687,6 +689,10 @@ export const discountsApi = {
 
   delete: (storeId: number, discountId: number) =>
     request<void>(`/merchant/stores/${storeId}/discounts/${discountId}`, { method: 'DELETE' }),
+
+  /** Persist a merchant-chosen order (full list of ids, top-to-bottom). */
+  reorder: (storeId: number, discountIds: number[]) =>
+    request<DiscountResponse[]>(`/merchant/stores/${storeId}/discounts/reorder`, { method: 'PATCH', body: { discountIds } }),
 };
 
 export interface CategoryResponse {
