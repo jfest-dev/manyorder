@@ -3,8 +3,9 @@ import { TrendingUp, ShoppingCart, DollarSign, RotateCcw, XCircle, Star, Chevron
 import { Card } from '../Card';
 import { ordersApi, OrderResponse, OrderStatus } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
-import { computeOrderStats, ordersWithinRange, ordersInMonth, monthsWithSales, topProductsByUnits, type RangeKey } from '../../lib/orderStats';
+import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersInMonth, monthsWithSales, topProductsByUnits, type RangeKey } from '../../lib/orderStats';
 import { Select } from '../Select';
+import { DatePicker } from '../DatePicker';
 import type { Store } from '../../App';
 
 interface DashboardProps {
@@ -12,12 +13,21 @@ interface DashboardProps {
   onNavigate: (screen: string) => void;
 }
 
-const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
+// The tiles' toggle: the presets plus a 'custom' start/end range.
+type TileRange = RangeKey | 'custom';
+const RANGE_OPTIONS: { key: TileRange; label: string }[] = [
   { key: '7d', label: '7 days' },
   { key: '30d', label: '30 days' },
   { key: '90d', label: '90 days' },
   { key: 'all', label: 'All time' },
+  { key: 'custom', label: 'Custom' },
 ];
+
+/** A local, human date like "1 Sep 2026" from a 'YYYY-MM-DD' string. */
+function prettyDate(ymd: string): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: 'Pending', CONFIRMED: 'Confirmed', PREPARING: 'Preparing', READY: 'Ready',
@@ -70,7 +80,10 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<RangeKey>('30d');
+  const [range, setRange] = useState<TileRange>('30d');
+  // Custom range (both 'YYYY-MM-DD' or ''); retained when switching to a preset.
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   // Top products has its own picker: 'all' or a specific 'YYYY-MM' month.
   const [topMonth, setTopMonth] = useState<string>(ALL_TIME);
 
@@ -89,7 +102,21 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
   // The tiles use the main 7/30/90/all toggle. Top products has its own separate
   // month/all control. Recent orders is a latest-activity glance, independent of
   // both (always the newest few overall).
-  const windowed = useMemo(() => ordersWithinRange(orders, range), [orders, range]);
+  // Custom-range validity: both dates present and start on or before end.
+  const isCustom = range === 'custom';
+  const customComplete = isCustom && customStart !== '' && customEnd !== '';
+  const customInvalid = customComplete && customStart > customEnd; // start after end
+  const customValid = customComplete && !customInvalid;
+  // Tiles render only for a preset, or a valid custom range (never for an
+  // incomplete/invalid custom range, so we never show misleading zeros).
+  const tilesReady = !isCustom || customValid;
+
+  const windowed = useMemo(
+    () => (isCustom
+      ? (customValid ? ordersInDateRange(orders, customStart, customEnd) : [])
+      : ordersWithinRange(orders, range as RangeKey)),
+    [orders, range, isCustom, customValid, customStart, customEnd],
+  );
   const stats = useMemo(() => computeOrderStats(windowed), [windowed]);
 
   // Month picker options: "All time" plus every month that has fulfilled sales.
@@ -112,7 +139,9 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
   );
 
   const rangeLabel = RANGE_OPTIONS.find((r) => r.key === range)!.label;
-  const rangeSuffix = range === 'all' ? 'all time' : `last ${rangeLabel}`;
+  const rangeSuffix = isCustom
+    ? (customValid ? `from ${prettyDate(customStart)} to ${prettyDate(customEnd)}` : 'a custom range')
+    : range === 'all' ? 'all time' : `last ${rangeLabel}`;
   const c = store.currency;
 
   return (
@@ -146,24 +175,55 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
         </div>
       </div>
 
+      {/* Custom range: two date fields, revealed only when 'Custom' is active. */}
+      {isCustom && (
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
+            <div style={{ minWidth: '160px' }}>
+              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Start date</label>
+              <DatePicker value={customStart} onChange={setCustomStart} placeholder="Start date" ariaLabel="Custom range start date" />
+            </div>
+            <div style={{ minWidth: '160px' }}>
+              <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>End date</label>
+              <DatePicker value={customEnd} onChange={setCustomEnd} min={customStart || undefined} placeholder="End date" ariaLabel="Custom range end date" />
+            </div>
+          </div>
+          {customInvalid && (
+            <p className="text-small" style={{ color: 'var(--error-color)', margin: '8px 0 0' }}>
+              Start date must be on or before the end date.
+            </p>
+          )}
+        </div>
+      )}
+
       {error ? (
         <Card><div style={{ padding: '32px', textAlign: 'center', color: 'var(--error-color)' }} className="text-small">{error}</div></Card>
       ) : loading ? (
         <Card><div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-secondary)' }} className="text-small">Loading your dashboard…</div></Card>
       ) : (
         <>
-          {/* Stat tiles (windowed) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-            <StatCard icon={<DollarSign size={20} style={{ color: '#10B981' }} />} tint="#10B981" label="Total Revenue" value={formatMoney(stats.totalRevenue, c)} />
-            <StatCard icon={<ShoppingCart size={20} style={{ color: '#3B82F6' }} />} tint="#3B82F6" label="Orders" value={String(stats.totalOrders)} />
-            <StatCard icon={<RotateCcw size={20} style={{ color: '#D97706' }} />} tint="#D97706" label="Refunded" value={formatMoney(stats.refundedAmount, c)} />
-            <StatCard icon={<XCircle size={20} style={{ color: '#DC2626' }} />} tint="#DC2626" label="Cancelled" value={String(stats.cancelledCount)} />
-          </div>
+          {tilesReady ? (
+            <>
+              {/* Stat tiles (windowed) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                <StatCard icon={<DollarSign size={20} style={{ color: '#10B981' }} />} tint="#10B981" label="Total Revenue" value={formatMoney(stats.totalRevenue, c)} />
+                <StatCard icon={<ShoppingCart size={20} style={{ color: '#3B82F6' }} />} tint="#3B82F6" label="Orders" value={String(stats.totalOrders)} />
+                <StatCard icon={<RotateCcw size={20} style={{ color: '#D97706' }} />} tint="#D97706" label="Refunded" value={formatMoney(stats.refundedAmount, c)} />
+                <StatCard icon={<XCircle size={20} style={{ color: '#DC2626' }} />} tint="#DC2626" label="Cancelled" value={String(stats.cancelledCount)} />
+              </div>
 
-          {stats.totalOrders === 0 && (
-            <p className="text-small" style={{ color: 'var(--text-muted)', marginTop: '12px' }}>
-              No orders in this period. Your totals appear here as orders come in.
-            </p>
+              {stats.totalOrders === 0 && (
+                <p className="text-small" style={{ color: 'var(--text-muted)', marginTop: '12px' }}>
+                  No orders in this period. Your totals appear here as orders come in.
+                </p>
+              )}
+            </>
+          ) : (
+            <Card>
+              <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }} className="text-small">
+                {customInvalid ? 'Adjust the dates above to see your totals.' : 'Pick a start and end date to see your totals.'}
+              </div>
+            </Card>
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginTop: '16px' }}>

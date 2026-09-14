@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { OrderResponse, OrderItemResponse, OrderStatus, PaymentStatus } from './api';
-import { computeOrderStats, ordersWithinRange, ordersInMonth, monthsWithSales, monthLabel, topProductsByUnits } from './orderStats';
+import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersInMonth, monthsWithSales, monthLabel, topProductsByUnits } from './orderStats';
 
 // --- fixtures --------------------------------------------------------------
 
@@ -101,6 +101,52 @@ describe('ordersWithinRange', () => {
     const withBad = [...orders, order({ createdAt: 'not-a-date' })];
     expect(ordersWithinRange(withBad, '30d', now)).toHaveLength(2);
     expect(ordersWithinRange(withBad, 'all', now)).toHaveLength(5);
+  });
+});
+
+// --- ordersInDateRange -----------------------------------------------------
+
+describe('ordersInDateRange', () => {
+  // Local-time construction so the local-date key matches these calendar days.
+  const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h, 0, 0).toISOString();
+  const orders = [
+    order({ createdAt: at(2026, 9, 1) }),
+    order({ createdAt: at(2026, 9, 10) }),
+    order({ createdAt: at(2026, 9, 14) }),
+    order({ createdAt: at(2026, 9, 20) }),
+  ];
+
+  it('includes orders within the range and excludes those outside', () => {
+    // 09-05..09-15 contains the 10th and 14th; the 1st and 20th are outside.
+    expect(ordersInDateRange(orders, '2026-09-05', '2026-09-15')).toHaveLength(2);
+  });
+
+  it('is inclusive on both boundaries', () => {
+    // 1st and 14th are the exact bounds; both included, the 20th excluded.
+    expect(ordersInDateRange(orders, '2026-09-01', '2026-09-14')).toHaveLength(3);
+  });
+
+  it('treats start === end as a valid single day', () => {
+    expect(ordersInDateRange(orders, '2026-09-10', '2026-09-10')).toHaveLength(1);
+    expect(ordersInDateRange(orders, '2026-09-11', '2026-09-11')).toHaveLength(0);
+  });
+
+  it('includes an order whose time is late on the end date (date-level, not time-level)', () => {
+    const late = order({ createdAt: at(2026, 9, 14, 23) }); // 11pm on the end date
+    expect(ordersInDateRange([late], '2026-09-14', '2026-09-14')).toHaveLength(1);
+  });
+
+  it('returns [] when start is after end', () => {
+    expect(ordersInDateRange(orders, '2026-09-20', '2026-09-01')).toEqual([]);
+  });
+
+  it('returns [] when either bound is missing', () => {
+    expect(ordersInDateRange(orders, '', '2026-09-14')).toEqual([]);
+    expect(ordersInDateRange(orders, '2026-09-01', '')).toEqual([]);
+  });
+
+  it('excludes an unparseable createdAt', () => {
+    expect(ordersInDateRange([order({ createdAt: 'nope' })], '2026-09-01', '2026-09-30')).toEqual([]);
   });
 });
 

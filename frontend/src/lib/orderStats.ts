@@ -50,6 +50,28 @@ export function ordersWithinRange(orders: OrderResponse[], range: RangeKey, now:
   });
 }
 
+/** Local-time 'YYYY-MM-DD' key for an ISO datetime, or null if unparseable. */
+function dayKey(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Orders whose local calendar date falls within [start, end], both 'YYYY-MM-DD'
+ * and both inclusive (so start === end is a valid single day). Compared as
+ * strings, which for 'YYYY-MM-DD' is chronological and timezone-consistent with
+ * the rest of this file. Returns [] if the range is invalid (start after end) or
+ * either bound is missing; orders with an unparseable createdAt are excluded.
+ */
+export function ordersInDateRange(orders: OrderResponse[], start: string, end: string): OrderResponse[] {
+  if (!start || !end || start > end) return [];
+  return orders.filter((o) => {
+    const k = dayKey(o.createdAt);
+    return k !== null && k >= start && k <= end;
+  });
+}
+
 /** Local-time 'YYYY-MM' key for a date, or null if unparseable. */
 function monthKey(iso: string): string | null {
   const d = new Date(iso);
