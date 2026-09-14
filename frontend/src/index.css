@@ -703,3 +703,8 @@ body {
 
 /* Spinner used by loading states (e.g. the email-verification screen). */
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Hide the scrollbar while keeping scroll/swipe functional (e.g. the storefront
+   offers carousel). Applied via className="no-scrollbar". */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

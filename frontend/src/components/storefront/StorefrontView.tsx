@@ -341,7 +341,7 @@ export function StorefrontView({
             <Tag size={14} style={{ color: BRAND }} />
             <span style={{ fontSize: '13px', fontWeight: 700 }}>Offers</span>
           </div>
-          <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
+          <div className="no-scrollbar" style={{ display: 'flex', gap: '10px', overflowX: 'auto' }}>
             {offers.map((o) => {
               // Minimal by default (value + name); tap to expand inline (accordion)
               // to reveal scope, conditions and expiry.
