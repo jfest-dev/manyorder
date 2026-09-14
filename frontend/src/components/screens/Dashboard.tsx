@@ -3,7 +3,7 @@ import { TrendingUp, ShoppingCart, DollarSign, RotateCcw, XCircle, Star, Chevron
 import { Card } from '../Card';
 import { ordersApi, OrderResponse, OrderStatus } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
-import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersInMonth, monthsWithSales, topProductsByUnits, type RangeKey } from '../../lib/orderStats';
+import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersToday, ordersInMonth, monthsWithSales, topProductsByUnits, type RangeKey } from '../../lib/orderStats';
 import { Select } from '../Select';
 import { DatePicker } from '../DatePicker';
 import type { Store } from '../../App';
@@ -13,9 +13,10 @@ interface DashboardProps {
   onNavigate: (screen: string) => void;
 }
 
-// The tiles' toggle: the presets plus a 'custom' start/end range.
-type TileRange = RangeKey | 'custom';
+// The tiles' toggle: 'today', the rolling presets, and a 'custom' start/end range.
+type TileRange = RangeKey | 'today' | 'custom';
 const RANGE_OPTIONS: { key: TileRange; label: string }[] = [
+  { key: 'today', label: 'Today' },
   { key: '7d', label: '7 days' },
   { key: '30d', label: '30 days' },
   { key: '90d', label: '90 days' },
@@ -111,12 +112,11 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
   // incomplete/invalid custom range, so we never show misleading zeros).
   const tilesReady = !isCustom || customValid;
 
-  const windowed = useMemo(
-    () => (isCustom
-      ? (customValid ? ordersInDateRange(orders, customStart, customEnd) : [])
-      : ordersWithinRange(orders, range as RangeKey)),
-    [orders, range, isCustom, customValid, customStart, customEnd],
-  );
+  const windowed = useMemo(() => {
+    if (isCustom) return customValid ? ordersInDateRange(orders, customStart, customEnd) : [];
+    if (range === 'today') return ordersToday(orders);
+    return ordersWithinRange(orders, range as RangeKey);
+  }, [orders, range, isCustom, customValid, customStart, customEnd]);
   const stats = useMemo(() => computeOrderStats(windowed), [windowed]);
 
   // Month picker options: "All time" plus every month that has fulfilled sales.
@@ -141,7 +141,7 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
   const rangeLabel = RANGE_OPTIONS.find((r) => r.key === range)!.label;
   const rangeSuffix = isCustom
     ? (customValid ? `from ${prettyDate(customStart)} to ${prettyDate(customEnd)}` : 'a custom range')
-    : range === 'all' ? 'all time' : `last ${rangeLabel}`;
+    : range === 'today' ? 'today' : range === 'all' ? 'all time' : `last ${rangeLabel}`;
   const c = store.currency;
 
   return (

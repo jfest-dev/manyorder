@@ -50,6 +50,16 @@ export function ordersWithinRange(orders: OrderResponse[], range: RangeKey, now:
   });
 }
 
+/**
+ * Orders whose local calendar date is today. Reuses the inclusive date-range
+ * filter with today as both bounds (built from local Y/M/D, not toISOString,
+ * so it doesn't shift a day near midnight).
+ */
+export function ordersToday(orders: OrderResponse[], now: Date = new Date()): OrderResponse[] {
+  const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return ordersInDateRange(orders, key, key);
+}
+
 /** Local-time 'YYYY-MM-DD' key for an ISO datetime, or null if unparseable. */
 function dayKey(iso: string): string | null {
   const d = new Date(iso);

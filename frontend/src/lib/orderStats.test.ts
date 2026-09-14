@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { OrderResponse, OrderItemResponse, OrderStatus, PaymentStatus } from './api';
-import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersInMonth, monthsWithSales, monthLabel, topProductsByUnits } from './orderStats';
+import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersToday, ordersInMonth, monthsWithSales, monthLabel, topProductsByUnits } from './orderStats';
 
 // --- fixtures --------------------------------------------------------------
 
@@ -147,6 +147,27 @@ describe('ordersInDateRange', () => {
 
   it('excludes an unparseable createdAt', () => {
     expect(ordersInDateRange([order({ createdAt: 'nope' })], '2026-09-01', '2026-09-30')).toEqual([]);
+  });
+});
+
+// --- ordersToday -----------------------------------------------------------
+
+describe('ordersToday', () => {
+  const now = new Date(2026, 8, 14, 10, 0, 0); // 14 Sep 2026, local
+  const at = (y: number, m: number, d: number, h = 12) => new Date(y, m - 1, d, h, 0, 0).toISOString();
+
+  it('includes only orders whose local calendar date is today (incl. late in the day)', () => {
+    const orders = [
+      order({ createdAt: at(2026, 9, 14, 9) }),   // today morning
+      order({ createdAt: at(2026, 9, 14, 23) }),  // today, 11pm
+      order({ createdAt: at(2026, 9, 13, 23) }),  // yesterday
+      order({ createdAt: at(2026, 9, 15, 0) }),   // tomorrow (midnight)
+    ];
+    expect(ordersToday(orders, now)).toHaveLength(2);
+  });
+
+  it('is empty when nothing was placed today', () => {
+    expect(ordersToday([order({ createdAt: at(2026, 9, 13) })], now)).toEqual([]);
   });
 });
 

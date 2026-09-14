@@ -6,7 +6,8 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ordersApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { orderSummaryLines, waLink, type WaOrderSection } from '../../lib/whatsapp';
-import { computeOrderStats } from '../../lib/orderStats';
+import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersToday, type RangeKey } from '../../lib/orderStats';
+import { DatePicker } from '../DatePicker';
 import type { Store } from '../../App';
 import { useConfirm } from '../ConfirmDialog';
 
@@ -127,6 +128,17 @@ function CopyValue({ text, muted = false }: { text: string; muted?: boolean }) {
   );
 }
 
+// Time-range scope for the whole screen: 'today', rolling presets, custom range.
+type TileRange = RangeKey | 'today' | 'custom';
+const RANGE_OPTIONS: { key: TileRange; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: '7d', label: '7 days' },
+  { key: '30d', label: '30 days' },
+  { key: '90d', label: '90 days' },
+  { key: 'all', label: 'All time' },
+  { key: 'custom', label: 'Custom' },
+];
+
 function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string; label: string; value: string }) {
   return (
     <Card>
@@ -154,6 +166,10 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<OrderStatus | 'ALL'>(initialStatus);
   const [query, setQuery] = useState('');
+  // Time-range scope (default 'all' preserves the all-orders view on load).
+  const [range, setRange] = useState<TileRange>('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   // Each row toggles its OWN expand/collapse; several can stay open at once, and
   // clicking elsewhere never closes them (same model as the sidebar submenus).
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -187,9 +203,23 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
   // customer name, phone, product names, the status label (Pending … Cancelled),
   // and payment status (Unpaid / Paid / Refunded). Status is included both
   // as-shown and collapsed, so "out for delivery" and "outfordelivery" both match.
+  // The time range scopes the whole screen. Custom-range validity mirrors the
+  // Dashboard: both dates required and start on or before end (single day OK).
+  const isCustom = range === 'custom';
+  const customComplete = isCustom && customStart !== '' && customEnd !== '';
+  const customInvalid = customComplete && customStart > customEnd;
+  const customValid = customComplete && !customInvalid;
+  const rangeReady = !isCustom || customValid;
+
+  const rangedOrders = useMemo(() => {
+    if (isCustom) return customValid ? ordersInDateRange(orders, customStart, customEnd) : [];
+    if (range === 'today') return ordersToday(orders);
+    return ordersWithinRange(orders, range as RangeKey);
+  }, [orders, range, isCustom, customValid, customStart, customEnd]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return orders.filter((o) => {
+    return rangedOrders.filter((o) => {
       if (tab !== 'ALL' && o.status !== tab) return false;
       if (!q) return true;
       const status = STATUS_LABEL[o.status] || o.status;
@@ -204,7 +234,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
         .map((s) => String(s).toLowerCase());
       return haystack.some((h) => h.includes(q));
     });
-  }, [orders, tab, query]);
+  }, [rangedOrders, tab, query]);
 
   const applyUpdated = (updated: OrderResponse) =>
     setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
@@ -305,10 +335,11 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
     return waLink(order.contactPhone, lines.join('\n'));
   };
 
-  // Summary stats over ALL orders (already fetched; the tab filter is client-side).
-  // Shared with the Dashboard via computeOrderStats so the two can't drift: revenue
-  // counts only fulfilled orders, refunded/cancelled are context.
-  const { totalRevenue, refundedAmount, cancelledCount } = useMemo(() => computeOrderStats(orders), [orders]);
+  // Summary stats over the orders in the active range (the tab/search filter is
+  // applied separately, in the list). Shared with the Dashboard via
+  // computeOrderStats so the two can't drift: revenue counts only fulfilled
+  // orders, refunded/cancelled are context.
+  const { totalRevenue, refundedAmount, cancelledCount } = useMemo(() => computeOrderStats(rangedOrders), [rangedOrders]);
 
   return (
     <div>
@@ -359,11 +390,58 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
         )}
       </div>
 
-      {/* Summary stats (same pattern as the Products/Marketing screens). */}
+      {/* Time-range scope (presets + custom start/end), applied to the whole screen. */}
       {!loading && orders.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
+          <div role="group" aria-label="Time range" style={{ display: 'inline-flex', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', overflow: 'hidden', background: 'var(--bg-card)' }}>
+            {RANGE_OPTIONS.map((opt, i) => {
+              const active = opt.key === range;
+              return (
+                <button
+                  key={opt.key}
+                  onClick={() => setRange(opt.key)}
+                  aria-pressed={active}
+                  className="text-small"
+                  style={{
+                    padding: '8px 12px', fontWeight: 600, cursor: 'pointer',
+                    border: 'none', borderLeft: i === 0 ? 'none' : '1px solid var(--border-subtle)',
+                    background: active ? 'var(--primary-solid)' : 'transparent',
+                    color: active ? 'var(--text-on-dark)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {isCustom && (
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
+                <div style={{ minWidth: '160px' }}>
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Start date</label>
+                  <DatePicker value={customStart} onChange={setCustomStart} placeholder="Start date" ariaLabel="Custom range start date" />
+                </div>
+                <div style={{ minWidth: '160px' }}>
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>End date</label>
+                  <DatePicker value={customEnd} onChange={setCustomEnd} min={customStart || undefined} placeholder="End date" ariaLabel="Custom range end date" />
+                </div>
+              </div>
+              {customInvalid && (
+                <p className="text-small" style={{ color: 'var(--error-color)', margin: '8px 0 0' }}>
+                  Start date must be on or before the end date.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Summary stats (same pattern as the Products/Marketing screens). */}
+      {!loading && orders.length > 0 && rangeReady && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <StatCard icon={<DollarSign size={20} style={{ color: '#10B981' }} />} tint="#10B981" label="Total Revenue" value={formatMoney(totalRevenue, store.currency)} />
-          <StatCard icon={<ShoppingBag size={20} style={{ color: '#3B82F6' }} />} tint="#3B82F6" label="Total Orders" value={String(orders.length)} />
+          <StatCard icon={<ShoppingBag size={20} style={{ color: '#3B82F6' }} />} tint="#3B82F6" label="Total Orders" value={String(rangedOrders.length)} />
           <StatCard icon={<RotateCcw size={20} style={{ color: '#D97706' }} />} tint="#D97706" label="Refunded" value={formatMoney(refundedAmount, store.currency)} />
           <StatCard icon={<XCircle size={20} style={{ color: '#DC2626' }} />} tint="#DC2626" label="Cancelled" value={String(cancelledCount)} />
         </div>
@@ -395,7 +473,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {STATUS_TABS.map((s) => {
           const active = tab === s;
-          const count = s === 'ALL' ? orders.length : orders.filter((o) => o.status === s).length;
+          const count = s === 'ALL' ? rangedOrders.length : rangedOrders.filter((o) => o.status === s).length;
           return (
             <button
               key={s}
@@ -430,9 +508,13 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
 
         {loading ? (
           <p className="text-small" style={{ padding: '32px 20px', color: 'var(--text-secondary)' }}>Loading orders…</p>
+        ) : !rangeReady ? (
+          <p className="text-small" style={{ padding: '32px 20px', color: 'var(--text-muted)' }}>
+            {customInvalid ? 'Adjust the dates above to see orders.' : 'Pick a start and end date to see orders.'}
+          </p>
         ) : filtered.length === 0 ? (
           <p className="text-small" style={{ padding: '32px 20px', color: 'var(--text-secondary)' }}>
-            No orders {tab !== 'ALL' ? `with status ${STATUS_LABEL[tab]}` : 'yet'}.
+            No orders {tab !== 'ALL' ? `with status ${STATUS_LABEL[tab]}` : 'in this range'}.
           </p>
         ) : (
           filtered.map((o) => {
@@ -624,9 +706,11 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
         )}
       </div>
 
-      <p className="text-small" style={{ color: 'var(--text-secondary)', marginTop: '16px' }}>
-        Total {filtered.length} order{filtered.length === 1 ? '' : 's'}
-      </p>
+      {rangeReady && (
+        <p className="text-small" style={{ color: 'var(--text-secondary)', marginTop: '16px' }}>
+          Total {filtered.length} order{filtered.length === 1 ? '' : 's'}
+        </p>
+      )}
 
       <style>{`
         .m-label { display: none; }
