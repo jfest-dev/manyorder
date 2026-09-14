@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -79,6 +80,34 @@ class DiscountIntegrationTest extends IntegrationTestBase {
                         .delete("/merchant/stores/" + storeId + "/discounts/" + id)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void editFreeDeliveryDiscount_doesNotRequireValue() throws Exception {
+        String token = registerAndGetToken("disc-fd-edit@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "FD Edit", "disc-fd-edit-store");
+        long id = createDiscount(token, storeId, Map.of("code", "FREESHIP", "type", "FREE_DELIVERY"));
+
+        // A free-delivery voucher's value is unused (0). Editing it (the client sends
+        // value 0) must not be blocked by a value>0 rule. Regression: @Positive on
+        // the update DTO's value rejected 0 at the @Valid layer, before validateShape.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/discounts/" + id)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("name", "Free shipping", "value", 0))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void editPercentageDiscount_toZeroValue_stillRejected() throws Exception {
+        String token = registerAndGetToken("disc-pct-zero@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Pct Zero", "disc-pct-zero-store");
+        long id = createDiscount(token, storeId, Map.of("code", "TEN", "type", "PERCENTAGE", "value", 10));
+
+        // The value>0 rule still applies to percentage/fixed on update (validateShape).
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/discounts/" + id)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("value", 0))))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
 /** PATCH semantics: null fields are left unchanged. */
@@ -14,7 +13,8 @@ public class UpdateDiscountRequest {
     private String name;
     private DiscountType type;
 
-    @Positive
+    // No @Positive here: value is 0 for a FREE_DELIVERY code, and validateShape
+    // enforces value > 0 for percentage/fixed types (skipping free delivery).
     private BigDecimal value;
 
     @PositiveOrZero
