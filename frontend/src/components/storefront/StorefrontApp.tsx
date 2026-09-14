@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   storefrontApi, ApiError,
-  type PublicStoreResponse, type ProductResponse, type GuestCheckoutResult,
+  type PublicStoreResponse, type ProductResponse, type GuestCheckoutResult, type PublicOffer,
 } from '../../lib/api';
 import { StorefrontView } from './StorefrontView';
 import { ProductDetailView } from './ProductDetailView';
@@ -34,6 +34,7 @@ export function StorefrontApp() {
   const [notFound, setNotFound] = useState(false);
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [offers, setOffers] = useState<PublicOffer[]>([]);
   const [orderResult, setOrderResult] = useState<GuestCheckoutResult | null>(null);
   const [recentOrder, setRecentOrder] = useState<RecentOrder | null>(null);
   // Product whose "already in cart?" decision sheet is open (shop grid). null = closed.
@@ -51,6 +52,8 @@ export function StorefrontApp() {
         setStore(s);
         const list = await storefrontApi.getProducts(s.id);
         if (!cancelled) setProducts(list);
+        // Public offers are non-critical: a failure just hides the section.
+        storefrontApi.getOffers(s.id).then((o) => { if (!cancelled) setOffers(o); }).catch(() => {});
       })
       .catch(() => { if (!cancelled) setNotFound(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -202,6 +205,7 @@ export function StorefrontApp() {
             <StorefrontView
               store={store}
               products={products}
+              offers={offers}
               onProductClick={openProduct}
               onAddToCart={(id) => addToCart(id, 1)}
               quantities={quantities}
@@ -246,7 +250,7 @@ export function StorefrontApp() {
           <Route path="checkout" element={
             hydratedCart.length === 0
               ? <Navigate to={`/${slug}`} replace />
-              : <CheckoutView store={store} items={hydratedCart} onBack={goBack}
+              : <CheckoutView store={store} items={hydratedCart} offers={offers} onBack={goBack}
                   onPlaced={(result) => { setOrderResult(result); setCart([]); navigate(`/${slug}/confirmation`); }} />
           } />
           <Route path="confirmation" element={

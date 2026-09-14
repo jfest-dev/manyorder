@@ -643,6 +643,8 @@ export interface DiscountResponse {
   firstOrderOnly: boolean;
   /** When true, may combine with an active product sale price. */
   canStackWithSale: boolean;
+  /** When true, shown on the storefront for one-tap apply; false = code-only. */
+  isPublic: boolean;
   /** Products the discount is limited to; empty = store-wide. */
   productIds: number[];
   createdAt: string;
@@ -664,6 +666,8 @@ export interface DiscountPayload {
   firstOrderOnly?: boolean;
   /** When true, may combine with an active product sale price. */
   canStackWithSale?: boolean;
+  /** When true, shown on the storefront for one-tap apply. Default false. */
+  isPublic?: boolean;
   /** Empty/omitted = store-wide; non-empty = limited to these products. On
    *  update: null leaves the scope unchanged, an empty array clears to store-wide. */
   productIds?: number[] | null;
@@ -848,12 +852,28 @@ export interface DiscountValidationResult {
   deliveryDiscount: number;
 }
 
+/** A public offer as shown on the storefront (only what's needed to label + apply). */
+export interface PublicOffer {
+  code: string;
+  name: string | null;
+  type: DiscountType;
+  value: number;
+  minSpend: number | null;
+  firstOrderOnly: boolean;
+  storeWide: boolean;
+  productIds: number[];
+}
+
 export const storefrontApi = {
   getStore: (slug: string) =>
     request<PublicStoreResponse>(`/public/stores/${encodeURIComponent(slug)}`, { auth: false }),
 
   getProducts: (merchantId: number) =>
     request<ProductResponse[]>(`/public/storefront/${merchantId}/products`, { auth: false }),
+
+  /** Public, one-tap-applicable offers for a store (private codes never appear). */
+  getOffers: (merchantId: number) =>
+    request<PublicOffer[]>(`/public/storefront/${merchantId}/offers`, { auth: false }),
 
   checkout: (payload: GuestCheckoutPayload) =>
     request<GuestCheckoutResult>(`/public/checkout`, { method: 'POST', body: payload, auth: false }),

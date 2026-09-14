@@ -78,13 +78,14 @@ interface FormState {
   active: boolean;
   firstOrderOnly: boolean;
   canStackWithSale: boolean;
+  isPublic: boolean;
   /** ALL = store-wide (empty scope); SPECIFIC = limited to productIds. */
   appliesTo: 'ALL' | 'SPECIFIC';
   productIds: number[];
 }
 const BLANK: FormState = {
   name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', minSpend: '', startDate: '', endDate: '', active: true,
-  firstOrderOnly: false, canStackWithSale: false, appliesTo: 'ALL', productIds: [],
+  firstOrderOnly: false, canStackWithSale: false, isPublic: false, appliesTo: 'ALL', productIds: [],
 };
 
 export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
@@ -201,6 +202,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       active: d.active,
       firstOrderOnly: d.firstOrderOnly,
       canStackWithSale: d.canStackWithSale,
+      isPublic: d.isPublic,
       appliesTo: d.productIds.length > 0 ? 'SPECIFIC' : 'ALL',
       productIds: d.productIds,
     });
@@ -240,6 +242,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       active: form.active,
       firstOrderOnly: form.firstOrderOnly,
       canStackWithSale: form.canStackWithSale,
+      isPublic: form.isPublic,
       // Empty array = store-wide (and always empty for free delivery). On edit
       // this also clears a previous scope.
       productIds: !freeDelivery && form.appliesTo === 'SPECIFIC' ? form.productIds : [],
@@ -331,6 +334,9 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '14px', fontWeight: 600 }}>{d.name || d.code}</span>
                         <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: `${meta.color}20`, color: meta.color, fontSize: '12px', fontWeight: 500 }}>{meta.label}</span>
+                        {d.isPublic && (
+                          <span className="text-tag" style={{ padding: '2px 8px', borderRadius: '4px', background: '#EFF6FF', color: '#1D4ED8', fontSize: '12px', fontWeight: 500 }}>Public</span>
+                        )}
                       </div>
                       <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
                         Code <strong style={{ color: 'var(--text-primary)' }}>{d.code}</strong> · {valueLabel(d)}{d.type !== 'FREE_DELIVERY' ? ` · ${scopeLabel(d, productName)}` : ''}{d.minSpend != null ? ` · min ${formatMoney(d.minSpend, currency)}` : ''}{d.firstOrderOnly ? ' · first order only' : ''}
@@ -410,6 +416,13 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
               </div>
 
               <ToggleSwitch checked={form.active} onChange={(v) => set('active', v)} label="Active" />
+
+              <div>
+                <ToggleSwitch checked={form.isPublic} onChange={(v) => set('isPublic', v)} label="Show on storefront" />
+                <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                  Customers see it at checkout and apply with one tap. Off keeps it code-only.
+                </p>
+              </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
                 <Checkbox checked={form.firstOrderOnly} onChange={(v) => set('firstOrderOnly', v)} ariaLabel="First order only" />

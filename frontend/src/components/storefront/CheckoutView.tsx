@@ -4,10 +4,11 @@ import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { saveRecentOrder } from '../../lib/orderRecall';
 import { DEFAULT_DELIVERY_TBC_MESSAGE } from '../../lib/delivery';
+import { offerValueLabel, offerConditions } from '../../lib/offers';
 import { NoteBlock } from '../NoteBlock';
 import {
   storefrontApi, ApiError,
-  type PublicStoreResponse, type GuestCheckoutResult, type FulfilmentMethod,
+  type PublicStoreResponse, type GuestCheckoutResult, type FulfilmentMethod, type PublicOffer,
 } from '../../lib/api';
 import type { CartLine } from './storefrontTypes';
 import { cartLineToCheckoutItem } from '../../lib/cart';
@@ -17,11 +18,14 @@ interface CheckoutViewProps {
   items: CartLine[];
   onBack: () => void;
   onPlaced: (result: GuestCheckoutResult) => void;
+  /** Public offers the merchant chose to surface; picked from a sheet and applied
+   *  like any code. Empty = the voucher row is hidden entirely. */
+  offers?: PublicOffer[];
 }
 
 const PAYMENT_METHODS = ['PayNow', 'Cash', 'Bank Transfer'];
 
-export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewProps) {
+export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: CheckoutViewProps) {
   // Buttons/selection controls use the fixed brand colour, not the store theme.
   const accent = 'var(--primary-solid)';
   const currency = store.currency;
@@ -89,8 +93,9 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
   const deliveryWaived = freeDelivery ? deliveryFee : 0;
   const total = Math.max(0, subtotal + deliveryFee - discount - deliveryWaived);
 
-  const applyCode = async () => {
-    if (!code.trim()) return;
+  const applyCode = async (raw?: string) => {
+    const entered = (raw ?? code).trim();
+    if (!entered) return;
     setCheckingCode(true);
     setDiscountError(null);
     try {
@@ -98,7 +103,7 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
       // product-specific code is measured against exactly its matching lines.
       const res = await storefrontApi.validateDiscount({
         merchantId: store.id,
-        code: code.trim(),
+        code: entered,
         fulfilmentMethod: fulfilment,
         // Forward the entered contact so a first-order-only code previews against
         // real history; blank is tolerated (assumed first-order, enforced at submit).
@@ -116,6 +121,12 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
   };
 
   const clearCode = () => { setApplied(null); setCode(''); setDiscountError(null); };
+
+  // Tap a public offer to apply it like any code (validated the same way, no typing).
+  const applyOffer = (o: PublicOffer) => {
+    setCode(o.code);
+    applyCode(o.code);
+  };
 
   const submit = async () => {
     setError(null);
@@ -235,13 +246,48 @@ export function CheckoutView({ store, items, onBack, onPlaced }: CheckoutViewPro
           ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
               <input style={inputStyle} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Enter code" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCode(); } }} />
-              <button onClick={applyCode} disabled={checkingCode || !code.trim()}
+              <button onClick={() => applyCode()} disabled={checkingCode || !code.trim()}
                 style={{ flexShrink: 0, padding: '0 16px', borderRadius: '10px', border: '1px solid var(--border-subtle)', background: 'white', cursor: checkingCode || !code.trim() ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: 600 }}>
                 {checkingCode ? '…' : 'Apply'}
               </button>
             </div>
           )}
           {discountError && <p style={{ fontSize: '12px', color: '#B91C1C', marginTop: '6px' }}>{discountError}</p>}
+
+          {/* Available offers: the store's public codes, shown inline right under the
+              promo field. Tap Apply to apply one (validated like any code, no typing).
+              Hidden entirely when the store has none. */}
+          {offers.length > 0 && (
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <Tag size={14} style={{ color: accent }} />
+                <span style={{ fontSize: '13px', fontWeight: 700 }}>Available offers</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {offers.map((o) => {
+                  const conditions = offerConditions(o, currency);
+                  const isApplied = applied?.code?.toUpperCase() === o.code.toUpperCase();
+                  return (
+                    <div key={o.code} style={{ display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '10px' }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600 }}>{o.name || offerValueLabel(o, currency)}</div>
+                        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {offerValueLabel(o, currency)}{conditions ? ` · ${conditions}` : ''}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => applyOffer(o)}
+                        disabled={checkingCode || isApplied}
+                        style={{ flexShrink: 0, padding: '0 14px', height: '34px', borderRadius: '8px', border: 'none', cursor: checkingCode || isApplied ? 'default' : 'pointer', background: isApplied ? 'var(--border-subtle)' : accent, color: isApplied ? 'var(--text-secondary)' : 'white', fontSize: '13px', fontWeight: 600 }}
+                      >
+                        {isApplied ? 'Applied' : 'Apply'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Split preview - a mixed cart becomes two orders. */}

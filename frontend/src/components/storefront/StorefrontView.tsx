@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Package, ShoppingBag, Plus, MapPin, Clock, Search, X, Share2, Check } from 'lucide-react';
+import { Package, ShoppingBag, Plus, MapPin, Clock, Search, X, Share2, Check, Tag } from 'lucide-react';
 import { WhatsAppIcon } from '../icons/WhatsAppIcon';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { bestsellerProductIds } from '../../lib/bestsellers';
-import type { ProductResponse } from '../../lib/api';
+import { offerValueLabel, offerConditions } from '../../lib/offers';
+import type { ProductResponse, PublicOffer } from '../../lib/api';
 import { StorefrontStore, isOrderable, initialsOf } from './storefrontTypes';
 import { QuantityStepper } from './QuantityStepper';
 
 interface StorefrontViewProps {
   store: StorefrontStore;
   products: ProductResponse[];
+  /** Public offers to surface as a discovery carousel under the category chips. */
+  offers?: PublicOffer[];
   onProductClick?: (productId: number) => void;
   onAddToCart?: (productId: number) => void;
   /** Per-product quantities of the PLAIN line already in the cart (drives the inline stepper). */
@@ -65,6 +68,7 @@ const floatBtnStyle = (enabled: boolean, pill: boolean): React.CSSProperties => 
 export function StorefrontView({
   store,
   products,
+  offers = [],
   onProductClick,
   onAddToCart,
   quantities = {},
@@ -318,6 +322,32 @@ export function StorefrontView({
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* Public offers discovery carousel: horizontally-scrollable cards so a
+          browsing customer sees vouchers exist before checkout (where they apply
+          one). Hidden entirely when the store has no public offers. */}
+      {offers.length > 0 && (
+        <div style={{ padding: '12px 12px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+            <Tag size={14} style={{ color: BRAND }} />
+            <span style={{ fontSize: '13px', fontWeight: 700 }}>Offers</span>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
+            {offers.map((o) => {
+              const conditions = offerConditions(o, store.currency);
+              return (
+                <div key={o.code} style={{ flexShrink: 0, width: '190px', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '12px', background: 'white' }}>
+                  <div style={{ fontSize: '15px', fontWeight: 700, color: BRAND }}>{offerValueLabel(o, store.currency)}</div>
+                  {o.name && <div style={{ fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>{o.name}</div>}
+                  <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px', minHeight: '14px' }}>
+                    {conditions || 'Apply at checkout'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
