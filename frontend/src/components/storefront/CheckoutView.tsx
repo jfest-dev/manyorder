@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Tag, Clock } from 'lucide-react';
+import { ArrowLeft, Tag, Clock, ChevronDown } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { saveRecentOrder } from '../../lib/orderRecall';
@@ -127,6 +127,14 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
     setCode(o.code);
     applyCode(o.code);
   };
+
+  // Which offer rows are expanded (accordion). Collapsed shows just value + name.
+  const [expandedOffers, setExpandedOffers] = useState<Set<string>>(new Set());
+  const toggleOffer = (code: string) => setExpandedOffers((prev) => {
+    const next = new Set(prev);
+    next.has(code) ? next.delete(code) : next.add(code);
+    return next;
+  });
 
   const submit = async () => {
     setError(null);
@@ -265,28 +273,41 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {offers.map((o) => {
-                  // Consistent shape: same lines and fallbacks as the shop carousel.
+                  // Minimal by default (value + name); tap the row to expand inline
+                  // (accordion) for scope, conditions and expiry. Apply stays a
+                  // separate action (it doesn't toggle the row).
+                  const expanded = expandedOffers.has(o.code);
                   const conditions = offerConditions(o, currency) || 'No conditions';
                   const expiry = offerExpiry(o) || 'No expiry';
                   const isApplied = applied?.code?.toUpperCase() === o.code.toUpperCase();
                   return (
-                    <div key={o.code} style={{ display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '10px' }}>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: '13px', fontWeight: 600 }}>
-                          {offerValueLabel(o, currency)} · {o.name || o.code}
-                        </div>
-                        <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                    <div key={o.code} style={{ border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <button
+                          type="button"
+                          onClick={() => toggleOffer(o.code)}
+                          aria-expanded={expanded}
+                          style={{ minWidth: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <span style={{ minWidth: 0, flex: 1, fontSize: '13px', fontWeight: 600 }}>
+                            {offerValueLabel(o, currency)}{o.name ? ` · ${o.name}` : ''}
+                          </span>
+                          <ChevronDown size={15} style={{ flexShrink: 0, color: 'var(--text-muted)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                        </button>
+                        <button
+                          onClick={() => applyOffer(o)}
+                          disabled={checkingCode || isApplied}
+                          style={{ flexShrink: 0, padding: '0 14px', height: '34px', borderRadius: '8px', border: 'none', cursor: checkingCode || isApplied ? 'default' : 'pointer', background: isApplied ? 'var(--border-subtle)' : accent, color: isApplied ? 'var(--text-secondary)' : 'white', fontSize: '13px', fontWeight: 600 }}
+                        >
+                          {isApplied ? 'Applied' : 'Apply'}
+                        </button>
+                      </div>
+                      {expanded && (
+                        <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
                           <span>{o.scopeLabel} · {conditions}</span>
                           <span>{expiry}</span>
                         </div>
-                      </div>
-                      <button
-                        onClick={() => applyOffer(o)}
-                        disabled={checkingCode || isApplied}
-                        style={{ flexShrink: 0, padding: '0 14px', height: '34px', borderRadius: '8px', border: 'none', cursor: checkingCode || isApplied ? 'default' : 'pointer', background: isApplied ? 'var(--border-subtle)' : accent, color: isApplied ? 'var(--text-secondary)' : 'white', fontSize: '13px', fontWeight: 600 }}
-                      >
-                        {isApplied ? 'Applied' : 'Apply'}
-                      </button>
+                      )}
                     </div>
                   );
                 })}

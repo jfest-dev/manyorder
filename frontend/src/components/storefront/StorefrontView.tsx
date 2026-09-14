@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Package, ShoppingBag, Plus, MapPin, Clock, Search, X, Share2, Check, Tag } from 'lucide-react';
+import { Package, ShoppingBag, Plus, MapPin, Clock, Search, X, Share2, Check, Tag, ChevronDown } from 'lucide-react';
 import { WhatsAppIcon } from '../icons/WhatsAppIcon';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
@@ -110,6 +110,13 @@ export function StorefrontView({
   const [activeCategory, setActiveCategory] = useState<string>(ALL);
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  // Which offer cards are expanded (accordion). Collapsed shows just value + name.
+  const [expandedOffers, setExpandedOffers] = useState<Set<string>>(new Set());
+  const toggleOffer = (code: string) => setExpandedOffers((prev) => {
+    const next = new Set(prev);
+    next.has(code) ? next.delete(code) : next.add(code);
+    return next;
+  });
   const searchInputRef = useRef<HTMLInputElement>(null);
   // Focus the field the moment the search input expands.
   useEffect(() => { if (searchOpen) searchInputRef.current?.focus(); }, [searchOpen]);
@@ -336,20 +343,34 @@ export function StorefrontView({
           </div>
           <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '2px' }}>
             {offers.map((o) => {
-              // Consistent card shape: every card renders the same lines, with
-              // fallbacks so a sparse offer doesn't leave an empty gap.
+              // Minimal by default (value + name); tap to expand inline (accordion)
+              // to reveal scope, conditions and expiry.
+              const expanded = expandedOffers.has(o.code);
               const conditions = offerConditions(o, store.currency) || 'No conditions';
               const expiry = offerExpiry(o) || 'No expiry';
               return (
-                <div key={o.code} style={{ flexShrink: 0, width: '210px', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '12px', background: 'white' }}>
-                  <div style={{ fontSize: '15px', fontWeight: 700, color: BRAND }}>{offerValueLabel(o, store.currency)}</div>
-                  <div style={{ fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>{o.name || o.code}</div>
-                  <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span>{o.scopeLabel}</span>
-                    <span>{conditions}</span>
-                    <span>{expiry}</span>
+                <button
+                  key={o.code}
+                  type="button"
+                  onClick={() => toggleOffer(o.code)}
+                  aria-expanded={expanded}
+                  style={{ flexShrink: 0, width: '210px', textAlign: 'left', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '12px', background: 'white', cursor: 'pointer', alignSelf: 'flex-start' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: BRAND }}>{offerValueLabel(o, store.currency)}</div>
+                      {o.name && <div style={{ fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>{o.name}</div>}
+                    </div>
+                    <ChevronDown size={16} style={{ flexShrink: 0, color: 'var(--text-muted)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
                   </div>
-                </div>
+                  {expanded && (
+                    <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span>{o.scopeLabel}</span>
+                      <span>{conditions}</span>
+                      <span>{expiry}</span>
+                    </div>
+                  )}
+                </button>
               );
             })}
           </div>
