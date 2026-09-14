@@ -353,6 +353,7 @@ public class OrderService {
                 order.isDeliveryFeePending(),
                 order.getDiscountAmount(),
                 order.getDeliveryDiscount(),
+                order.isFreeDelivery(),
                 order.getDiscountCode(),
                 order.getOrderGroupId(),
                 order.getTotalAmount(),

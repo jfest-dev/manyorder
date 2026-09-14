@@ -18,6 +18,8 @@ public class PublicOfferResponse {
     private final BigDecimal value;
     private final BigDecimal minSpend;
     private final boolean firstOrderOnly;
+    /** When true, the value is off the delivery fee (label "X off delivery"). */
+    private final boolean appliesToDelivery;
     private final boolean storeWide;
     private final List<Long> productIds;
     /** Human "applies to" label (e.g. "All products", a category, a product name, "3 products"). */
@@ -32,6 +34,7 @@ public class PublicOfferResponse {
         this.value = d.getValue();
         this.minSpend = d.getMinSpend();
         this.firstOrderOnly = d.isFirstOrderOnly();
+        this.appliesToDelivery = d.isAppliesToDelivery();
         this.storeWide = d.isStoreWide();
         this.productIds = d.getProductIds().stream().sorted().toList();
         this.scopeLabel = scopeLabel;
@@ -44,6 +47,7 @@ public class PublicOfferResponse {
     public BigDecimal getValue() { return value; }
     public BigDecimal getMinSpend() { return minSpend; }
     public boolean isFirstOrderOnly() { return firstOrderOnly; }
+    public boolean isAppliesToDelivery() { return appliesToDelivery; }
     public boolean isStoreWide() { return storeWide; }
     public List<Long> getProductIds() { return productIds; }
     public String getScopeLabel() { return scopeLabel; }

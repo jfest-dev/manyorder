@@ -85,12 +85,21 @@ public class Order {
     private BigDecimal discountAmount = BigDecimal.ZERO;
 
     /**
-     * Delivery fee waived by a FREE_DELIVERY voucher. Informational only:
-     * deliveryFee already holds the net (0 when waived), so the total is
-     * unaffected. Surfaced so the storefront can show a "Free delivery" line.
+     * Delivery fee discounted by a delivery voucher (full FREE_DELIVERY or a partial
+     * % / fixed off the fee). Informational only: deliveryFee already holds the net,
+     * so the total is unaffected. Surfaced so the storefront can show the line.
      */
     @Column(nullable = false, columnDefinition = "numeric default 0")
     private BigDecimal deliveryDiscount = BigDecimal.ZERO;
+
+    /**
+     * Snapshot of whether the applied delivery discount was a FREE_DELIVERY voucher
+     * (full waiver), so the line is labelled "Free delivery" vs "Delivery discount"
+     * by the configured type, never by whether the net fee reached $0. False for a
+     * partial delivery discount, and for orders with no delivery discount.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean freeDelivery = false;
 
     /** Snapshot of the applied discount code (stable if the voucher is later edited/deleted). */
     private String discountCode;
@@ -194,6 +203,8 @@ public class Order {
     public void setDiscountAmount(BigDecimal discountAmount) { this.discountAmount = discountAmount; }
     public BigDecimal getDeliveryDiscount() { return deliveryDiscount; }
     public void setDeliveryDiscount(BigDecimal deliveryDiscount) { this.deliveryDiscount = deliveryDiscount; }
+    public boolean isFreeDelivery() { return freeDelivery; }
+    public void setFreeDelivery(boolean freeDelivery) { this.freeDelivery = freeDelivery; }
     public String getDiscountCode() { return discountCode; }
     public void setDiscountCode(String discountCode) { this.discountCode = discountCode; }
     public String getOrderGroupId() { return orderGroupId; }

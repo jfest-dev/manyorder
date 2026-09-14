@@ -22,6 +22,7 @@ public class DiscountResponse {
     private final boolean firstOrderOnly;
     private final boolean canStackWithSale;
     private final boolean isPublic;
+    private final boolean appliesToDelivery;
     /** Products the discount is limited to; empty = store-wide. Sorted for stable output. */
     private final List<Long> productIds;
     /** Merchant-controlled sort position (drag-to-reorder). */
@@ -43,6 +44,7 @@ public class DiscountResponse {
         this.firstOrderOnly = d.isFirstOrderOnly();
         this.canStackWithSale = d.isCanStackWithSale();
         this.isPublic = d.isPublic();
+        this.appliesToDelivery = d.isAppliesToDelivery();
         this.productIds = d.getProductIds().stream().sorted().toList();
         this.displayOrder = d.getDisplayOrder();
         this.createdAt = d.getCreatedAt();
@@ -65,6 +67,7 @@ public class DiscountResponse {
     // "public", but the request side and clients use "isPublic".
     @JsonProperty("isPublic")
     public boolean isPublic() { return isPublic; }
+    public boolean isAppliesToDelivery() { return appliesToDelivery; }
     public List<Long> getProductIds() { return productIds; }
     public int getDisplayOrder() { return displayOrder; }
     public LocalDateTime getCreatedAt() { return createdAt; }

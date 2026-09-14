@@ -27,8 +27,10 @@ public class GuestCheckoutResponse {
     /** True when the delivery fee is unresolved → the total shown is an estimate. */
     private boolean deliveryFeePending;
     private BigDecimal discountAmount;
-    /** Delivery fee waived by a FREE_DELIVERY voucher; 0 otherwise. */
+    /** Delivery fee discounted by a delivery voucher; 0 otherwise. */
     private BigDecimal deliveryDiscount;
+    /** True when a FREE_DELIVERY voucher applied (label "Free delivery" vs "Delivery discount"). */
+    private boolean freeDelivery;
     private String discountCode;
     private BigDecimal totalAmount;
     private LocalDateTime createdAt;
@@ -42,7 +44,7 @@ public class GuestCheckoutResponse {
                                   String deliveryAddress, String notes, String orderStatus,
                                   String paymentStatus, BigDecimal subtotal, BigDecimal deliveryFee,
                                   boolean deliveryFeePending, BigDecimal discountAmount, BigDecimal deliveryDiscount,
-                                  String discountCode, BigDecimal totalAmount, LocalDateTime createdAt,
+                                  boolean freeDelivery, String discountCode, BigDecimal totalAmount, LocalDateTime createdAt,
                                   List<ItemSummary> items, List<OrderSummary> orders) {
         this.orderGroupId = orderGroupId;
         this.orderId = orderId;
@@ -61,6 +63,7 @@ public class GuestCheckoutResponse {
         this.deliveryFeePending = deliveryFeePending;
         this.discountAmount = discountAmount;
         this.deliveryDiscount = deliveryDiscount;
+        this.freeDelivery = freeDelivery;
         this.discountCode = discountCode;
         this.totalAmount = totalAmount;
         this.createdAt = createdAt;
@@ -85,6 +88,7 @@ public class GuestCheckoutResponse {
     public boolean isDeliveryFeePending() { return deliveryFeePending; }
     public BigDecimal getDiscountAmount() { return discountAmount; }
     public BigDecimal getDeliveryDiscount() { return deliveryDiscount; }
+    public boolean isFreeDelivery() { return freeDelivery; }
     public String getDiscountCode() { return discountCode; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public LocalDateTime getCreatedAt() { return createdAt; }
@@ -101,12 +105,13 @@ public class GuestCheckoutResponse {
         private BigDecimal deliveryFee;
         private BigDecimal discountAmount;
         private BigDecimal deliveryDiscount;
+        private boolean freeDelivery;
         private BigDecimal totalAmount;
         private List<ItemSummary> items;
 
         public OrderSummary(Long orderId, String kind, String orderStatus, String paymentStatus,
                             BigDecimal subtotal, BigDecimal deliveryFee, BigDecimal discountAmount,
-                            BigDecimal deliveryDiscount, BigDecimal totalAmount, List<ItemSummary> items) {
+                            BigDecimal deliveryDiscount, boolean freeDelivery, BigDecimal totalAmount, List<ItemSummary> items) {
             this.orderId = orderId;
             this.kind = kind;
             this.orderStatus = orderStatus;
@@ -115,6 +120,7 @@ public class GuestCheckoutResponse {
             this.deliveryFee = deliveryFee;
             this.discountAmount = discountAmount;
             this.deliveryDiscount = deliveryDiscount;
+            this.freeDelivery = freeDelivery;
             this.totalAmount = totalAmount;
             this.items = items;
         }
@@ -127,6 +133,7 @@ public class GuestCheckoutResponse {
         public BigDecimal getDeliveryFee() { return deliveryFee; }
         public BigDecimal getDiscountAmount() { return discountAmount; }
         public BigDecimal getDeliveryDiscount() { return deliveryDiscount; }
+        public boolean isFreeDelivery() { return freeDelivery; }
         public BigDecimal getTotalAmount() { return totalAmount; }
         public List<ItemSummary> getItems() { return items; }
     }

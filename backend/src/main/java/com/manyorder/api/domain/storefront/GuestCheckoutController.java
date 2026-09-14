@@ -155,12 +155,21 @@ public class GuestCheckoutController {
             combinedDiscount = redemption.amount();
             discountCode = redemption.code();
             if (redemption.freeDelivery()) {
-                // Waive delivery: the net fee is zero and nothing is left to confirm.
+                // FREE_DELIVERY: waive the whole fee, nothing left to confirm.
                 deliveryDiscount = redemption.deliveryDiscount();
                 deliveryFee = BigDecimal.ZERO;
                 deliveryFeePending = false;
+            } else if (redemption.partialDelivery()) {
+                // Partial delivery discount: net fee is the fee minus the discount
+                // (pending was already rejected, so the fee here is confirmed).
+                deliveryDiscount = redemption.deliveryDiscount();
+                deliveryFee = deliveryFee.subtract(deliveryDiscount);
             }
         }
+        // Snapshot which delivery-discount kind was applied, so the order labels
+        // "Free delivery" vs "Delivery discount" by the configured type, not by
+        // whether the net fee happened to reach $0.
+        boolean freeDeliveryApplied = redemption != null && redemption.freeDelivery();
 
         // 4) One order, or a split into two linked orders when the cart mixes
         //    ready and pre-order items. On a split the delivery fee (and its
@@ -190,15 +199,16 @@ public class GuestCheckoutController {
             }
             BigDecimal preDiscount = combinedDiscount.subtract(readyDiscount); // remainder, so shares sum exactly
 
-            // The delivery fee (and any free-delivery waiver) lives on the ready order.
+            // The delivery fee (and any delivery discount) lives on the ready order;
+            // the pre-order bucket has none, so it is never "free delivery".
             orders.add(persistOrder(merchant, customer, orderType, request, groupId,
-                    ready, readySubtotal, deliveryFee, deliveryFeePending, readyDiscount, deliveryDiscount, discountCode));
+                    ready, readySubtotal, deliveryFee, deliveryFeePending, readyDiscount, deliveryDiscount, freeDeliveryApplied, discountCode));
             orders.add(persistOrder(merchant, customer, orderType, request, groupId,
-                    preorder, sumLines(preorder), BigDecimal.ZERO, false, preDiscount, BigDecimal.ZERO, discountCode));
+                    preorder, sumLines(preorder), BigDecimal.ZERO, false, preDiscount, BigDecimal.ZERO, false, discountCode));
         } else {
             List<Line> all = ready.isEmpty() ? preorder : ready; // exactly one bucket is non-empty
             orders.add(persistOrder(merchant, customer, orderType, request, null,
-                    all, combinedSubtotal, deliveryFee, deliveryFeePending, combinedDiscount, deliveryDiscount, discountCode));
+                    all, combinedSubtotal, deliveryFee, deliveryFeePending, combinedDiscount, deliveryDiscount, freeDeliveryApplied, discountCode));
         }
 
         // Notify the merchant, if they've opted in. Best-effort and isolated: the
@@ -219,7 +229,7 @@ public class GuestCheckoutController {
     private Order persistOrder(Merchant merchant, Customer customer, OrderType orderType,
                                GuestCheckoutRequest request, String groupId, List<Line> lines,
                                BigDecimal subtotal, BigDecimal deliveryFee, boolean deliveryFeePending,
-                               BigDecimal discount, BigDecimal deliveryDiscount, String discountCode) {
+                               BigDecimal discount, BigDecimal deliveryDiscount, boolean freeDelivery, String discountCode) {
         Order order = new Order(customer, merchant, orderType,
                 request.getCustomerName(), request.getCustomerPhone());
         order.setSource(OrderSource.STOREFRONT);
@@ -253,6 +263,7 @@ public class GuestCheckoutController {
         order.setDeliveryFeePending(deliveryFeePending);
         order.setDiscountAmount(discount);
         order.setDeliveryDiscount(deliveryDiscount);
+        order.setFreeDelivery(freeDelivery);
         // Record the code when this order actually carries the discount's effect
         // (a product discount, or a free-delivery waiver on the fee-bearing order).
         if (discount.signum() > 0 || deliveryDiscount.signum() > 0) order.setDiscountCode(discountCode);
@@ -290,6 +301,7 @@ public class GuestCheckoutController {
         BigDecimal subtotal = BigDecimal.ZERO, deliveryFee = BigDecimal.ZERO,
                 discount = BigDecimal.ZERO, deliveryDiscount = BigDecimal.ZERO, total = BigDecimal.ZERO;
         boolean pending = false;
+        boolean freeDelivery = false;
         String discountCode = null;
 
         for (Order o : orders) {
@@ -308,12 +320,13 @@ public class GuestCheckoutController {
             summaries.add(new GuestCheckoutResponse.OrderSummary(
                     o.getId(), kind, o.getStatus().name(), o.getPaymentStatus().name(),
                     o.getSubtotal(), o.getDeliveryFee(), o.getDiscountAmount(), o.getDeliveryDiscount(),
-                    o.getTotalAmount(), items));
+                    o.isFreeDelivery(), o.getTotalAmount(), items));
 
             subtotal = subtotal.add(o.getSubtotal());
             deliveryFee = deliveryFee.add(o.getDeliveryFee());
             discount = discount.add(o.getDiscountAmount());
             deliveryDiscount = deliveryDiscount.add(o.getDeliveryDiscount());
+            freeDelivery = freeDelivery || o.isFreeDelivery();
             total = total.add(o.getTotalAmount());
             pending = pending || o.isDeliveryFeePending();
             if (discountCode == null && o.getDiscountCode() != null) discountCode = o.getDiscountCode();
@@ -325,7 +338,7 @@ public class GuestCheckoutController {
                 primary.getPaymentMethod(), primary.getContactName(), primary.getOrderType().name(),
                 primary.getDeliveryAddress(), primary.getNotes(),
                 primary.getStatus().name(), primary.getPaymentStatus().name(),
-                subtotal, deliveryFee, pending, discount, deliveryDiscount, discountCode, total,
+                subtotal, deliveryFee, pending, discount, deliveryDiscount, freeDelivery, discountCode, total,
                 primary.getCreatedAt(), allItems, summaries);
     }
 

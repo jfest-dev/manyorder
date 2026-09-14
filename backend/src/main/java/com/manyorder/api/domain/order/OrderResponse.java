@@ -31,6 +31,9 @@ public class OrderResponse {
     private boolean deliveryFeePending;
     private BigDecimal discountAmount;
     private BigDecimal deliveryDiscount;
+    /** True when the delivery discount was a FREE_DELIVERY voucher; drives the
+     *  "Free delivery" vs "Delivery discount" label. */
+    private boolean freeDelivery;
     private String discountCode;
     private String orderGroupId;
     private BigDecimal totalAmount;
@@ -60,6 +63,7 @@ public class OrderResponse {
             boolean deliveryFeePending,
             BigDecimal discountAmount,
             BigDecimal deliveryDiscount,
+            boolean freeDelivery,
             String discountCode,
             String orderGroupId,
             BigDecimal totalAmount,
@@ -87,6 +91,7 @@ public class OrderResponse {
         this.deliveryFeePending = deliveryFeePending;
         this.discountAmount = discountAmount;
         this.deliveryDiscount = deliveryDiscount;
+        this.freeDelivery = freeDelivery;
         this.discountCode = discountCode;
         this.orderGroupId = orderGroupId;
         this.totalAmount = totalAmount;
@@ -116,6 +121,7 @@ public class OrderResponse {
     public boolean isDeliveryFeePending() { return deliveryFeePending; }
     public BigDecimal getDiscountAmount() { return discountAmount; }
     public BigDecimal getDeliveryDiscount() { return deliveryDiscount; }
+    public boolean isFreeDelivery() { return freeDelivery; }
     public String getDiscountCode() { return discountCode; }
     public String getOrderGroupId() { return orderGroupId; }
     public BigDecimal getTotalAmount() { return totalAmount; }

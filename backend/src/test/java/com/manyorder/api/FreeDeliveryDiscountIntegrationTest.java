@@ -120,6 +120,8 @@ class FreeDeliveryDiscountIntegrationTest extends IntegrationTestBase {
         assertEquals(0.0, resp.get("discountAmount").asDouble(), 0.001);    // no product discount
         assertEquals("FREESHIP", resp.get("discountCode").asText());
         assertEquals(10.0, resp.get("totalAmount").asDouble(), 0.001);
+        // FREE_DELIVERY type -> labelled "Free delivery".
+        assertEquals(true, resp.get("freeDelivery").asBoolean());
     }
 
     @Test
@@ -259,5 +261,117 @@ class FreeDeliveryDiscountIntegrationTest extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("code", "X", "type", "PERCENTAGE"))))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ---------- partial delivery discounts (PERCENTAGE/FIXED + appliesToDelivery) ----------
+
+    @Test
+    void partial_percentageOffDeliveryFee() throws Exception {
+        String token = registerAndGetToken("pd-pct@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PD Pct", "pd-pct-store");
+        long p = createProduct(token, storeId, "Item", 10.00);
+        patchStore(token, storeId, Map.of("deliveryFee", 5.00));
+        createDiscount(token, storeId, Map.of("code", "DEL20", "type", "PERCENTAGE", "value", 20, "appliesToDelivery", true));
+
+        // 20% off the $5 fee = $1 off -> net delivery $4, total 10 + 4 = 14. Not a
+        // product discount, so discountAmount stays 0.
+        JsonNode resp = json(checkout(storeId, List.of(new long[]{p, 1}), "DELIVERY", "DEL20", 201));
+        assertEquals(4.0, resp.get("deliveryFee").asDouble(), 0.001);
+        assertEquals(1.0, resp.get("deliveryDiscount").asDouble(), 0.001);
+        assertEquals(0.0, resp.get("discountAmount").asDouble(), 0.001);
+        assertEquals(14.0, resp.get("totalAmount").asDouble(), 0.001);
+        // Partial -> labelled "Delivery discount", never "Free delivery".
+        assertEquals(false, resp.get("freeDelivery").asBoolean());
+    }
+
+    @Test
+    void partial_fixedCapsAtFee_andStaysDeliveryDiscountEvenAtZeroNet() throws Exception {
+        String token = registerAndGetToken("pd-cap@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PD Cap", "pd-cap-store");
+        long p = createProduct(token, storeId, "Item", 10.00);
+        patchStore(token, storeId, Map.of("deliveryFee", 5.00));
+        createDiscount(token, storeId, Map.of("code", "DEL8", "type", "FIXED", "value", 8, "appliesToDelivery", true));
+
+        // $8 off a $5 fee caps at $5 -> net delivery 0, total = subtotal. Critically,
+        // the label stays "Delivery discount" (freeDelivery=false) even though the
+        // net fee coincidentally reached $0 - the label follows the configured type.
+        JsonNode resp = json(checkout(storeId, List.of(new long[]{p, 1}), "DELIVERY", "DEL8", 201));
+        assertEquals(0.0, resp.get("deliveryFee").asDouble(), 0.001);
+        assertEquals(5.0, resp.get("deliveryDiscount").asDouble(), 0.001);
+        assertEquals(10.0, resp.get("totalAmount").asDouble(), 0.001);
+        assertEquals(false, resp.get("freeDelivery").asBoolean());
+    }
+
+    @Test
+    void partial_rejectedOnPickup() throws Exception {
+        String token = registerAndGetToken("pd-pickup@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PD Pickup", "pd-pickup-store");
+        long p = createProduct(token, storeId, "Item", 10.00);
+        patchStore(token, storeId, Map.of("deliveryFee", 5.00));
+        createDiscount(token, storeId, Map.of("code", "DEL20", "type", "PERCENTAGE", "value", 20, "appliesToDelivery", true));
+
+        checkout(storeId, List.of(new long[]{p, 1}), "PICKUP", "DEL20", 400);
+    }
+
+    @Test
+    void partial_rejectedWhenFeePending() throws Exception {
+        String token = registerAndGetToken("pd-pending@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PD Pending", "pd-pending-store");
+        long p = createProduct(token, storeId, "Item", 10.00);
+        // No delivery fee configured -> to-be-confirmed. A partial can't compute
+        // against an unknown fee, so it rejects (unlike FREE_DELIVERY, which frees).
+        createDiscount(token, storeId, Map.of("code", "DEL20", "type", "PERCENTAGE", "value", 20, "appliesToDelivery", true));
+
+        checkout(storeId, List.of(new long[]{p, 1}), "DELIVERY", "DEL20", 400);
+    }
+
+    @Test
+    void partial_rejectedWhenFreeByThreshold() throws Exception {
+        String token = registerAndGetToken("pd-thresh@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PD Thresh", "pd-thresh-store");
+        long p = createProduct(token, storeId, "Item", 10.00);
+        patchDelivery(token, storeId, Map.of("deliveryFee", 5.00, "freeDeliveryThreshold", 20.00));
+        createDiscount(token, storeId, Map.of("code", "DEL20", "type", "PERCENTAGE", "value", 20, "appliesToDelivery", true));
+
+        // Cart 30 >= 20 threshold -> delivery already free -> nothing to discount -> reject.
+        checkout(storeId, List.of(new long[]{p, 3}), "DELIVERY", "DEL20", 400);
+    }
+
+    @Test
+    void split_partialDeliveryDiscount_onReadyBucketOnly() throws Exception {
+        String token = registerAndGetToken("pd-split@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PD Split", "pd-split-store");
+        long ready = createProduct(token, storeId, "Ready", 10.00);
+        long pre = createProduct(token, storeId, Map.of(
+                "name", "Pre", "price", 20.00, "preOrder", true, "preOrderReadyDate", "2099-01-01"));
+        patchStore(token, storeId, Map.of("deliveryFee", 5.00));
+        createDiscount(token, storeId, Map.of("code", "DEL20", "type", "PERCENTAGE", "value", 20, "appliesToDelivery", true));
+
+        // Mixed cart -> split. The fee ($5) and its partial discount ($1) sit on the
+        // ready bucket; the pre-order bucket carries neither.
+        JsonNode resp = json(checkout(storeId, List.of(new long[]{ready, 1}, new long[]{pre, 1}), "DELIVERY", "DEL20", 201));
+        assertEquals(4.0, resp.get("deliveryFee").asDouble(), 0.001);
+        assertEquals(1.0, resp.get("deliveryDiscount").asDouble(), 0.001);
+        assertEquals(34.0, resp.get("totalAmount").asDouble(), 0.001); // 10 + 20 + 4 net delivery
+
+        assertEquals(1.0, summaryOfKind(resp, "READY").get("deliveryDiscount").asDouble(), 0.001);
+        assertEquals(4.0, summaryOfKind(resp, "READY").get("deliveryFee").asDouble(), 0.001);
+        assertEquals(false, summaryOfKind(resp, "READY").get("freeDelivery").asBoolean());
+        assertEquals(0.0, summaryOfKind(resp, "PREORDER").get("deliveryDiscount").asDouble(), 0.001);
+        assertEquals(0.0, summaryOfKind(resp, "PREORDER").get("deliveryFee").asDouble(), 0.001);
+    }
+
+    @Test
+    void validate_partialDelivery_previewsAmount_notFreeDelivery() throws Exception {
+        String token = registerAndGetToken("pd-val@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PD Val", "pd-val-store");
+        long p = createProduct(token, storeId, "Item", 10.00);
+        patchStore(token, storeId, Map.of("deliveryFee", 5.00));
+        createDiscount(token, storeId, Map.of("code", "DEL20", "type", "PERCENTAGE", "value", 20, "appliesToDelivery", true));
+
+        JsonNode resp = json(validate(storeId, "DEL20", "DELIVERY", List.of(new long[]{p, 1}), 200));
+        assertEquals(false, resp.get("freeDelivery").asBoolean()); // partial, not free
+        assertEquals(1.0, resp.get("deliveryDiscount").asDouble(), 0.001);
+        assertEquals(0.0, resp.get("discountAmount").asDouble(), 0.001);
     }
 }

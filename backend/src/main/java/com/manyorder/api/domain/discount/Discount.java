@@ -91,6 +91,16 @@ public class Discount {
     private boolean canStackWithSale = false;
 
     /**
+     * When true, a PERCENTAGE/FIXED value is taken off the DELIVERY FEE instead of
+     * the product subtotal (a partial delivery discount, alongside the full
+     * FREE_DELIVERY type). Meaningless for FREE_DELIVERY (forced false). A new
+     * boolean column, so it avoids the enum CHECK-constraint migration a new
+     * DiscountType value would need. SQL default backfills existing rows false.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean appliesToDelivery = false;
+
+    /**
      * Whether customers may see this offer on the storefront and apply it with
      * one tap (no code typing). Default false (safe): the code stays private and
      * exclusive, redeemable only by someone who already knows and types it, the
@@ -164,6 +174,8 @@ public class Discount {
     public void setFirstOrderOnly(boolean firstOrderOnly) { this.firstOrderOnly = firstOrderOnly; }
     public boolean isCanStackWithSale() { return canStackWithSale; }
     public void setCanStackWithSale(boolean canStackWithSale) { this.canStackWithSale = canStackWithSale; }
+    public boolean isAppliesToDelivery() { return appliesToDelivery; }
+    public void setAppliesToDelivery(boolean appliesToDelivery) { this.appliesToDelivery = appliesToDelivery; }
     public boolean isPublic() { return isPublic; }
     public void setPublic(boolean isPublic) { this.isPublic = isPublic; }
     public Set<Long> getProductIds() { return productIds; }

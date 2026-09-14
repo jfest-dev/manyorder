@@ -60,9 +60,11 @@ public class DiscountService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A discount with that code already exists.");
         }
         validateShape(request.getType(), request.getValue(), request.getStartsAt(), request.getEndsAt());
-        // A free-delivery voucher has no percentage/amount value and no product
-        // scope (it waives delivery, not products) - normalise both away.
+        // A FREE_DELIVERY voucher has no value; any delivery discount (full or a
+        // partial % / fixed off the fee) has no product scope - normalise those away.
         boolean freeDelivery = request.getType() == DiscountType.FREE_DELIVERY;
+        boolean appliesToDelivery = !freeDelivery && Boolean.TRUE.equals(request.getAppliesToDelivery());
+        boolean deliveryScoped = freeDelivery || appliesToDelivery;
         BigDecimal value = freeDelivery ? BigDecimal.ZERO : request.getValue();
 
         Discount discount = new Discount(
@@ -70,11 +72,12 @@ public class DiscountService {
                 request.getUsageLimit(), request.getStartsAt(), request.getEndsAt(),
                 request.getActive() == null || request.getActive());
         discount.setName(request.getName());
-        discount.setProductIds(freeDelivery ? new HashSet<>() : validateProductScope(merchant, request.getProductIds()));
+        discount.setProductIds(deliveryScoped ? new HashSet<>() : validateProductScope(merchant, request.getProductIds()));
         discount.setMinSpend(request.getMinSpend());
         discount.setFirstOrderOnly(request.getFirstOrderOnly() != null && request.getFirstOrderOnly());
         discount.setCanStackWithSale(request.getCanStackWithSale() != null && request.getCanStackWithSale());
         discount.setPublic(request.getIsPublic() != null && request.getIsPublic());
+        discount.setAppliesToDelivery(appliesToDelivery);
         // New discounts append at the end of the merchant's order.
         int nextOrder = discountRepository.findByMerchantOrderByDisplayOrderAscCreatedAtDesc(merchant)
                 .stream().mapToInt(Discount::getDisplayOrder).max().orElse(-1) + 1;
@@ -112,10 +115,15 @@ public class DiscountService {
         if (request.getFirstOrderOnly() != null) discount.setFirstOrderOnly(request.getFirstOrderOnly());
         if (request.getCanStackWithSale() != null) discount.setCanStackWithSale(request.getCanStackWithSale());
         if (request.getIsPublic() != null) discount.setPublic(request.getIsPublic());
-        // A free-delivery code carries no value or product scope, whichever way it
-        // was set - normalise so a type flip to FREE_DELIVERY can't leave stale data.
+        if (request.getAppliesToDelivery() != null) discount.setAppliesToDelivery(request.getAppliesToDelivery());
+        // Normalise delivery-discount data, whichever way things were set (incl. a
+        // type flip): FREE_DELIVERY carries no value and is never appliesToDelivery;
+        // any delivery discount (full or partial) carries no product scope.
         if (discount.getType() == DiscountType.FREE_DELIVERY) {
             discount.setValue(BigDecimal.ZERO);
+            discount.setAppliesToDelivery(false);
+        }
+        if (discount.getType() == DiscountType.FREE_DELIVERY || discount.isAppliesToDelivery()) {
             discount.setProductIds(new HashSet<>());
         }
 
@@ -258,8 +266,13 @@ public class DiscountService {
             }
         }
 
+        // Delivery discounts (full FREE_DELIVERY, or a partial % / fixed off the
+        // fee) discount the delivery fee, not products.
         if (discount.getType() == DiscountType.FREE_DELIVERY) {
-            return resolveFreeDelivery(discount, delivery);
+            return resolveDeliveryDiscount(discount, delivery, true);
+        }
+        if (discount.isAppliesToDelivery()) {
+            return resolveDeliveryDiscount(discount, delivery, false);
         }
 
         // In-scope subtotal (store-wide = all lines; product-specific = matching
@@ -282,25 +295,42 @@ public class DiscountService {
         }
         BigDecimal amount = computeAmount(discount, discountable);
         return new Redemption(discount.getCode(), amount, discount.isStoreWide(),
-                Set.copyOf(discount.getProductIds()), false, BigDecimal.ZERO, discount.isCanStackWithSale());
+                Set.copyOf(discount.getProductIds()), false, BigDecimal.ZERO, discount.isCanStackWithSale(), false);
     }
 
     /**
-     * Resolve a FREE_DELIVERY code against the order's delivery situation. Rejects
-     * a pickup order (nothing to waive) and an order whose delivery is already
-     * free. A to-be-confirmed fee is forced to free (nothing quantifiable to
-     * waive yet). Otherwise the applicable fee is the waived amount.
+     * Resolve a delivery discount against the order's delivery situation. Rejects
+     * a pickup order (nothing to discount) and an order whose delivery is already
+     * free (via the store threshold).
+     *
+     * <p>{@code full} = a FREE_DELIVERY code: it waives the whole fee, and a
+     * to-be-confirmed fee is forced to free (nothing quantifiable, but delivery is
+     * guaranteed free). A partial code (PERCENTAGE/FIXED off the fee) instead
+     * rejects a to-be-confirmed fee, since there is no confirmed number to compute
+     * against, and takes its value off the fee (capped at the fee).
      */
-    private Redemption resolveFreeDelivery(Discount discount, DeliveryContext delivery) {
+    private Redemption resolveDeliveryDiscount(Discount discount, DeliveryContext delivery, boolean full) {
         if (delivery == null || !delivery.delivery()) {
             throw reject("This code applies to delivery orders only.");
         }
-        if (!delivery.pending() && delivery.fee().signum() == 0) {
+        if (full) {
+            if (!delivery.pending() && delivery.fee().signum() == 0) {
+                throw reject("Delivery is already free on this order.");
+            }
+            BigDecimal waived = delivery.pending() ? BigDecimal.ZERO : delivery.fee();
+            return new Redemption(discount.getCode(), BigDecimal.ZERO, true, Set.of(), true, waived,
+                    discount.isCanStackWithSale(), false);
+        }
+        // Partial: needs a confirmed fee to compute a percentage/fixed amount.
+        if (delivery.pending()) {
+            throw reject("The delivery fee is still to be confirmed, so this code can't be applied.");
+        }
+        if (delivery.fee().signum() == 0) {
             throw reject("Delivery is already free on this order.");
         }
-        BigDecimal waived = delivery.pending() ? BigDecimal.ZERO : delivery.fee();
-        return new Redemption(discount.getCode(), BigDecimal.ZERO, true, Set.of(), true, waived,
-                discount.isCanStackWithSale());
+        BigDecimal amount = computeAmount(discount, delivery.fee()); // % or fixed off the fee, capped at the fee
+        return new Redemption(discount.getCode(), BigDecimal.ZERO, true, Set.of(), false, amount,
+                discount.isCanStackWithSale(), true);
     }
 
     /** Format the discount's minimum spend in the store's currency, for the
@@ -315,10 +345,15 @@ public class DiscountService {
      * Result of a redemption/preview: the canonical code, the product money off,
      * the scope (store-wide, or the specific product ids) so the caller can
      * allocate the amount across a split order by matching share, and - for a
-     * free-delivery code - a flag plus the delivery fee it waives.
+     * delivery code - the fee it discounts plus which kind it is. {@code freeDelivery}
+     * marks a FREE_DELIVERY code (full waiver, labelled "Free delivery");
+     * {@code partialDelivery} marks a percentage/fixed code off the fee (labelled
+     * "Delivery discount"). The two are mutually exclusive; the label is chosen by
+     * the configured type, never by whether the net fee happens to reach $0.
      */
     public record Redemption(String code, BigDecimal amount, boolean storeWide, Set<Long> productIds,
-                             boolean freeDelivery, BigDecimal deliveryDiscount, boolean canStackWithSale) {}
+                             boolean freeDelivery, BigDecimal deliveryDiscount, boolean canStackWithSale,
+                             boolean partialDelivery) {}
 
     // ---------- helpers ----------
 

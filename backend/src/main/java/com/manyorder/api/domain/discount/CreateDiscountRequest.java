@@ -49,6 +49,9 @@ public class CreateDiscountRequest {
     /** When true, shown on the storefront for one-tap apply. Defaults to false (code-only). */
     private Boolean isPublic;
 
+    /** When true (PERCENTAGE/FIXED only), the value is taken off the delivery fee. Defaults to false. */
+    private Boolean appliesToDelivery;
+
     /** Products this discount is limited to. Null/empty = store-wide. */
     private List<Long> productIds;
 
@@ -78,6 +81,8 @@ public class CreateDiscountRequest {
     public void setCanStackWithSale(Boolean canStackWithSale) { this.canStackWithSale = canStackWithSale; }
     public Boolean getIsPublic() { return isPublic; }
     public void setIsPublic(Boolean isPublic) { this.isPublic = isPublic; }
+    public Boolean getAppliesToDelivery() { return appliesToDelivery; }
+    public void setAppliesToDelivery(Boolean appliesToDelivery) { this.appliesToDelivery = appliesToDelivery; }
     public List<Long> getProductIds() { return productIds; }
     public void setProductIds(List<Long> productIds) { this.productIds = productIds; }
 }
