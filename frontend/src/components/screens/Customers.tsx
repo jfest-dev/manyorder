@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Download, Plus, X, Filter, Trash2 } from 'lucide-react';
+import { Search, Download, Plus, X, Filter, Trash2, Pencil } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
@@ -64,6 +64,12 @@ export function Customers({ storeId, currency }: CustomersProps) {
   const [newCustomer, setNewCustomer] = useState({ fullName: '', phoneNumber: '', email: '' });
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+
+  // Editing an existing customer (null = closed). Same fields as Add, pre-filled.
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ fullName: '', phoneNumber: '', email: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const load = () => {
     let cancelled = false;
@@ -134,6 +140,34 @@ export function Customers({ storeId, currency }: CustomersProps) {
       setAddError(e instanceof ApiError ? e.message : 'Could not add customer');
     } finally {
       setAdding(false);
+    }
+  };
+
+  const openEdit = (c: CustomerResponse) => {
+    setEditError(null);
+    setEditingId(c.id);
+    setEditForm({ fullName: c.fullName, phoneNumber: c.phoneNumber ?? '', email: c.email ?? '' });
+  };
+
+  const handleUpdateCustomer = async () => {
+    if (editingId == null) return;
+    setEditError(null);
+    if (!editForm.fullName.trim()) { setEditError('Name is required.'); return; }
+    if (!editForm.phoneNumber.trim()) { setEditError('Phone number is required.'); return; }
+    setSavingEdit(true);
+    try {
+      const updated = await customersApi.update(storeId, editingId, {
+        fullName: editForm.fullName.trim(),
+        phoneNumber: editForm.phoneNumber.trim(),
+        email: editForm.email.trim() || undefined,
+      });
+      setCustomers((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+      setEditingId(null);
+      showNotice('Customer updated.');
+    } catch (e) {
+      setEditError(e instanceof ApiError ? e.message : 'Could not update customer');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -262,6 +296,10 @@ export function Customers({ storeId, currency }: CustomersProps) {
                               <WhatsAppIcon size={16} color="#6B7280" /> Message
                             </a>
                           )}
+                          <button onClick={() => openEdit(c)} aria-label={`Edit ${c.fullName}`} title="Edit customer"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
+                            <Pencil size={16} />
+                          </button>
                           <button onClick={() => handleDelete(c)} aria-label={`Delete ${c.fullName}`} title="Delete customer"
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
                             <Trash2 size={16} />
@@ -294,6 +332,10 @@ export function Customers({ storeId, currency }: CustomersProps) {
                           <WhatsAppIcon size={16} color="#6B7280" /> Message
                         </a>
                       )}
+                      <button onClick={() => openEdit(c)} aria-label={`Edit ${c.fullName}`} title="Edit customer"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
+                        <Pencil size={16} />
+                      </button>
                       <button onClick={() => handleDelete(c)} aria-label={`Delete ${c.fullName}`} title="Delete customer"
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
                         <Trash2 size={16} />
@@ -336,6 +378,34 @@ export function Customers({ storeId, currency }: CustomersProps) {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
               <Button variant="ghost" onClick={() => setShowAddForm(false)} disabled={adding}>Cancel</Button>
               <Button variant="primary" onClick={handleAddCustomer} disabled={adding}>{adding ? 'Adding…' : 'Add Customer'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Customer modal */}
+      {editingId != null && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !savingEdit && setEditingId(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-medium)', border: '1px solid var(--border-strong)', boxShadow: 'var(--shadow-overlay)', width: '100%', maxWidth: '420px', padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 600, margin: 0 }}>Edit Customer</h3>
+              <button onClick={() => !savingEdit && setEditingId(null)} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={18} /></button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <FieldInput label="Name" value={editForm.fullName} onChange={(v) => setEditForm((s) => ({ ...s, fullName: v }))} maxLength={255} required />
+              <FieldInput label="Phone" placeholder="+65 8123 4567" value={editForm.phoneNumber} onChange={(v) => setEditForm((s) => ({ ...s, phoneNumber: v }))} maxLength={255} helperText="Used to reach the customer on WhatsApp, and to avoid duplicates." required />
+              <FieldInput label="Email" type="email" value={editForm.email} onChange={(v) => setEditForm((s) => ({ ...s, email: v }))} maxLength={255} helperText="Optional." />
+              <p className="text-xs" style={{ color: 'var(--text-muted)', margin: 0 }}>Changes apply going forward. Past orders keep the name and contact recorded at the time.</p>
+              {editError && <p className="text-small" style={{ color: 'var(--error-color)', margin: 0 }}>{editError}</p>}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+              <Button variant="ghost" onClick={() => setEditingId(null)} disabled={savingEdit}>Cancel</Button>
+              <Button variant="primary" onClick={handleUpdateCustomer} disabled={savingEdit}>{savingEdit ? 'Saving…' : 'Save Changes'}</Button>
             </div>
           </div>
         </div>

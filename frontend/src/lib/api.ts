@@ -615,6 +615,10 @@ export const customersApi = {
   create: (storeId: number, payload: { fullName: string; phoneNumber: string; email?: string }) =>
     request<CustomerResponse>(`/merchant/stores/${storeId}/customers`, { method: 'POST', body: payload }),
 
+  /** Edit a customer (full-record replace). 409 if the phone/email now matches another customer. */
+  update: (storeId: number, customerId: number, payload: { fullName: string; phoneNumber: string; email?: string }) =>
+    request<CustomerResponse>(`/merchant/stores/${storeId}/customers/${customerId}`, { method: 'PUT', body: payload }),
+
   /** Permanently delete a customer (data erasure). Past orders survive detached. */
   delete: (storeId: number, customerId: number) =>
     request<void>(`/merchant/stores/${storeId}/customers/${customerId}`, { method: 'DELETE' }),
