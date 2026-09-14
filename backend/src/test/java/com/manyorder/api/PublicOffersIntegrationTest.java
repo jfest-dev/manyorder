@@ -49,6 +49,11 @@ class PublicOffersIntegrationTest extends IntegrationTestBase {
         return false;
     }
 
+    private JsonNode byCode(JsonNode arr, String code) {
+        for (JsonNode n : arr) if (code.equalsIgnoreCase(n.get("code").asText())) return n;
+        throw new AssertionError("offer not found: " + code);
+    }
+
     @Test
     void offers_returnOnlyPublicAndLive() throws Exception {
         String token = registerAndGetToken("offers-list@test.com", "MERCHANT", null);
@@ -65,6 +70,29 @@ class PublicOffersIntegrationTest extends IntegrationTestBase {
         assertFalse(hasCode(arr, "SECRET5"), "a private code is never exposed");
         assertFalse(hasCode(arr, "PUBOFF"), "an inactive public offer is excluded");
         assertFalse(hasCode(arr, "PUBEXP"), "an expired public offer is excluded");
+    }
+
+    @Test
+    void offers_carryScopeLabelAndEndsAt() throws Exception {
+        String token = registerAndGetToken("offers-rich@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Rich", "offers-rich-store");
+        long pid = createProduct(token, storeId, "Latte", 6.00);
+
+        // Store-wide offer with an end date.
+        createDiscount(token, storeId, Map.of("code", "STOREWIDE", "type", "PERCENTAGE", "value", 10,
+                "isPublic", true, "endsAt", "2030-09-30T23:59:59"));
+        // Offer scoped to a single product.
+        createDiscount(token, storeId, Map.of("code", "LATTEONLY", "type", "FIXED", "value", 2,
+                "isPublic", true, "productIds", List.of(pid)));
+
+        JsonNode arr = offers(storeId);
+        JsonNode storeWide = byCode(arr, "STOREWIDE");
+        JsonNode latteOnly = byCode(arr, "LATTEONLY");
+
+        assertEquals("All products", storeWide.get("scopeLabel").asText());
+        assertTrue(storeWide.get("endsAt").asText().startsWith("2030-09-30"), "end date is exposed");
+        assertEquals("Latte", latteOnly.get("scopeLabel").asText(), "single-product scope names the product");
+        assertTrue(latteOnly.get("endsAt").isNull(), "no end date -> null");
     }
 
     @Test

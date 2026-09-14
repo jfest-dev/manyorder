@@ -160,8 +160,26 @@ public class DiscountService {
         LocalDateTime now = LocalDateTime.now();
         return discountRepository.findPublicByMerchant(merchant).stream()
                 .filter(d -> isLive(d, now))
-                .map(PublicOfferResponse::new)
+                .map(d -> new PublicOfferResponse(d, scopeLabelFor(merchant, d)))
                 .toList();
+    }
+
+    /**
+     * Human "applies to" label for an offer: "All products" store-wide; otherwise
+     * the single product's name, or the shared category when every scoped product
+     * belongs to one, or "N products". Stale ids (deleted products) are ignored.
+     */
+    private String scopeLabelFor(Merchant merchant, Discount d) {
+        if (d.isStoreWide()) return "All products";
+        List<Product> scoped = productRepository.findByMerchantAndIdIn(merchant, d.getProductIds());
+        if (scoped.isEmpty()) return "Selected products";
+        if (scoped.size() == 1) return scoped.get(0).getName();
+        Set<String> categories = new HashSet<>();
+        for (Product p : scoped) categories.add(p.getCategory() != null ? p.getCategory().getName() : null);
+        if (categories.size() == 1 && categories.iterator().next() != null) {
+            return categories.iterator().next();
+        }
+        return scoped.size() + " products";
     }
 
     /**
