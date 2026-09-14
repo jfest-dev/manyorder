@@ -1,0 +1,130 @@
+package com.manyorder.api;
+
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
+
+import com.fasterxml.jackson.databind.JsonNode;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * Public "Available offers": only public AND currently-live discounts are ever
+ * exposed; private (code-only) codes never appear, and a public offer still
+ * enforces its own eligibility rules when applied (public != a bypass).
+ */
+class PublicOffersIntegrationTest extends IntegrationTestBase {
+
+    private long createProduct(String token, long storeId, String name, double price) throws Exception {
+        MvcResult r = mockMvc.perform(post("/merchant/stores/" + storeId + "/products")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("name", name, "price", price))))
+                .andExpect(status().isCreated()).andReturn();
+        return json(r).get("id").asLong();
+    }
+
+    private void createDiscount(String token, long storeId, Map<String, Object> body) throws Exception {
+        mockMvc.perform(post("/merchant/stores/" + storeId + "/discounts")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isCreated());
+    }
+
+    private JsonNode offers(long storeId) throws Exception {
+        return json(mockMvc.perform(get("/public/storefront/" + storeId + "/offers"))
+                .andExpect(status().isOk()).andReturn());
+    }
+
+    private boolean hasCode(JsonNode arr, String code) {
+        for (JsonNode n : arr) if (code.equalsIgnoreCase(n.get("code").asText())) return true;
+        return false;
+    }
+
+    @Test
+    void offers_returnOnlyPublicAndLive() throws Exception {
+        String token = registerAndGetToken("offers-list@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Offers", "offers-list-store");
+
+        createDiscount(token, storeId, Map.of("code", "PUBLIC10", "type", "PERCENTAGE", "value", 10, "isPublic", true));
+        createDiscount(token, storeId, Map.of("code", "SECRET5", "type", "FIXED", "value", 5)); // private (default)
+        createDiscount(token, storeId, Map.of("code", "PUBOFF", "type", "FIXED", "value", 5, "isPublic", true, "active", false)); // inactive
+        createDiscount(token, storeId, Map.of("code", "PUBEXP", "type", "FIXED", "value", 5, "isPublic", true, "endsAt", "2020-01-01T00:00:00")); // expired
+
+        JsonNode arr = offers(storeId);
+        assertEquals(1, arr.size(), "only the public, active, in-window offer is listed");
+        assertTrue(hasCode(arr, "PUBLIC10"));
+        assertFalse(hasCode(arr, "SECRET5"), "a private code is never exposed");
+        assertFalse(hasCode(arr, "PUBOFF"), "an inactive public offer is excluded");
+        assertFalse(hasCode(arr, "PUBEXP"), "an expired public offer is excluded");
+    }
+
+    @Test
+    void createAndUpdate_roundTripIsPublic_defaultFalse() throws Exception {
+        String token = registerAndGetToken("offers-flag@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Flag", "offers-flag-store");
+
+        createDiscount(token, storeId, Map.of("code", "DEF", "type", "FIXED", "value", 5)); // no isPublic -> false
+        createDiscount(token, storeId, Map.of("code", "PUB", "type", "FIXED", "value", 5, "isPublic", true));
+
+        JsonNode list = json(getWithToken("/merchant/stores/" + storeId + "/discounts", token, 200));
+        long defId = -1;
+        for (JsonNode d : list) {
+            if ("DEF".equals(d.get("code").asText())) { assertFalse(d.get("isPublic").asBoolean(), "default is private"); defId = d.get("id").asLong(); }
+            if ("PUB".equals(d.get("code").asText())) assertTrue(d.get("isPublic").asBoolean());
+        }
+        assertFalse(hasCode(offers(storeId), "DEF"), "private offer not listed publicly");
+
+        // Flip DEF to public via update -> it now appears in the offers list.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/discounts/" + defId)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("isPublic", true))))
+                .andExpect(status().isOk());
+        assertTrue(hasCode(offers(storeId), "DEF"), "now public and live, appears in offers");
+    }
+
+    @Test
+    void offers_excludeExhausted() throws Exception {
+        String token = registerAndGetToken("offers-exh@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Exh", "offers-exh-store");
+        long productId = createProduct(token, storeId, "Item", 20.00);
+        createDiscount(token, storeId, Map.of("code", "ONCE", "type", "FIXED", "value", 5, "isPublic", true, "usageLimit", 1));
+
+        assertTrue(hasCode(offers(storeId), "ONCE"), "listed before it is used");
+
+        // Redeem once via checkout to reach the usage limit.
+        mockMvc.perform(post("/public/checkout").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "merchantId", storeId, "customerName", "G", "customerPhone", "+6588881111",
+                                "fulfilmentMethod", "PICKUP", "discountCode", "ONCE",
+                                "items", List.of(Map.of("productId", productId, "quantity", 1))))))
+                .andExpect(status().isCreated());
+
+        assertFalse(hasCode(offers(storeId), "ONCE"), "excluded once its usage limit is reached");
+    }
+
+    @Test
+    void publicOffer_stillEnforcesEligibility_minSpend() throws Exception {
+        String token = registerAndGetToken("offers-min@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Min", "offers-min-store");
+        long productId = createProduct(token, storeId, "Cheap", 5.00);
+        createDiscount(token, storeId, Map.of("code", "BIG", "type", "FIXED", "value", 3, "isPublic", true, "minSpend", 50));
+
+        // It IS a public offer the customer can see...
+        assertTrue(hasCode(offers(storeId), "BIG"));
+        // ...but applying it below the minimum is still rejected (public is not a bypass).
+        mockMvc.perform(post("/public/discounts/validate").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "merchantId", storeId, "code", "BIG", "fulfilmentMethod", "PICKUP",
+                                "items", List.of(Map.of("productId", productId, "quantity", 1))))))
+                .andExpect(status().is4xxClientError());
+    }
+}

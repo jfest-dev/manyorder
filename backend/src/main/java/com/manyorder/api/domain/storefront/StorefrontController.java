@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.manyorder.api.domain.discount.DiscountService;
+import com.manyorder.api.domain.discount.PublicOfferResponse;
 import com.manyorder.api.domain.merchant.Merchant;
 import com.manyorder.api.domain.merchant.MerchantRepository;
 import com.manyorder.api.domain.order.OrderItemRepository;
@@ -28,13 +30,16 @@ public class StorefrontController {
     private final ProductService productService;
     private final MerchantRepository merchantRepository;
     private final OrderItemRepository orderItemRepository;
+    private final DiscountService discountService;
 
     public StorefrontController(ProductService productService,
                                 MerchantRepository merchantRepository,
-                                OrderItemRepository orderItemRepository) {
+                                OrderItemRepository orderItemRepository,
+                                DiscountService discountService) {
         this.productService = productService;
         this.merchantRepository = merchantRepository;
         this.orderItemRepository = orderItemRepository;
+        this.discountService = discountService;
     }
 
     /** Public store lookup by slug — powers the storefront and Sign In to Store branding. */
@@ -52,5 +57,15 @@ public class StorefrontController {
     @GetMapping("/storefront/{merchantId}/products")
     public List<ProductResponse> getActiveProducts(@PathVariable Long merchantId) {
         return productService.getActiveProductsByMerchantId(merchantId);
+    }
+
+    /** Public, one-tap-applicable offers for a store. Only discounts the merchant
+     *  marked public and that are currently live; private codes never appear. */
+    @GetMapping("/storefront/{merchantId}/offers")
+    public List<PublicOfferResponse> getPublicOffers(@PathVariable Long merchantId) {
+        Merchant merchant = merchantRepository.findById(merchantId)
+                .filter(m -> !m.isArchived())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+        return discountService.listPublicOffers(merchant);
     }
 }

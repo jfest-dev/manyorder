@@ -91,6 +91,15 @@ public class Discount {
     private boolean canStackWithSale = false;
 
     /**
+     * Whether customers may see this offer on the storefront and apply it with
+     * one tap (no code typing). Default false (safe): the code stays private and
+     * exclusive, redeemable only by someone who already knows and types it, the
+     * original behaviour. SQL default backfills existing rows as false.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean isPublic = false;
+
+    /**
      * Product ids this discount is limited to. Empty = store-wide (applies to
      * the whole order, the original behaviour). Stored as plain ids rather than
      * a Product association so deleting a product never breaks a discount or its
@@ -146,6 +155,8 @@ public class Discount {
     public void setFirstOrderOnly(boolean firstOrderOnly) { this.firstOrderOnly = firstOrderOnly; }
     public boolean isCanStackWithSale() { return canStackWithSale; }
     public void setCanStackWithSale(boolean canStackWithSale) { this.canStackWithSale = canStackWithSale; }
+    public boolean isPublic() { return isPublic; }
+    public void setPublic(boolean isPublic) { this.isPublic = isPublic; }
     public Set<Long> getProductIds() { return productIds; }
     public void setProductIds(Set<Long> productIds) {
         this.productIds = productIds == null ? new HashSet<>() : new HashSet<>(productIds);

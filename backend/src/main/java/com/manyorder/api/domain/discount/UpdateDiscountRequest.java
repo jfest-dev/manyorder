@@ -29,6 +29,7 @@ public class UpdateDiscountRequest {
     private Boolean active;
     private Boolean firstOrderOnly;
     private Boolean canStackWithSale;
+    private Boolean isPublic;
 
     /** Null = leave the product scope unchanged; empty list = clear to store-wide;
      *  non-empty = replace with these products. */
@@ -58,6 +59,8 @@ public class UpdateDiscountRequest {
     public void setFirstOrderOnly(Boolean firstOrderOnly) { this.firstOrderOnly = firstOrderOnly; }
     public Boolean getCanStackWithSale() { return canStackWithSale; }
     public void setCanStackWithSale(Boolean canStackWithSale) { this.canStackWithSale = canStackWithSale; }
+    public Boolean getIsPublic() { return isPublic; }
+    public void setIsPublic(Boolean isPublic) { this.isPublic = isPublic; }
     public List<Long> getProductIds() { return productIds; }
     public void setProductIds(List<Long> productIds) { this.productIds = productIds; }
 }

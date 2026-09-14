@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class DiscountResponse {
 
     private final Long id;
@@ -19,6 +21,7 @@ public class DiscountResponse {
     private final boolean active;
     private final boolean firstOrderOnly;
     private final boolean canStackWithSale;
+    private final boolean isPublic;
     /** Products the discount is limited to; empty = store-wide. Sorted for stable output. */
     private final List<Long> productIds;
     private final LocalDateTime createdAt;
@@ -37,6 +40,7 @@ public class DiscountResponse {
         this.active = d.isActive();
         this.firstOrderOnly = d.isFirstOrderOnly();
         this.canStackWithSale = d.isCanStackWithSale();
+        this.isPublic = d.isPublic();
         this.productIds = d.getProductIds().stream().sorted().toList();
         this.createdAt = d.getCreatedAt();
     }
@@ -54,6 +58,10 @@ public class DiscountResponse {
     public boolean isActive() { return active; }
     public boolean isFirstOrderOnly() { return firstOrderOnly; }
     public boolean isCanStackWithSale() { return canStackWithSale; }
+    // Pin the JSON name: a boolean getter isPublic() would otherwise serialize as
+    // "public", but the request side and clients use "isPublic".
+    @JsonProperty("isPublic")
+    public boolean isPublic() { return isPublic; }
     public List<Long> getProductIds() { return productIds; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

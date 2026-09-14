@@ -46,6 +46,9 @@ public class CreateDiscountRequest {
     /** When true, may combine with an active product sale price. Defaults to false. */
     private Boolean canStackWithSale;
 
+    /** When true, shown on the storefront for one-tap apply. Defaults to false (code-only). */
+    private Boolean isPublic;
+
     /** Products this discount is limited to. Null/empty = store-wide. */
     private List<Long> productIds;
 
@@ -73,6 +76,8 @@ public class CreateDiscountRequest {
     public void setFirstOrderOnly(Boolean firstOrderOnly) { this.firstOrderOnly = firstOrderOnly; }
     public Boolean getCanStackWithSale() { return canStackWithSale; }
     public void setCanStackWithSale(Boolean canStackWithSale) { this.canStackWithSale = canStackWithSale; }
+    public Boolean getIsPublic() { return isPublic; }
+    public void setIsPublic(Boolean isPublic) { this.isPublic = isPublic; }
     public List<Long> getProductIds() { return productIds; }
     public void setProductIds(List<Long> productIds) { this.productIds = productIds; }
 }

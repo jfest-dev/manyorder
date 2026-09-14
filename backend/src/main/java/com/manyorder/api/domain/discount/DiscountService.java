@@ -63,6 +63,7 @@ public class DiscountService {
         discount.setMinSpend(request.getMinSpend());
         discount.setFirstOrderOnly(request.getFirstOrderOnly() != null && request.getFirstOrderOnly());
         discount.setCanStackWithSale(request.getCanStackWithSale() != null && request.getCanStackWithSale());
+        discount.setPublic(request.getIsPublic() != null && request.getIsPublic());
         return new DiscountResponse(discountRepository.save(discount));
     }
 
@@ -95,6 +96,7 @@ public class DiscountService {
         }
         if (request.getFirstOrderOnly() != null) discount.setFirstOrderOnly(request.getFirstOrderOnly());
         if (request.getCanStackWithSale() != null) discount.setCanStackWithSale(request.getCanStackWithSale());
+        if (request.getIsPublic() != null) discount.setPublic(request.getIsPublic());
         // A free-delivery code carries no value or product scope, whichever way it
         // was set - normalise so a type flip to FREE_DELIVERY can't leave stale data.
         if (discount.getType() == DiscountType.FREE_DELIVERY) {
@@ -137,6 +139,29 @@ public class DiscountService {
             throw reject("That discount code has reached its usage limit.");
         }
         return discount;
+    }
+
+    /** Whether a discount is currently redeemable (active, within its window, not
+     *  usage-exhausted) - the non-throwing form of requireRedeemable's checks. */
+    private boolean isLive(Discount d, LocalDateTime now) {
+        if (!d.isActive()) return false;
+        if (d.getStartsAt() != null && now.isBefore(d.getStartsAt())) return false;
+        if (d.getEndsAt() != null && now.isAfter(d.getEndsAt())) return false;
+        if (d.getUsageLimit() != null && d.getUsedCount() >= d.getUsageLimit()) return false;
+        return true;
+    }
+
+    /** Public offers a customer may see and one-tap apply on the storefront:
+     *  flagged public AND currently live. Private (code-only) offers are never
+     *  included, so their existence and codes stay hidden. Eligibility rules
+     *  (min spend, first-order-only) still apply when the code is validated. */
+    @Transactional(readOnly = true)
+    public List<PublicOfferResponse> listPublicOffers(Merchant merchant) {
+        LocalDateTime now = LocalDateTime.now();
+        return discountRepository.findPublicByMerchant(merchant).stream()
+                .filter(d -> isLive(d, now))
+                .map(PublicOfferResponse::new)
+                .toList();
     }
 
     /**
