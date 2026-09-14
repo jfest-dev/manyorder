@@ -163,6 +163,25 @@ As a possible F&B-specific extension on top of that, ingredient and recipe
 tracking (cost by ingredient, stock drawn down per sale). Not scoped in
 detail, just captured for later thinking.
 
+Concrete UX direction when this is built:
+
+- Add an optional "Cost price" field per product, hidden by default behind an
+  expandable "+ Track cost price" link, the same opt-in pattern as Sale Price
+  (which only appears once the merchant chooses to set it). Keeps the product
+  form uncluttered for the common case where a merchant does not track cost.
+- Once both cost and selling price are filled in, show a live computed margin
+  line right there in the form, e.g. "Margin: $X (Y%)". Immediate feedback as
+  they type, not just a value stored and hidden away.
+- Do not add cost or margin as a default column in the Products list. Keep it
+  optional and tucked away, the same anti-clutter reasoning already applied to
+  the storefront sold count and the Bestseller badge (surface a number only
+  where it earns its place, never by default).
+- Future payoff, and the real reason this field matters: with a per-product
+  cost recorded, the Dashboard could eventually show real profit
+  (revenue minus COGS) rather than raw revenue, a far more meaningful number
+  for a small business. Not scoped now, but this is the groundwork for it, and
+  it connects to the existing Dashboard revenue tiles.
+
 ## Storefront promo display
 
 Discounts today are code-only: a customer must know and type a code at
