@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.manyorder.api.domain.discount.CreateDiscountRequest;
 import com.manyorder.api.domain.discount.DiscountResponse;
 import com.manyorder.api.domain.discount.DiscountService;
+import com.manyorder.api.domain.discount.ReorderDiscountsRequest;
 import com.manyorder.api.domain.discount.UpdateDiscountRequest;
 import com.manyorder.api.domain.user.User;
 import com.manyorder.api.security.CurrentUserService;
@@ -56,6 +57,17 @@ public class MerchantDiscountController {
         User user = currentUserService.require(authentication);
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
         return discountService.createDiscount(merchant, request);
+    }
+
+    /** Set the merchant's discount order (drag-to-reorder). Owner-only. The literal
+     *  /reorder path takes precedence over /{discountId}. */
+    @PatchMapping("/reorder")
+    public List<DiscountResponse> reorderDiscounts(@PathVariable Long storeId,
+                                                   @Valid @RequestBody ReorderDiscountsRequest request,
+                                                   Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+        return discountService.reorderDiscounts(merchant, request.getDiscountIds());
     }
 
     @PatchMapping("/{discountId}")

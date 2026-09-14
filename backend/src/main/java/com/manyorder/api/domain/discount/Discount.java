@@ -110,6 +110,12 @@ public class Discount {
     @Column(name = "product_id", nullable = false)
     private Set<Long> productIds = new HashSet<>();
 
+    /** Merchant-controlled sort position (drag-to-reorder). Lower = earlier, both
+     *  on the Marketing list and in the public storefront offers. SQL default
+     *  backfills existing rows as 0. */
+    @Column(nullable = false, columnDefinition = "integer default 0 not null")
+    private Integer displayOrder = 0;
+
     private LocalDateTime createdAt;
 
     protected Discount() {
@@ -128,6 +134,9 @@ public class Discount {
         this.active = active;
         this.createdAt = LocalDateTime.now();
     }
+
+    public Integer getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder != null ? displayOrder : 0; }
 
     public Long getId() { return id; }
     public Merchant getMerchant() { return merchant; }

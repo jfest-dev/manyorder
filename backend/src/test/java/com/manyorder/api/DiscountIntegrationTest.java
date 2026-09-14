@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -40,6 +42,14 @@ class DiscountIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isCreated())
                 .andReturn();
         return json(r).get("id").asLong();
+    }
+
+    /** The store's discount codes in list order (top-to-bottom). */
+    private java.util.List<String> discountCodes(String token, long storeId) throws Exception {
+        JsonNode arr = json(getWithToken("/merchant/stores/" + storeId + "/discounts", token, 200));
+        java.util.List<String> codes = new java.util.ArrayList<>();
+        for (JsonNode n : arr) codes.add(n.get("code").asText());
+        return codes;
     }
 
     private MvcResult checkout(long storeId, long productId, int qty, String discountCode, int expectedStatus) throws Exception {
@@ -108,6 +118,43 @@ class DiscountIntegrationTest extends IntegrationTestBase {
                         .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("value", 0))))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void reorderDiscounts_setsOrder_andNewOnesAppend() throws Exception {
+        String token = registerAndGetToken("disc-reorder@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Reorder", "disc-reorder-store");
+        long a = createDiscount(token, storeId, Map.of("code", "AAA", "type", "FIXED", "value", 5));
+        long b = createDiscount(token, storeId, Map.of("code", "BBB", "type", "FIXED", "value", 5));
+        long c = createDiscount(token, storeId, Map.of("code", "CCC", "type", "FIXED", "value", 5));
+
+        // Default order is creation order (each new discount appends at the end).
+        assertEquals(java.util.List.of("AAA", "BBB", "CCC"), discountCodes(token, storeId));
+
+        // Reorder to C, A, B.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/discounts/reorder")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("discountIds", java.util.List.of(c, a, b)))))
+                .andExpect(status().isOk());
+        assertEquals(java.util.List.of("CCC", "AAA", "BBB"), discountCodes(token, storeId));
+
+        // A brand-new discount appends at the very end of the current order.
+        createDiscount(token, storeId, Map.of("code", "DDD", "type", "FIXED", "value", 5));
+        assertEquals(java.util.List.of("CCC", "AAA", "BBB", "DDD"), discountCodes(token, storeId));
+    }
+
+    @Test
+    void reorderDiscounts_asStaff_isForbidden() throws Exception {
+        String owner = registerAndGetToken("disc-reorder-owner@test.com", "MERCHANT", null);
+        long storeId = createStore(owner, "ReorderStaff", "disc-reorder-staff-store");
+        long a = createDiscount(owner, storeId, Map.of("code", "AAA", "type", "FIXED", "value", 5));
+        long b = createDiscount(owner, storeId, Map.of("code", "BBB", "type", "FIXED", "value", 5));
+
+        String staff = registerAndGetToken("disc-reorder-staff@test.com", "STAFF", "disc-reorder-staff-store");
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/discounts/reorder")
+                        .header("Authorization", "Bearer " + staff).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("discountIds", java.util.List.of(b, a)))))
+                .andExpect(status().isForbidden());
     }
 
     @Test

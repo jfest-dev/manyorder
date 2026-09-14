@@ -38,8 +38,19 @@ public class DiscountService {
 
     @Transactional(readOnly = true)
     public List<DiscountResponse> getDiscounts(Merchant merchant) {
-        return discountRepository.findByMerchantOrderByCreatedAtDesc(merchant)
+        return discountRepository.findByMerchantOrderByDisplayOrderAscCreatedAtDesc(merchant)
                 .stream().map(DiscountResponse::new).toList();
+    }
+
+    /** Apply a merchant-chosen order: the given ids become positions 0..n. Ids
+     *  must all belong to the store. Mirrors category/product reordering. */
+    @Transactional
+    public List<DiscountResponse> reorderDiscounts(Merchant merchant, List<Long> discountIds) {
+        int i = 0;
+        for (Long id : discountIds) {
+            requireOwned(merchant, id).setDisplayOrder(i++);
+        }
+        return getDiscounts(merchant);
     }
 
     @Transactional
@@ -64,6 +75,10 @@ public class DiscountService {
         discount.setFirstOrderOnly(request.getFirstOrderOnly() != null && request.getFirstOrderOnly());
         discount.setCanStackWithSale(request.getCanStackWithSale() != null && request.getCanStackWithSale());
         discount.setPublic(request.getIsPublic() != null && request.getIsPublic());
+        // New discounts append at the end of the merchant's order.
+        int nextOrder = discountRepository.findByMerchantOrderByDisplayOrderAscCreatedAtDesc(merchant)
+                .stream().mapToInt(Discount::getDisplayOrder).max().orElse(-1) + 1;
+        discount.setDisplayOrder(nextOrder);
         return new DiscountResponse(discountRepository.save(discount));
     }
 

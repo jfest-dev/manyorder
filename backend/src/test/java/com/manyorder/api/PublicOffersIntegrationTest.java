@@ -73,6 +73,34 @@ class PublicOffersIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void offers_reflectMerchantDisplayOrder() throws Exception {
+        String token = registerAndGetToken("offers-order@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Order", "offers-order-store");
+        long first = json(mockMvc.perform(post("/merchant/stores/" + storeId + "/discounts")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("code", "FIRST", "type", "PERCENTAGE", "value", 10, "isPublic", true))))
+                .andExpect(status().isCreated()).andReturn()).get("id").asLong();
+        long second = json(mockMvc.perform(post("/merchant/stores/" + storeId + "/discounts")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("code", "SECOND", "type", "PERCENTAGE", "value", 20, "isPublic", true))))
+                .andExpect(status().isCreated()).andReturn()).get("id").asLong();
+
+        // Default order matches creation order.
+        JsonNode arr = offers(storeId);
+        assertEquals("FIRST", arr.get(0).get("code").asText());
+        assertEquals("SECOND", arr.get(1).get("code").asText());
+
+        // Reorder on the merchant side flips the storefront offers order.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/discounts/reorder")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("discountIds", List.of(second, first)))))
+                .andExpect(status().isOk());
+        JsonNode reordered = offers(storeId);
+        assertEquals("SECOND", reordered.get(0).get("code").asText());
+        assertEquals("FIRST", reordered.get(1).get("code").asText());
+    }
+
+    @Test
     void offers_carryScopeLabelAndEndsAt() throws Exception {
         String token = registerAndGetToken("offers-rich@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Rich", "offers-rich-store");
