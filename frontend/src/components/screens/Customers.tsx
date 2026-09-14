@@ -18,6 +18,9 @@ interface CustomersProps {
 // A customer counts as "active" if they've ordered within this window.
 const ACTIVE_WINDOW_DAYS = 90;
 
+// How many customers to show per page in the list.
+const PAGE_SIZE = 20;
+
 function isActive(c: CustomerResponse): boolean {
   if (!c.lastOrderAt) return false;
   return Date.now() - new Date(c.lastOrderAt).getTime() <= ACTIVE_WINDOW_DAYS * 86400000;
@@ -59,6 +62,7 @@ export function Customers({ storeId, currency }: CustomersProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterOrders, setFilterOrders] = useState('all');
+  const [page, setPage] = useState(1);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newCustomer, setNewCustomer] = useState({ fullName: '', phoneNumber: '', email: '' });
@@ -102,6 +106,17 @@ export function Customers({ storeId, currency }: CustomersProps) {
       return matchesSearch && matchesStatus && matchesOrders;
     });
   }, [customers, searchQuery, filterStatus, filterOrders]);
+
+  // Client-side pagination over the filtered set. Reset to page 1 whenever the
+  // search or filters change, and clamp so a shrinking list (e.g. after a
+  // delete on the last page) never strands us on an empty page.
+  useEffect(() => { setPage(1); }, [searchQuery, filterStatus, filterOrders]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage],
+  );
 
   const handleExport = () => {
     const headers = ['Name', 'Email', 'Phone', 'Orders', 'Total Spent', 'Status', 'First Order', 'Joined'];
@@ -277,7 +292,7 @@ export function Customers({ storeId, currency }: CustomersProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((c) => (
+                  {pageItems.map((c) => (
                     <tr key={c.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                       <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{c.fullName}</td>
                       <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -314,12 +329,13 @@ export function Customers({ storeId, currency }: CustomersProps) {
 
             {/* Mobile cards */}
             <div className="mobile-cards" style={{ display: 'none' }}>
-              {filtered.map((c) => (
+              {pageItems.map((c) => (
                 <div key={c.id} style={{ padding: '16px', borderRadius: '8px', background: 'var(--bg-card-subtle)', marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '10px' }}>
                     <div style={{ minWidth: 0 }}>
                       <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>{c.fullName}</div>
                       <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{c.phoneNumber || '—'}{c.email ? ` · ${c.email}` : ''}</div>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>Joined {fmtDate(c.createdAt)}</div>
                     </div>
                     <StatusTag active={isActive(c)} />
                   </div>
@@ -355,6 +371,22 @@ export function Customers({ storeId, currency }: CustomersProps) {
           </>
         )}
       </Card>
+
+      {/* Total count + pagination (mirrors the Products/Orders footer). */}
+      {!loading && !error && filtered.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
+          <span className="text-small" style={{ color: 'var(--text-secondary)' }}>
+            Total {filtered.length} customer{filtered.length === 1 ? '' : 's'}
+          </span>
+          {totalPages > 1 && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px' }}>
+              <Button variant="secondary" onClick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage <= 1}>Prev</Button>
+              <span className="text-small" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Page {currentPage} of {totalPages}</span>
+              <Button variant="secondary" onClick={() => setPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage >= totalPages}>Next</Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add Customer modal */}
       {showAddForm && (
