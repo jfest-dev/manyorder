@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.manyorder.api.domain.customer.Customer;
 import com.manyorder.api.domain.customer.CustomerRepository;
 import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.util.PhoneNumbers;
 import com.manyorder.api.domain.merchant.MerchantRepository;
 import com.manyorder.api.domain.product.Product;
 import com.manyorder.api.domain.product.ProductRepository;
@@ -242,8 +243,9 @@ public class OrderService {
     public Customer findOrCreateCustomer(Merchant merchant, String name, String email, String phone) {
         Customer customer = null;
 
-        if (phone != null && !phone.isBlank()) {
-            customer = customerRepository.findByMerchantAndPhoneNumber(merchant, phone).orElse(null);
+        String phoneKey = PhoneNumbers.normalize(phone);
+        if (!phoneKey.isEmpty()) {
+            customer = customerRepository.findByMerchantAndPhoneNormalized(merchant, phoneKey).orElse(null);
         }
         if (customer == null && email != null && !email.isBlank()) {
             customer = customerRepository.findByMerchantAndEmail(merchant, email).orElse(null);
@@ -273,8 +275,9 @@ public class OrderService {
      */
     public boolean isFirstOrderForContact(Merchant merchant, String email, String phone) {
         Customer customer = null;
-        if (phone != null && !phone.isBlank()) {
-            customer = customerRepository.findByMerchantAndPhoneNumber(merchant, phone).orElse(null);
+        String phoneKey = PhoneNumbers.normalize(phone);
+        if (!phoneKey.isEmpty()) {
+            customer = customerRepository.findByMerchantAndPhoneNormalized(merchant, phoneKey).orElse(null);
         }
         if (customer == null && email != null && !email.isBlank()) {
             customer = customerRepository.findByMerchantAndEmail(merchant, email).orElse(null);

@@ -12,5 +12,12 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     List<Customer> findByMerchant(Merchant merchant);
     Optional<Customer> findByMerchantAndId(Merchant merchant, Long id);
     Optional<Customer> findByMerchantAndEmail(Merchant merchant, String email);
-    Optional<Customer> findByMerchantAndPhoneNumber(Merchant merchant, String phoneNumber);
+
+    /** Identity match on the digits-only phone, so formatting differences of the
+     *  same number resolve to one customer. */
+    Optional<Customer> findByMerchantAndPhoneNormalized(Merchant merchant, String phoneNormalized);
+
+    /** Rows created before phoneNormalized existed (or otherwise unset), for the
+     *  one-time backfill. */
+    List<Customer> findByPhoneNormalizedIsNull();
 }

@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.manyorder.api.domain.merchant.Merchant;
 import com.manyorder.api.domain.order.OrderRepository;
 import com.manyorder.api.domain.order.OrderStatus;
+import com.manyorder.api.util.PhoneNumbers;
 
 @Service
 public class CustomerService {
@@ -55,8 +56,9 @@ public class CustomerService {
     public CustomerResponse createCustomer(Merchant merchant, CreateCustomerRequest req) {
         String phone = req.getPhoneNumber();
         String email = req.getEmail();
+        String phoneKey = PhoneNumbers.normalize(phone);
         boolean exists =
-                (phone != null && !phone.isBlank() && customerRepository.findByMerchantAndPhoneNumber(merchant, phone).isPresent())
+                (!phoneKey.isEmpty() && customerRepository.findByMerchantAndPhoneNormalized(merchant, phoneKey).isPresent())
                 || (email != null && !email.isBlank() && customerRepository.findByMerchantAndEmail(merchant, email).isPresent());
         if (exists) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A customer with this phone or email already exists.");
@@ -79,8 +81,9 @@ public class CustomerService {
 
         String phone = req.getPhoneNumber();
         String email = req.getEmail();
-        boolean phoneClash = phone != null && !phone.isBlank()
-                && customerRepository.findByMerchantAndPhoneNumber(merchant, phone)
+        String phoneKey = PhoneNumbers.normalize(phone);
+        boolean phoneClash = !phoneKey.isEmpty()
+                && customerRepository.findByMerchantAndPhoneNormalized(merchant, phoneKey)
                         .filter(other -> !other.getId().equals(customerId)).isPresent();
         boolean emailClash = email != null && !email.isBlank()
                 && customerRepository.findByMerchantAndEmail(merchant, email)

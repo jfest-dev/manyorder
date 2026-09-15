@@ -3,10 +3,13 @@ package com.manyorder.api;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.manyorder.api.domain.customer.CustomerPhoneBackfill;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -15,6 +18,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Customers list derives order activity, and every creation path dedupes by phone. */
 class CustomerIntegrationTest extends IntegrationTestBase {
+
+    @Autowired JdbcTemplate jdbcTemplate;
+    @Autowired CustomerPhoneBackfill customerPhoneBackfill;
 
     @Test
     void listsCustomersWithDerivedOrderCount_dedupedByPhone() throws Exception {
@@ -259,6 +265,74 @@ class CustomerIntegrationTest extends IntegrationTestBase {
         assertEquals("Sam Tan", orders.get(0).get("customerName").asText(), "order snapshot is unchanged by the edit");
         assertEquals("+6591112222", orders.get(0).get("contactPhone").asText(), "contact phone snapshot unchanged");
         assertEquals(id, orders.get(0).get("customerId").asLong(), "order still linked to the same customer id");
+    }
+
+    // ---------- phone normalization (digits-only identity match) ----------
+
+    @Test
+    void phoneDedupe_ignoresFormatting_acrossOrders() throws Exception {
+        String token = registerAndGetToken("cust-norm@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Norm", "cust-norm-store");
+        // Same number, three different formattings -> one customer with three orders.
+        createManualOrder(token, storeId, "Sam Tan", "+65 8123 4567");
+        createManualOrder(token, storeId, "Sam Tan", "+6581234567");
+        createManualOrder(token, storeId, "Sam Tan", "(+65) 8123-4567");
+
+        JsonNode arr = json(getWithToken("/merchant/stores/" + storeId + "/customers", token, 200));
+        assertEquals(1, arr.size(), "same number, different formatting -> one customer");
+        assertEquals(3, arr.get(0).get("ordersCount").asInt(), "all three orders on that one customer");
+    }
+
+    @Test
+    void manualAdd_dedupe_ignoresFormatting() throws Exception {
+        String token = registerAndGetToken("cust-normadd@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "NormAdd", "cust-normadd-store");
+        mockMvc.perform(post("/merchant/stores/" + storeId + "/customers")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("fullName", "A", "phoneNumber", "+65 8123 4567"))))
+                .andExpect(status().isCreated());
+        // Same number, different spacing -> rejected as a duplicate.
+        mockMvc.perform(post("/merchant/stores/" + storeId + "/customers")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("fullName", "A2", "phoneNumber", "+6581234567"))))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void editCustomer_dedupe_ignoresFormatting() throws Exception {
+        String token = registerAndGetToken("cust-normedit@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "NormEdit", "cust-normedit-store");
+        createManualOrder(token, storeId, "Person A", "+6590000001");
+        createManualOrder(token, storeId, "Person B", "+6590000002");
+        long idB = findByPhone(json(getWithToken("/merchant/stores/" + storeId + "/customers", token, 200)),
+                "+6590000002").get("id").asLong();
+
+        // Editing B to A's number in a different format collides with A.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/merchant/stores/" + storeId + "/customers/" + idB)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("fullName", "Person B", "phoneNumber", "+65 9000 0001"))))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void backfill_populatesNormalized_soOldRowsMatchAgain() throws Exception {
+        String token = registerAndGetToken("cust-backfill@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Backfill", "cust-backfill-store");
+        createManualOrder(token, storeId, "Old Sam", "+6588887777");
+
+        // Simulate a pre-migration row: null out the normalized column.
+        int nulled = jdbcTemplate.update("UPDATE customers SET phone_normalized = NULL WHERE phone_number = ?", "+6588887777");
+        assertEquals(1, nulled);
+
+        // Run the one-time backfill.
+        customerPhoneBackfill.run(null);
+
+        // A new order with the same number differently formatted now dedupes to it.
+        createManualOrder(token, storeId, "Old Sam", "+65 8888 7777");
+        JsonNode arr = json(getWithToken("/merchant/stores/" + storeId + "/customers", token, 200));
+        assertEquals(1, arr.size(), "backfilled row matches the reformatted number -> still one customer");
+        assertEquals(2, arr.get(0).get("ordersCount").asInt());
     }
 
     private JsonNode findByPhone(JsonNode arr, String phone) {

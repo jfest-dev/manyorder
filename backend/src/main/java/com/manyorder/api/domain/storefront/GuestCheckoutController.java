@@ -31,6 +31,7 @@ import com.manyorder.api.domain.order.OrderSource;
 import com.manyorder.api.domain.order.OrderType;
 import com.manyorder.api.domain.product.Product;
 import com.manyorder.api.domain.product.ProductRepository;
+import com.manyorder.api.util.PhoneNumbers;
 
 import jakarta.validation.Valid;
 
@@ -506,8 +507,8 @@ public class GuestCheckoutController {
 
     /** Lenient phone comparison: digits only, tolerating a country-code prefix. */
     private static boolean phoneMatches(String stored, String provided) {
-        String a = stored == null ? "" : stored.replaceAll("\\D", "");
-        String b = provided == null ? "" : provided.replaceAll("\\D", "");
+        String a = PhoneNumbers.normalize(stored);
+        String b = PhoneNumbers.normalize(provided);
         if (a.isEmpty() || b.length() < 7) return false;
         return a.equals(b) || a.endsWith(b) || b.endsWith(a);
     }

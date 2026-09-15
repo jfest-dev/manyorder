@@ -3,6 +3,7 @@ package com.manyorder.api.domain.customer;
 import java.time.LocalDateTime;
 
 import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.util.PhoneNumbers;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,7 +33,12 @@ public class Customer {
     @Column(nullable = false)
     private String email;
 
+    /** As typed by the customer - kept verbatim for display (WhatsApp, lists). */
     private String phoneNumber;
+
+    /** Digits-only form of phoneNumber, used only for identity matching so the same
+     *  number typed with different spacing/dashes resolves to one customer. */
+    private String phoneNormalized;
 
     private LocalDateTime createdAt;
 
@@ -45,6 +51,7 @@ public class Customer {
         this.fullName = fullName;
         this.email = email;
         this.phoneNumber = phoneNumber;
+        this.phoneNormalized = PhoneNumbers.normalize(phoneNumber);
         this.createdAt = LocalDateTime.now();
     }
 
@@ -68,6 +75,16 @@ public class Customer {
         return phoneNumber;
     }
 
+    public String getPhoneNormalized() {
+        return phoneNormalized;
+    }
+
+    /** Recompute the normalized form from the current raw phone (used by the
+     *  one-time backfill of rows created before this column existed). */
+    public void refreshPhoneNormalized() {
+        this.phoneNormalized = PhoneNumbers.normalize(phoneNumber);
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -78,5 +95,6 @@ public class Customer {
         this.fullName = fullName;
         this.email = email;
         this.phoneNumber = phoneNumber;
+        this.phoneNormalized = PhoneNumbers.normalize(phoneNumber);
     }
 }

@@ -98,6 +98,20 @@ class FirstOrderDiscountIntegrationTest extends IntegrationTestBase {
         validate(storeId, "NEW10", phone, p, 400);      // preview with that phone also rejects
     }
 
+    @Test
+    void returningCustomer_isRecognized_acrossPhoneFormatting() throws Exception {
+        String token = registerAndGetToken("fo-fmt@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "FO Fmt", "fo-fmt-store");
+        long p = createProduct(token, storeId, "Item", 10.00);
+        createDiscount(token, storeId, Map.of("code", "NEW10", "type", "PERCENTAGE", "value", 10, "firstOrderOnly", true));
+
+        // First order with one formatting; the same number typed differently must
+        // still be recognized as the same (returning) customer -> code rejected.
+        checkout(storeId, p, 1, "+6591112222", "NEW10", 201);      // first order applies
+        checkout(storeId, p, 1, "+65 9111 2222", "NEW10", 400);    // reformatted, same person -> rejected
+        validate(storeId, "NEW10", "(+65) 9111-2222", p, 400);     // preview with yet another format rejects
+    }
+
     // ---------- cancelled-only prior ----------
 
     @Test
