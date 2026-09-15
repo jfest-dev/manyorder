@@ -342,6 +342,13 @@ public class ProductService {
         return toResponse(productRepository.save(product));
     }
 
+    @Transactional
+    public ProductResponse activateProduct(Merchant merchant, Long productId) {
+        Product product = requireStoreProduct(merchant, productId);
+        product.setIsActive(true);
+        return toResponse(productRepository.save(product));
+    }
+
     /**
      * Permanently delete a product. Past order lines are detached (their name and
      * price are snapshotted on the line, so order history survives); the product

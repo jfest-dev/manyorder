@@ -114,6 +114,15 @@ public class MerchantProductController {
         return productService.deactivateProduct(merchant, productId);
     }
 
+    @PatchMapping("/{productId}/activate")
+    public ProductResponse activateProduct(@PathVariable Long storeId,
+                                           @PathVariable Long productId,
+                                           Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+        return productService.activateProduct(merchant, productId);
+    }
+
     /** Permanently delete a product (owner only). Order history is preserved via
      *  the name/price snapshot on each order line. */
     @DeleteMapping("/{productId}")

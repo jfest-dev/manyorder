@@ -451,4 +451,40 @@ class ProductIntegrationTest extends IntegrationTestBase {
                         .content("{\"productIds\":[" + mine + "," + foreign + "]}"))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void deactivateThenActivate_flipsIsActive() throws Exception {
+        String token = registerAndGetToken("prod-active@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Active Store", "prod-active-store");
+        long id = createProduct(token, storeId, "{\"name\":\"Toggle Me\",\"price\":5.00}");
+
+        // New products are active by default.
+        mockMvc.perform(get("/merchant/stores/" + storeId + "/products/" + id)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.isActive").value(true));
+
+        // Deactivate -> draft.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + id + "/deactivate")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isActive").value(false));
+
+        // Activate -> back to active (previously impossible; no activate path existed).
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + id + "/activate")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isActive").value(true));
+    }
+
+    @Test
+    void activateProduct_asStaff_isForbidden() throws Exception {
+        String owner = registerAndGetToken("prod-active-owner@test.com", "MERCHANT", null);
+        long storeId = createStore(owner, "Active Staff Store", "prod-active-staff-store");
+        long id = createProduct(owner, storeId, "{\"name\":\"P\",\"price\":5.00}");
+
+        String staff = registerAndGetToken("prod-active-staff@test.com", "STAFF", "prod-active-staff-store");
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + id + "/activate")
+                        .header("Authorization", "Bearer " + staff))
+                .andExpect(status().isForbidden());
+    }
 }
