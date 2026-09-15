@@ -4,7 +4,7 @@ import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { saveRecentOrder } from '../../lib/orderRecall';
 import { DEFAULT_DELIVERY_TBC_MESSAGE } from '../../lib/delivery';
-import { offerValueLabel, offerConditions, offerExpiry } from '../../lib/offers';
+import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from '../../lib/offers';
 import { NoteBlock } from '../NoteBlock';
 import {
   storefrontApi, ApiError,
@@ -65,7 +65,7 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
   }, [formKey, name, phone, email, fulfilment, address, notes, paymentMethod]);
 
   const [code, setCode] = useState('');
-  const [applied, setApplied] = useState<{ code: string; amount: number; freeDelivery: boolean } | null>(null);
+  const [applied, setApplied] = useState<{ code: string; amount: number; freeDelivery: boolean; deliveryDiscount: number } | null>(null);
   const [discountError, setDiscountError] = useState<string | null>(null);
   const [checkingCode, setCheckingCode] = useState(false);
 
@@ -88,9 +88,11 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
     && store.freeDeliveryThreshold != null && subtotal >= store.freeDeliveryThreshold;
   const deliveryFee = (isDelivery && store.deliveryFeeConfigured && !freeByThreshold)
     ? (store.deliveryFee ?? 0) : 0;
-  // A free-delivery voucher waives the (gross) delivery fee for this order.
+  // A delivery voucher discounts the (gross) delivery fee: the server returns the
+  // amount off (full for FREE_DELIVERY, partial for a %/fixed delivery code), and
+  // `freeDelivery` says which label to show - never inferred from the net reaching 0.
   const freeDelivery = applied?.freeDelivery ?? false;
-  const deliveryWaived = freeDelivery ? deliveryFee : 0;
+  const deliveryWaived = applied?.deliveryDiscount ?? 0;
   const total = Math.max(0, subtotal + deliveryFee - discount - deliveryWaived);
 
   const applyCode = async (raw?: string) => {
@@ -111,7 +113,7 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
         customerEmail: email.trim() || undefined,
         items: items.map(cartLineToCheckoutItem),
       });
-      setApplied({ code: res.code, amount: res.discountAmount, freeDelivery: res.freeDelivery });
+      setApplied({ code: res.code, amount: res.discountAmount, freeDelivery: res.freeDelivery, deliveryDiscount: res.deliveryDiscount });
     } catch (e) {
       setApplied(null);
       setDiscountError(e instanceof ApiError ? e.message : 'Could not apply that code.');
@@ -304,7 +306,7 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
                       </div>
                       {expanded && (
                         <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                          <span>{o.scopeLabel} · {conditions}</span>
+                          <span>{offerScopeLabel(o)} · {conditions}</span>
                           <span>{expiry}</span>
                         </div>
                       )}
@@ -344,7 +346,7 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
                   : deliveryFee > 0 && <Row label="Delivery fee" value={formatMoney(deliveryFee, currency)} />
           )}
           {discount > 0 && <Row label={`Discount (${applied?.code})`} value={`− ${formatMoney(discount, currency)}`} accent="#065F46" />}
-          {freeDelivery && deliveryFee > 0 && <Row label={`Free delivery (${applied?.code})`} value={`− ${formatMoney(deliveryFee, currency)}`} accent="#065F46" />}
+          {deliveryWaived > 0 && <Row label={`${freeDelivery ? 'Free delivery' : 'Delivery discount'} (${applied?.code})`} value={`− ${formatMoney(deliveryWaived, currency)}`} accent="#065F46" />}
           <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '8px', paddingTop: '8px' }}>
             <Row label={deliveryPending && !freeDelivery ? 'Estimated total' : 'Total'} value={formatMoney(total, currency)} bold />
           </div>

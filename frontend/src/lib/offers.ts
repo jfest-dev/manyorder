@@ -1,11 +1,18 @@
 import { formatMoney } from './currency';
 import type { PublicOffer } from './api';
 
-/** The offer's headline value, e.g. "10% off", "$5.00 off", "Free delivery". */
+/** The offer's headline value, e.g. "10% off", "$5.00 off", "Free delivery",
+ *  "20% off delivery" / "$3.00 off delivery" for a partial delivery discount. */
 export function offerValueLabel(o: PublicOffer, currency: string): string {
-  return o.type === 'FREE_DELIVERY' ? 'Free delivery'
-    : o.type === 'PERCENTAGE' ? `${o.value}% off`
-      : `${formatMoney(o.value, currency)} off`;
+  if (o.type === 'FREE_DELIVERY') return 'Free delivery';
+  const base = o.type === 'PERCENTAGE' ? `${o.value}% off` : `${formatMoney(o.value, currency)} off`;
+  return o.appliesToDelivery ? `${base} delivery` : base;
+}
+
+/** What the offer applies to, for the card's scope line: "Delivery" for any
+ *  delivery discount, otherwise the server-provided product scope. */
+export function offerScopeLabel(o: PublicOffer): string {
+  return (o.type === 'FREE_DELIVERY' || o.appliesToDelivery) ? 'Delivery' : o.scopeLabel;
 }
 
 /**

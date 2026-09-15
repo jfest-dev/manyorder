@@ -80,13 +80,15 @@ interface FormState {
   firstOrderOnly: boolean;
   canStackWithSale: boolean;
   isPublic: boolean;
+  /** When true (PERCENTAGE/FIXED), the value comes off the delivery fee, not products. */
+  appliesToDelivery: boolean;
   /** ALL = store-wide (empty scope); SPECIFIC = limited to productIds. */
   appliesTo: 'ALL' | 'SPECIFIC';
   productIds: number[];
 }
 const BLANK: FormState = {
   name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', minSpend: '', startDate: '', endDate: '', active: true,
-  firstOrderOnly: false, canStackWithSale: false, isPublic: false, appliesTo: 'ALL', productIds: [],
+  firstOrderOnly: false, canStackWithSale: false, isPublic: false, appliesToDelivery: false, appliesTo: 'ALL', productIds: [],
 };
 
 export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
@@ -217,6 +219,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       firstOrderOnly: d.firstOrderOnly,
       canStackWithSale: d.canStackWithSale,
       isPublic: d.isPublic,
+      appliesToDelivery: d.appliesToDelivery,
       appliesTo: d.productIds.length > 0 ? 'SPECIFIC' : 'ALL',
       productIds: d.productIds,
     });
@@ -257,6 +260,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       firstOrderOnly: form.firstOrderOnly,
       canStackWithSale: form.canStackWithSale,
       isPublic: form.isPublic,
+      appliesToDelivery: form.type !== 'FREE_DELIVERY' && form.appliesToDelivery,
       // Empty array = store-wide (and always empty for free delivery). On edit
       // this also clears a previous scope.
       productIds: !freeDelivery && form.appliesTo === 'SPECIFIC' ? form.productIds : [],
@@ -422,6 +426,37 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                 )}
               </div>
 
+              {/* Whether a %/fixed value comes off products or the delivery fee.
+                  Free delivery is inherently a delivery discount, so it's hidden there. */}
+              {form.type !== 'FREE_DELIVERY' && (
+                <div>
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Applies to</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {([['products', false], ['delivery', true]] as const).map(([key, val]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => set('appliesToDelivery', val)}
+                        style={{
+                          flex: 1, height: '38px', borderRadius: 'var(--radius-field)', cursor: 'pointer',
+                          fontSize: '13px', fontWeight: 600,
+                          border: `1px solid ${form.appliesToDelivery === val ? 'var(--primary-solid)' : 'var(--border-subtle)'}`,
+                          background: form.appliesToDelivery === val ? 'var(--primary-solid)' : 'var(--bg-card)',
+                          color: form.appliesToDelivery === val ? 'var(--text-on-dark)' : 'var(--text-secondary)',
+                        }}
+                      >
+                        {key === 'products' ? 'Products' : 'Delivery fee'}
+                      </button>
+                    ))}
+                  </div>
+                  {form.appliesToDelivery && (
+                    <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>
+                      Takes the {form.type === 'PERCENTAGE' ? 'percentage' : 'amount'} off the delivery fee (delivery orders only).
+                    </p>
+                  )}
+                </div>
+              )}
+
               <FieldInput label="Usage limit" type="number" inputMode="numeric" placeholder="Leave blank for unlimited" value={form.usageLimit} onChange={(v) => set('usageLimit', v)} helperText="Total redemptions allowed." />
 
               <div>
@@ -459,11 +494,11 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                 <span className="text-small">Stack with sale prices</span>
               </label>
 
-              {/* Applies to: whole order (store-wide) or a chosen set of products.
-                  Not shown for a free-delivery voucher (it waives delivery, not products). */}
-              {form.type !== 'FREE_DELIVERY' && (
+              {/* Product scope: whole order (store-wide) or a chosen set of products.
+                  Hidden for any delivery discount (free delivery or a delivery-fee %/fixed). */}
+              {form.type !== 'FREE_DELIVERY' && !form.appliesToDelivery && (
               <div>
-                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Applies to</label>
+                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Which products</label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {(['ALL', 'SPECIFIC'] as const).map((opt) => (
                     <button

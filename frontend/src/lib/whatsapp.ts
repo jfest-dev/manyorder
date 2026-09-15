@@ -32,8 +32,10 @@ export interface WaCombined {
    *  message matches the panel). Pickup orders leave this unset and omit the line. */
   isDelivery?: boolean;
   discountAmount: number;
-  /** Delivery fee waived by a free-delivery voucher; 0/omitted otherwise. */
+  /** Delivery fee discounted by a delivery voucher; 0/omitted otherwise. */
   deliveryDiscount?: number;
+  /** True when a FREE_DELIVERY voucher applied (label "Free delivery" vs "Delivery discount"). */
+  freeDelivery?: boolean;
   discountCode?: string | null;
   totalAmount: number;
 }
@@ -74,7 +76,8 @@ export function orderSummaryLines(sections: WaOrderSection[], currency: string, 
     lines.push(`Discount (${combined.discountCode}): ${formatMoney(combined.discountAmount, currency)} off`);
   }
   if (deliveryDiscount > 0) {
-    lines.push(`Free delivery (${combined.discountCode}): ${formatMoney(deliveryDiscount, currency)} off`);
+    const label = combined.freeDelivery ? 'Free delivery' : 'Delivery discount';
+    lines.push(`${label} (${combined.discountCode}): ${formatMoney(deliveryDiscount, currency)} off`);
   }
   const totalLabel = combined.deliveryFeePending ? 'Estimated total' : split ? 'Combined total' : 'Total';
   lines.push(`${totalLabel}: ${formatMoney(combined.totalAmount, currency)}`);

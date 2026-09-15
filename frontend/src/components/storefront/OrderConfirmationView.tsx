@@ -42,6 +42,7 @@ function resolveOrders(result: GuestCheckoutResult): GuestCheckoutOrderSummary[]
     deliveryFee: result.deliveryFee,
     discountAmount: result.discountAmount,
     deliveryDiscount: result.deliveryDiscount,
+    freeDelivery: result.freeDelivery,
     totalAmount: result.totalAmount,
     items: result.items ?? [],
   }];
@@ -69,6 +70,7 @@ function whatsappUrl(result: GuestCheckoutResult, store: PublicStoreResponse): s
     deliveryFeePending: result.deliveryFeePending,
     discountAmount: result.discountAmount,
     deliveryDiscount: result.deliveryDiscount,
+    freeDelivery: result.freeDelivery,
     discountCode: result.discountCode,
     totalAmount: result.totalAmount,
   }));
@@ -163,7 +165,7 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
                   <Row label="Subtotal" value={formatMoney(o.subtotal, currency)} />
                   {o.deliveryFee + o.deliveryDiscount > 0 && <Row label="Delivery fee" value={formatMoney(o.deliveryFee + o.deliveryDiscount, currency)} />}
                   {o.discountAmount > 0 && <Row label={`Discount${result.discountCode ? ` (${result.discountCode})` : ''}`} value={`− ${formatMoney(o.discountAmount, currency)}`} accent="#065F46" />}
-                  {o.deliveryDiscount > 0 && <Row label={`Free delivery${result.discountCode ? ` (${result.discountCode})` : ''}`} value={`− ${formatMoney(o.deliveryDiscount, currency)}`} accent="#065F46" />}
+                  {o.deliveryDiscount > 0 && <Row label={`${o.freeDelivery ? 'Free delivery' : 'Delivery discount'}${result.discountCode ? ` (${result.discountCode})` : ''}`} value={`− ${formatMoney(o.deliveryDiscount, currency)}`} accent="#065F46" />}
                   <Row label="Order total" value={formatMoney(o.totalAmount, currency)} bold />
                 </div>
               )}
@@ -178,7 +180,7 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
             ? <Row label="Delivery fee" value="To be confirmed" accent="#92400E" />
             : result.deliveryFee + result.deliveryDiscount > 0 && <Row label="Delivery fee" value={formatMoney(result.deliveryFee + result.deliveryDiscount, currency)} />}
           {result.discountAmount > 0 && <Row label={`Discount (${result.discountCode})`} value={`− ${formatMoney(result.discountAmount, currency)}`} accent="#065F46" />}
-          {result.deliveryDiscount > 0 && <Row label={`Free delivery (${result.discountCode})`} value={`− ${formatMoney(result.deliveryDiscount, currency)}`} accent="#065F46" />}
+          {result.deliveryDiscount > 0 && <Row label={`${result.freeDelivery ? 'Free delivery' : 'Delivery discount'} (${result.discountCode})`} value={`− ${formatMoney(result.deliveryDiscount, currency)}`} accent="#065F46" />}
           <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '4px', paddingTop: '8px' }}>
             <Row label={result.deliveryFeePending ? 'Estimated total' : split ? 'Combined total' : 'Total'} value={formatMoney(result.totalAmount, currency)} bold />
           </div>

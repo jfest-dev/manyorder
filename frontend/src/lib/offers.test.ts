@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { PublicOffer } from './api';
-import { offerValueLabel, offerConditions, offerExpiry } from './offers';
+import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from './offers';
 
 function offer(overrides: Partial<PublicOffer> = {}): PublicOffer {
   return {
     code: 'SAVE', name: null, type: 'PERCENTAGE', value: 10,
-    minSpend: null, firstOrderOnly: false, storeWide: true, productIds: [],
-    scopeLabel: 'All products', endsAt: null,
+    minSpend: null, firstOrderOnly: false, appliesToDelivery: false,
+    storeWide: true, productIds: [], scopeLabel: 'All products', endsAt: null,
     ...overrides,
   };
 }
@@ -17,6 +17,19 @@ describe('offerValueLabel', () => {
     expect(offerValueLabel(offer({ type: 'FIXED', value: 5 }), 'SGD')).toContain('off');
     expect(offerValueLabel(offer({ type: 'FIXED', value: 5 }), 'SGD')).toMatch(/5/);
     expect(offerValueLabel(offer({ type: 'FREE_DELIVERY', value: 0 }), 'SGD')).toBe('Free delivery');
+  });
+
+  it('appends "delivery" for a partial delivery discount', () => {
+    expect(offerValueLabel(offer({ type: 'PERCENTAGE', value: 20, appliesToDelivery: true }), 'SGD')).toBe('20% off delivery');
+    expect(offerValueLabel(offer({ type: 'FIXED', value: 3, appliesToDelivery: true }), 'SGD')).toMatch(/off delivery$/);
+  });
+});
+
+describe('offerScopeLabel', () => {
+  it('is "Delivery" for any delivery discount, else the product scope', () => {
+    expect(offerScopeLabel(offer({ type: 'FREE_DELIVERY' }))).toBe('Delivery');
+    expect(offerScopeLabel(offer({ appliesToDelivery: true }))).toBe('Delivery');
+    expect(offerScopeLabel(offer({ scopeLabel: 'Coffee' }))).toBe('Coffee');
   });
 });
 

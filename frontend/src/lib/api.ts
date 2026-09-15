@@ -645,6 +645,8 @@ export interface DiscountResponse {
   canStackWithSale: boolean;
   /** When true, shown on the storefront for one-tap apply; false = code-only. */
   isPublic: boolean;
+  /** When true (PERCENTAGE/FIXED), the value is off the delivery fee, not products. */
+  appliesToDelivery: boolean;
   /** Products the discount is limited to; empty = store-wide. */
   productIds: number[];
   /** Merchant-controlled sort position (drag-to-reorder). */
@@ -670,6 +672,8 @@ export interface DiscountPayload {
   canStackWithSale?: boolean;
   /** When true, shown on the storefront for one-tap apply. Default false. */
   isPublic?: boolean;
+  /** When true (PERCENTAGE/FIXED), the value is off the delivery fee. Default false. */
+  appliesToDelivery?: boolean;
   /** Empty/omitted = store-wide; non-empty = limited to these products. On
    *  update: null leaves the scope unchanged, an empty array clears to store-wide. */
   productIds?: number[] | null;
@@ -812,8 +816,11 @@ export interface GuestCheckoutOrderSummary {
   subtotal: number;
   deliveryFee: number;
   discountAmount: number;
-  /** Delivery fee waived by a free-delivery voucher; 0 otherwise. */
+  /** Delivery fee discounted by a delivery voucher; 0 otherwise. */
   deliveryDiscount: number;
+  /** True when the delivery discount was a FREE_DELIVERY voucher (label "Free
+   *  delivery" vs "Delivery discount"), by configured type not net outcome. */
+  freeDelivery: boolean;
   totalAmount: number;
   items: GuestCheckoutItemSummary[];
 }
@@ -839,8 +846,10 @@ export interface GuestCheckoutResult {
   subtotal: number;
   deliveryFee: number;
   discountAmount: number;
-  /** Delivery fee waived by a free-delivery voucher; 0 otherwise. */
+  /** Delivery fee discounted by a delivery voucher; 0 otherwise. */
   deliveryDiscount: number;
+  /** True when the delivery discount was a FREE_DELIVERY voucher. */
+  freeDelivery: boolean;
   discountCode: string | null;
   totalAmount: number;
   createdAt: string;
@@ -866,6 +875,8 @@ export interface PublicOffer {
   value: number;
   minSpend: number | null;
   firstOrderOnly: boolean;
+  /** When true, the value is off the delivery fee (a partial delivery discount). */
+  appliesToDelivery: boolean;
   storeWide: boolean;
   productIds: number[];
   /** Human "applies to" label: "All products", a category, a product name, "N products". */

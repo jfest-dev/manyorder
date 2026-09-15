@@ -4,7 +4,7 @@ import { WhatsAppIcon } from '../icons/WhatsAppIcon';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { bestsellerProductIds } from '../../lib/bestsellers';
-import { offerValueLabel, offerConditions, offerExpiry } from '../../lib/offers';
+import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from '../../lib/offers';
 import type { ProductResponse, PublicOffer } from '../../lib/api';
 import { StorefrontStore, isOrderable, initialsOf } from './storefrontTypes';
 import { QuantityStepper } from './QuantityStepper';
@@ -365,7 +365,7 @@ export function StorefrontView({
                   </div>
                   {expanded && (
                     <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      <span>{o.scopeLabel}</span>
+                      <span>{offerScopeLabel(o)}</span>
                       <span>{conditions}</span>
                       <span>{expiry}</span>
                     </div>
