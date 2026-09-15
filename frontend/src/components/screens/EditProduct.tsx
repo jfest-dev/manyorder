@@ -249,10 +249,12 @@ export function EditProduct({
         // Always sent → replace-on-save. An empty array clears the product's modifiers.
         modifierGroups: editorGroupsToInputs(modifierGroups),
       };
-      // Status maps to isActive via a dedicated call when it changes to draft/active.
+      // Status maps to isActive via a dedicated call (update doesn't carry it).
       await productsApi.update(storeId, productId, payload);
       if (status === 'draft') {
         await productsApi.deactivate(storeId, productId);
+      } else {
+        await productsApi.activate(storeId, productId);
       }
       dirtyRef.current = false; // saved - no unsaved changes to guard
       return true;

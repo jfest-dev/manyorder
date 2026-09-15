@@ -62,8 +62,11 @@ function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string;
   );
 }
 
+const ALL_CATEGORIES = '__all__';
+
 export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: ProductsListProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string>(ALL_CATEGORIES);
   const [products, setProducts] = useState<ProductResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,25 +105,37 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
     }
   };
 
-  // Search across every human-visible field: name, category, SKU, and the
-  // derived status label (Active / Draft / Out of Stock / Pre-order). The
-  // status is included both as-shown and collapsed, so "pre-order" and
-  // "preorder" (or "out of stock" / "outofstock") both match.
+  // Categories present in the catalogue, ordered by the merchant's displayOrder
+  // (then name), mirroring the storefront chips. Products with no category are
+  // grouped under "Uncategorized".
+  const categories = useMemo(() => {
+    const order = new Map<string, number>();
+    products.forEach((p) => {
+      const name = p.categoryName || 'Uncategorized';
+      const ord = p.categoryDisplayOrder ?? Number.MAX_SAFE_INTEGER;
+      if (!order.has(name) || ord < (order.get(name) as number)) order.set(name, ord);
+    });
+    return [...order.entries()]
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .map(([name]) => name);
+  }, [products]);
+
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return products;
     return products.filter((p) => {
+      if (activeCategory !== ALL_CATEGORIES && (p.categoryName || 'Uncategorized') !== activeCategory) return false;
+      if (!q) return true;
       const status = STATUS_LABEL[statusOf(p)];
       const haystack = [p.name, p.categoryName, p.sku, status, status.replace(/[\s-]/g, '')]
         .filter(Boolean)
         .map((s) => String(s).toLowerCase());
       return haystack.some((h) => h.includes(q));
     });
-  }, [products, searchQuery]);
+  }, [products, searchQuery, activeCategory]);
 
-  // Reorder is over the full list; disable it while a search filter is active
-  // (dragging a subset would be ambiguous). When not searching, filtered === products.
-  const searching = searchQuery.trim() !== '';
+  // Reorder is over the full list; disable it while any filter (search or a
+  // category) is active, since dragging a subset would be ambiguous.
+  const filtering = searchQuery.trim() !== '' || activeCategory !== ALL_CATEGORIES;
 
   // Summary stats over ALL products (not the search-filtered view). "Out" reuses
   // the honest row status; "low" is active, non-pre-order stock in 1..LOW_STOCK_AT.
@@ -139,6 +154,26 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
     } catch (e) {
       setProducts(previous); // revert
       setError(e instanceof ApiError ? e.message : 'Failed to save the new order.');
+    }
+  };
+
+  // Flip a product Active/Draft in place, reusing the activate/deactivate
+  // endpoints. Optimistic with the server response merged in; reverts on failure.
+  const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
+  const toggleActive = async (product: ProductResponse, next: boolean) => {
+    const previous = products;
+    setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, isActive: next } : p)));
+    setTogglingIds((s) => new Set(s).add(product.id));
+    try {
+      const updated = next
+        ? await productsApi.activate(storeId, product.id)
+        : await productsApi.deactivate(storeId, product.id);
+      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    } catch (e) {
+      setProducts(previous); // revert so the switch never lies
+      setError(e instanceof ApiError ? e.message : 'Could not change the product status.');
+    } finally {
+      setTogglingIds((s) => { const n = new Set(s); n.delete(product.id); return n; });
     }
   };
 
@@ -262,6 +297,31 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
         </Button>
       </div>
 
+      {/* Category filter chips (under the search bar), like the storefront shop page. */}
+      {categories.length > 1 && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          {[ALL_CATEGORIES, ...categories].map((cat) => {
+            const on = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActiveCategory(cat)}
+                className="text-small"
+                style={{
+                  padding: '7px 14px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontWeight: 500,
+                  border: on ? '1px solid var(--primary-solid)' : '1px solid var(--border-strong)',
+                  background: on ? 'var(--primary-solid)' : 'var(--bg-card)',
+                  color: on ? 'var(--text-on-dark)' : 'var(--text-primary)',
+                }}
+              >
+                {cat === ALL_CATEGORIES ? 'All' : cat}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <Card>
         {loading ? (
           <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading products…</div>
@@ -270,8 +330,8 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
         ) : (
           <>
             <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '0 0 12px', padding: '0 8px' }}>
-              {searching
-                ? 'Clear the search to reorder products.'
+              {filtering
+                ? 'Clear the search and category filter to reorder products.'
                 : 'Drag the grip to reorder. This is the order products appear on your storefront.'}
             </p>
 
@@ -291,7 +351,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
                   <ReorderableList
                     items={filtered}
                     getKey={(p) => p.id}
-                    disabled={searching}
+                    disabled={filtering}
                     onReorder={handleReorder}
                     renderRow={(p, { handle, setNodeRef, dragging }) => (
                       <tr
@@ -315,21 +375,31 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
                         </td>
                         <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.unitsSold}</td>
                         <td style={{ padding: '12px 16px' }}><StatusTag p={p} /></td>
-                        <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                          <button
-                            onClick={() => onEditProduct?.(p.id)}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
-                              background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
-                              borderRadius: 'var(--radius-field)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-app)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-card-subtle)'; }}
-                          >
-                            <Edit size={16} />
-                            Edit
-                          </button>
+                        <td style={{ padding: '12px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '16px' }}>
+                            <span style={{ display: 'inline-block', minWidth: '96px' }}>
+                              <ToggleSwitch
+                                checked={p.isActive}
+                                disabled={togglingIds.has(p.id)}
+                                onChange={(next) => toggleActive(p, next)}
+                                label={p.isActive ? 'Active' : 'Draft'}
+                              />
+                            </span>
+                            <button
+                              onClick={() => onEditProduct?.(p.id)}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                                background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
+                                borderRadius: 'var(--radius-field)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-app)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-card-subtle)'; }}
+                            >
+                              <Edit size={16} />
+                              Edit
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -339,7 +409,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
 
               {filtered.length === 0 && (
                 <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  {products.length === 0 ? 'No products yet. Add your first one.' : 'No products match your search.'}
+                  {products.length === 0 ? 'No products yet. Add your first one.' : 'No products match your filters.'}
                 </div>
               )}
             </div>
@@ -349,7 +419,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
               <ReorderableList
                 items={filtered}
                 getKey={(p) => p.id}
-                disabled={searching}
+                disabled={filtering}
                 onReorder={handleReorder}
                 renderRow={(p, { handle, setNodeRef, dragging }) => (
                   <div
@@ -372,6 +442,15 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
                         <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>{p.stock} in stock · {p.unitsSold} sold</span>
                       </div>
                       <StatusTag p={p} />
+                    </div>
+                    <div style={{ padding: '10px 0', borderTop: '1px solid var(--border-subtle)', marginBottom: '12px' }}>
+                      <ToggleSwitch
+                        checked={p.isActive}
+                        disabled={togglingIds.has(p.id)}
+                        onChange={(next) => toggleActive(p, next)}
+                        label={p.isActive ? 'Active' : 'Draft'}
+                        description={p.isActive ? 'Shown on your storefront.' : 'Hidden from customers.'}
+                      />
                     </div>
                     <button
                       onClick={() => onEditProduct?.(p.id)}

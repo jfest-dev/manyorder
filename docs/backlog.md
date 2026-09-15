@@ -221,3 +221,28 @@ math. Findings and the changes needed:
   (the genuine version of the targeting UI removed from the mock).
 
 Needs its own build session; not scoped further here.
+
+## True multi-code stacking (two discount codes on one order)
+
+Let two separate discount codes apply to the same order at once, e.g. a product
+discount plus a delivery discount. This is a genuinely large architectural
+change, not a flag. Checkout supports exactly one code per order by data-model
+design: GuestCheckoutRequest carries a single discountCode, the controller
+redeems exactly one via redeemForCheckout, and Order stores a single
+discountCode / discountAmount / deliveryDiscount. Supporting multiple would need
+a full checkout redesign (a list of applied codes; per-code redemption and
+usage-count bumps; the split-order allocation and the order/response breakdown
+generalised to N codes; the storefront apply UI holding several applied codes).
+
+It also needs real margin-risk consideration: compounding discounts (percentage
+on percentage, or a product discount plus a delivery discount plus an automatic
+sale price) can stack deeper than a merchant intends. Any stacking would need
+explicit, per-code opt-in rules and ordering, in the same spirit as the existing
+canStackWithSale flag, rather than free-for-all combination.
+
+Simpler alternative already available: a merchant who just wants "money off
+products AND off delivery in one promotion" can create a single discount that
+covers both in one code, once such a combined type exists, without needing true
+multi-code support. Reach for that first; only build real multi-code stacking if
+a genuine need for two independently-managed codes on one order emerges. Not
+scoped further here; needs its own session.

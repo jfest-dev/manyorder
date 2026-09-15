@@ -551,6 +551,10 @@ export const productsApi = {
   deactivate: (storeId: number, productId: number) =>
     request<ProductResponse>(`/merchant/stores/${storeId}/products/${productId}/deactivate`, { method: 'PATCH' }),
 
+  /** Reactivate a draft product (shown on the storefront again). */
+  activate: (storeId: number, productId: number) =>
+    request<ProductResponse>(`/merchant/stores/${storeId}/products/${productId}/activate`, { method: 'PATCH' }),
+
   /** Permanently delete a product. Order history is preserved server-side via a
    *  name/price snapshot on each order line. Returns 204. */
   delete: (storeId: number, productId: number) =>
