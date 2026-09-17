@@ -4,10 +4,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.manyorder.api.domain.discount.Discount;
+import com.manyorder.api.domain.discount.DiscountRepository;
+import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.domain.merchant.MerchantRepository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,6 +28,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * enforces its own eligibility rules when applied (public != a bypass).
  */
 class PublicOffersIntegrationTest extends IntegrationTestBase {
+
+    @Autowired private DiscountRepository discountRepository;
+    @Autowired private MerchantRepository merchantRepository;
 
     private long createProduct(String token, long storeId, String name, double price) throws Exception {
         MvcResult r = mockMvc.perform(post("/merchant/stores/" + storeId + "/products")
@@ -62,7 +70,13 @@ class PublicOffersIntegrationTest extends IntegrationTestBase {
         createDiscount(token, storeId, Map.of("code", "PUBLIC10", "type", "PERCENTAGE", "value", 10, "isPublic", true));
         createDiscount(token, storeId, Map.of("code", "SECRET5", "type", "FIXED", "value", 5)); // private (default)
         createDiscount(token, storeId, Map.of("code", "PUBOFF", "type", "FIXED", "value", 5, "isPublic", true, "active", false)); // inactive
-        createDiscount(token, storeId, Map.of("code", "PUBEXP", "type", "FIXED", "value", 5, "isPublic", true, "endsAt", "2020-01-01T00:00:00")); // expired
+        // Public but expired: create it live, then expire it directly, since the
+        // API now blocks creating a past-end code.
+        createDiscount(token, storeId, Map.of("code", "PUBEXP", "type", "FIXED", "value", 5, "isPublic", true));
+        Merchant merchant = merchantRepository.findById(storeId).orElseThrow();
+        Discount expired = discountRepository.findByMerchantAndCodeIgnoreCase(merchant, "PUBEXP").orElseThrow();
+        expired.setEndsAt(java.time.LocalDateTime.now().minusDays(1));
+        discountRepository.save(expired);
 
         JsonNode arr = offers(storeId);
         assertEquals(1, arr.size(), "only the public, active, in-window offer is listed");

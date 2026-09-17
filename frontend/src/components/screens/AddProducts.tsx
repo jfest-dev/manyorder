@@ -344,7 +344,7 @@ export function AddProducts({
                           </div>
                           <div>
                             <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Sale ends</label>
-                            <DatePicker value={product.saleEnd} onChange={(v) => update(product.id, 'saleEnd', v)} placeholder="No end" ariaLabel="Sale end date" />
+                            <DatePicker value={product.saleEnd} onChange={(v) => update(product.id, 'saleEnd', v)} min={new Date().toLocaleDateString('en-CA')} placeholder="No end" ariaLabel="Sale end date" />
                           </div>
                         </div>
                       )}

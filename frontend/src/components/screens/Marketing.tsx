@@ -471,7 +471,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
                 </div>
                 <div>
                   <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ends</label>
-                  <DatePicker value={form.endDate} onChange={(v) => set('endDate', v)} placeholder="No end" ariaLabel="End date" />
+                  <DatePicker value={form.endDate} onChange={(v) => set('endDate', v)} min={new Date().toLocaleDateString('en-CA')} placeholder="No end" ariaLabel="End date" />
                 </div>
               </div>
 

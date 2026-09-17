@@ -4,10 +4,15 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.manyorder.api.domain.discount.Discount;
+import com.manyorder.api.domain.discount.DiscountRepository;
+import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.domain.merchant.MerchantRepository;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -21,6 +26,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * (validate endpoint + application at guest checkout, usage limits, expiry).
  */
 class DiscountIntegrationTest extends IntegrationTestBase {
+
+    @Autowired private DiscountRepository discountRepository;
+    @Autowired private MerchantRepository merchantRepository;
 
     // ---------- helpers ----------
 
@@ -282,9 +290,13 @@ class DiscountIntegrationTest extends IntegrationTestBase {
         String token = registerAndGetToken("disc-exp@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Exp", "disc-exp-store");
         long productId = createProduct(token, storeId, "Old", 5.00);
-        createDiscount(token, storeId, Map.of(
-                "code", "GONE", "type", "FIXED", "value", 1,
-                "endsAt", "2020-01-01T00:00:00"));
+        // The API now blocks creating a past-end code, so make a valid one and
+        // expire it directly (simulating time passing after it was set up).
+        createDiscount(token, storeId, Map.of("code", "GONE", "type", "FIXED", "value", 1));
+        Merchant merchant = merchantRepository.findById(storeId).orElseThrow();
+        Discount d = discountRepository.findByMerchantAndCodeIgnoreCase(merchant, "GONE").orElseThrow();
+        d.setEndsAt(java.time.LocalDateTime.now().minusDays(1));
+        discountRepository.save(d);
 
         checkout(storeId, productId, 1, "GONE", 400);
     }
@@ -339,6 +351,33 @@ class DiscountIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk());
         JsonNode reset = firstDiscount(token, storeId);
         assertEquals("2031-06-30T23:59:59", reset.get("endsAt").asText());
+    }
+
+    @Test
+    void createDiscount_withPastEndDate_isRejected() throws Exception {
+        String token = registerAndGetToken("disc-pastend-create@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PastEnd", "disc-pastend-store");
+        String pastEnd = java.time.LocalDate.now().minusDays(1) + "T00:00:00";
+
+        mockMvc.perform(post("/merchant/stores/" + storeId + "/discounts")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "code", "STALE", "type", "FIXED", "value", 5, "endsAt", pastEnd))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateDiscount_toPastEndDate_isRejected() throws Exception {
+        String token = registerAndGetToken("disc-pastend-update@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "PastEndUpd", "disc-pastend-upd-store");
+        long id = createDiscount(token, storeId, Map.of("code", "OKAY", "type", "FIXED", "value", 5));
+        String pastEnd = java.time.LocalDate.now().minusDays(1) + "T00:00:00";
+
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/discounts/" + id)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "code", "OKAY", "type", "FIXED", "value", 5, "endsAt", pastEnd))))
+                .andExpect(status().isBadRequest());
     }
 
     /** The store's first (and here only) discount, as JSON. */

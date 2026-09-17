@@ -402,6 +402,11 @@ public class DiscountService {
         if (startsAt != null && endsAt != null && startsAt.isAfter(endsAt)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The start date must be before the end date.");
         }
+        // An end date must be in the future (mirrors the sale-end rule): a past end
+        // means the code is dead on arrival. Start dates may be backdated freely.
+        if (endsAt != null && endsAt.isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The end date must be in the future.");
+        }
     }
 
     private ResponseStatusException reject(String message) {

@@ -392,7 +392,7 @@ export function EditProduct({
                     </div>
                     <div>
                       <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Sale ends</label>
-                      <DatePicker value={saleEnd} onChange={setSaleEnd} placeholder="No end" ariaLabel="Sale end date" />
+                      <DatePicker value={saleEnd} onChange={setSaleEnd} min={new Date().toLocaleDateString('en-CA')} placeholder="No end" ariaLabel="Sale end date" />
                     </div>
                   </div>
                 )}
