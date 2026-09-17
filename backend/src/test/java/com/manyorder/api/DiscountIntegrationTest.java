@@ -299,4 +299,50 @@ class DiscountIntegrationTest extends IntegrationTestBase {
 
         checkout(storeId, productId, 1, "OFF", 400);
     }
+
+    @Test
+    void updateDiscount_clearsValidityWindow_whenDatesSentNull() throws Exception {
+        String token = registerAndGetToken("disc-clear-dates@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "ClearDates", "disc-clear-dates-store");
+        long id = createDiscount(token, storeId, Map.of(
+                "code", "WINDOW", "type", "FIXED", "value", 5,
+                "startsAt", "2030-01-01T00:00:00", "endsAt", "2030-12-31T23:59:59"));
+
+        // Both bounds are set to begin with.
+        JsonNode before = firstDiscount(token, storeId);
+        assertEquals("2030-01-01T00:00:00", before.get("startsAt").asText());
+        assertEquals("2030-12-31T23:59:59", before.get("endsAt").asText());
+
+        // The edit form always sends the whole window, so an explicit null clears
+        // it (open-ended), rather than leaving the old value in place.
+        java.util.HashMap<String, Object> clear = new java.util.HashMap<>();
+        clear.put("code", "WINDOW");
+        clear.put("type", "FIXED");
+        clear.put("value", 5);
+        clear.put("startsAt", null);
+        clear.put("endsAt", null);
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/discounts/" + id)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(clear)))
+                .andExpect(status().isOk());
+
+        JsonNode after = firstDiscount(token, storeId);
+        assertEquals(true, after.get("startsAt").isNull());
+        assertEquals(true, after.get("endsAt").isNull());
+
+        // A later edit can set the window again (normal round-trip still works).
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/discounts/" + id)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "code", "WINDOW", "type", "FIXED", "value", 5,
+                                "endsAt", "2031-06-30T23:59:59"))))
+                .andExpect(status().isOk());
+        JsonNode reset = firstDiscount(token, storeId);
+        assertEquals("2031-06-30T23:59:59", reset.get("endsAt").asText());
+    }
+
+    /** The store's first (and here only) discount, as JSON. */
+    private JsonNode firstDiscount(String token, long storeId) throws Exception {
+        return json(getWithToken("/merchant/stores/" + storeId + "/discounts", token, 200)).get(0);
+    }
 }

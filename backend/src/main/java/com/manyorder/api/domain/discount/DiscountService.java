@@ -101,8 +101,11 @@ public class DiscountService {
         if (request.getType() != null) discount.setType(request.getType());
         if (request.getValue() != null) discount.setValue(request.getValue());
         if (request.getUsageLimit() != null) discount.setUsageLimit(request.getUsageLimit());
-        if (request.getStartsAt() != null) discount.setStartsAt(request.getStartsAt());
-        if (request.getEndsAt() != null) discount.setEndsAt(request.getEndsAt());
+        // The validity window is always fully sent by the edit form, so a null here
+        // means "cleared" (open-ended on that side), not "leave unchanged". Set it
+        // unconditionally so an existing start/end can be cleared back to empty.
+        discount.setStartsAt(request.getStartsAt());
+        discount.setEndsAt(request.getEndsAt());
         if (request.getActive() != null) discount.setActive(request.getActive());
         // Null = leave scope unchanged; a list (even empty) replaces it.
         if (request.getProductIds() != null) {
