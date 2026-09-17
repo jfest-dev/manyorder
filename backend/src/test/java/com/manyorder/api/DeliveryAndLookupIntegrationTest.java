@@ -23,7 +23,7 @@ class DeliveryAndLookupIntegrationTest extends IntegrationTestBase {
     // ---------- helpers ----------
 
     private long createProduct(String token, long storeId, String name, double price, boolean preOrder) throws Exception {
-        var body = new HashMap<String, Object>(Map.of("name", name, "price", price));
+        var body = new HashMap<String, Object>(Map.of("name", name, "price", price, "stock", 100000));
         if (preOrder) body.put("preOrder", true);
         MvcResult r = mockMvc.perform(post("/merchant/stores/" + storeId + "/products")
                         .header("Authorization", "Bearer " + token)

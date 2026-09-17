@@ -21,10 +21,12 @@ class SaleStackingIntegrationTest extends IntegrationTestBase {
     private static final String FUTURE = "2099-12-31T23:59:59";
 
     private long createProduct(String token, long storeId, Map<String, Object> body) throws Exception {
+        Map<String, Object> stocked = new java.util.HashMap<>(body);
+        stocked.putIfAbsent("stock", 100000); // sellable by default; tests can override
         MvcResult r = mockMvc.perform(post("/merchant/stores/" + storeId + "/products")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(stocked)))
                 .andExpect(status().isCreated()).andReturn();
         return json(r).get("id").asLong();
     }

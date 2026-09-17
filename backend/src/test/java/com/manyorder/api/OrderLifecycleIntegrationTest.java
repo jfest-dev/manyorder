@@ -69,7 +69,7 @@ class OrderLifecycleIntegrationTest extends IntegrationTestBase {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                Map.of("name", "Kopi", "description", "Hot", "price", 3.5))))
+                                Map.of("name", "Kopi", "description", "Hot", "price", 3.5, "stock", 100000))))
                 .andExpect(status().isCreated())
                 .andReturn();
         long productId = json(productResult).get("id").asLong();

@@ -104,7 +104,6 @@ public class ProductService {
                 request.getPrice());
         product.setCategory(resolveCategory(merchant, request.getCategoryId()));
         product.setStock(request.getStock() != null ? request.getStock() : 0);
-        product.setTrackInventory(Boolean.TRUE.equals(request.getTrackInventory())); // opt-in, default off
         product.setDisplayOrder(nextDisplayOrder(merchant)); // append to the end of the list
         product.setSku(request.getSku());
         product.setPhotoUrl(isBlank(request.getPhotoUrl()) ? null : request.getPhotoUrl());
@@ -163,7 +162,6 @@ public class ProductService {
                     : resolveCategory(merchant, request.getCategoryId()));
         }
         if (request.getStock() != null) product.setStock(request.getStock());
-        if (request.getTrackInventory() != null) product.setTrackInventory(request.getTrackInventory());
         if (request.getSku() != null) product.setSku(request.getSku());
 
         // The pre-order schedule is owned by the preOrder flag, so it's applied

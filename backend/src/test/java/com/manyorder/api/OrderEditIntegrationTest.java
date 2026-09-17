@@ -132,7 +132,7 @@ class OrderEditIntegrationTest extends IntegrationTestBase {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                Map.of("name", name, "description", "d", "price", price))))
+                                Map.of("name", name, "description", "d", "price", price, "stock", 100000))))
                 .andExpect(status().isCreated())
                 .andReturn();
         return json(result).get("id").asLong();

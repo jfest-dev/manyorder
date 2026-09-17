@@ -27,17 +27,19 @@ class FreeDeliveryDiscountIntegrationTest extends IntegrationTestBase {
     // ---------- helpers ----------
 
     private long createProduct(String token, long storeId, Map<String, Object> body) throws Exception {
+        Map<String, Object> stocked = new java.util.HashMap<>(body);
+        stocked.putIfAbsent("stock", 100000); // sellable by default; tests can override
         MvcResult r = mockMvc.perform(post("/merchant/stores/" + storeId + "/products")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(body)))
+                        .content(objectMapper.writeValueAsString(stocked)))
                 .andExpect(status().isCreated())
                 .andReturn();
         return json(r).get("id").asLong();
     }
 
     private long createProduct(String token, long storeId, String name, double price) throws Exception {
-        return createProduct(token, storeId, Map.of("name", name, "price", price));
+        return createProduct(token, storeId, Map.of("name", name, "price", price, "stock", 100000));
     }
 
     private void patchStore(String token, long storeId, Map<String, Object> body) throws Exception {

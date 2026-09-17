@@ -21,17 +21,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Opt-in inventory tracking: orders on a trackInventory product atomically draw
- * down stock and are rejected rather than oversell; cancelling restocks. The
- * atomic conditional UPDATE is what makes two concurrent last-unit checkouts safe
- * without locking, so the concurrency test leads.
+ * Automatic inventory tracking: every product's orders atomically draw down stock
+ * and are rejected rather than oversell; cancelling restocks. Only pre-order lines
+ * are exempt. The atomic conditional UPDATE is what makes two concurrent last-unit
+ * checkouts safe without locking, so the concurrency test leads.
  */
 class StockInventoryIntegrationTest extends IntegrationTestBase {
 
     // ---------- helpers ----------
 
     /** Create a product and return its id. Body is raw JSON so tests can set
-     *  stock / trackInventory / preOrder freely. */
+     *  stock / preOrder freely. */
     private long createProduct(String token, long storeId, String json) throws Exception {
         MvcResult r = mockMvc.perform(post("/merchant/stores/" + storeId + "/products")
                         .header("Authorization", "Bearer " + token)
@@ -84,7 +84,7 @@ class StockInventoryIntegrationTest extends IntegrationTestBase {
         String token = registerAndGetToken("stock-race@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Race", "stock-race-store");
         long productId = createProduct(token, storeId,
-                "{\"name\":\"Last One\",\"price\":5.00,\"stock\":1,\"trackInventory\":true}");
+                "{\"name\":\"Last One\",\"price\":5.00,\"stock\":1}");
 
         // Two shoppers (distinct phones, so customer creation can't confound the
         // result) fire the last-unit checkout at the same instant.
@@ -125,7 +125,7 @@ class StockInventoryIntegrationTest extends IntegrationTestBase {
         String token = registerAndGetToken("stock-short@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Short", "stock-short-store");
         long productId = createProduct(token, storeId,
-                "{\"name\":\"Scarce\",\"price\":5.00,\"stock\":1,\"trackInventory\":true}");
+                "{\"name\":\"Scarce\",\"price\":5.00,\"stock\":1}");
 
         MvcResult r = postCheckout(storeId, productId, 2, "+6591111111");
         assertEquals(400, r.getResponse().getStatus());
@@ -139,9 +139,9 @@ class StockInventoryIntegrationTest extends IntegrationTestBase {
         String token = registerAndGetToken("stock-multi@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Multi", "stock-multi-store");
         long ok = createProduct(token, storeId,
-                "{\"name\":\"Plenty\",\"price\":5.00,\"stock\":10,\"trackInventory\":true}");
+                "{\"name\":\"Plenty\",\"price\":5.00,\"stock\":10}");
         long shortP = createProduct(token, storeId,
-                "{\"name\":\"OnlyOne\",\"price\":5.00,\"stock\":1,\"trackInventory\":true}");
+                "{\"name\":\"OnlyOne\",\"price\":5.00,\"stock\":1}");
 
         String body = objectMapper.writeValueAsString(Map.of(
                 "merchantId", storeId, "customerName", "Guest", "customerPhone", "+6592222222",
@@ -163,7 +163,7 @@ class StockInventoryIntegrationTest extends IntegrationTestBase {
         String token = registerAndGetToken("stock-cancel@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Cancel", "stock-cancel-store");
         long productId = createProduct(token, storeId,
-                "{\"name\":\"Refundable\",\"price\":5.00,\"stock\":5,\"trackInventory\":true}");
+                "{\"name\":\"Refundable\",\"price\":5.00,\"stock\":5}");
 
         MvcResult r = postCheckout(storeId, productId, 2, "+6593333333");
         assertEquals(201, r.getResponse().getStatus());
@@ -174,29 +174,17 @@ class StockInventoryIntegrationTest extends IntegrationTestBase {
         assertEquals(5, stockOf(token, storeId, productId), "cancelling returns the 2 units");
     }
 
-    // ---------- decrement + opt-in boundaries ----------
+    // ---------- decrement + the pre-order exception ----------
 
     @Test
-    void checkout_decrementsTrackedStock() throws Exception {
+    void checkout_decrementsStock() throws Exception {
         String token = registerAndGetToken("stock-dec@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Dec", "stock-dec-store");
         long productId = createProduct(token, storeId,
-                "{\"name\":\"Tracked\",\"price\":5.00,\"stock\":5,\"trackInventory\":true}");
+                "{\"name\":\"Regular\",\"price\":5.00,\"stock\":5}");
 
         assertEquals(201, postCheckout(storeId, productId, 2, "+6594444444").getResponse().getStatus());
         assertEquals(3, stockOf(token, storeId, productId));
-    }
-
-    @Test
-    void checkout_untrackedProduct_stockUnchanged() throws Exception {
-        String token = registerAndGetToken("stock-untracked@test.com", "MERCHANT", null);
-        long storeId = createStore(token, "Untracked", "stock-untracked-store");
-        // Default trackInventory=false: stock is display-only, orders never touch it.
-        long productId = createProduct(token, storeId,
-                "{\"name\":\"Display\",\"price\":5.00,\"stock\":1}");
-
-        assertEquals(201, postCheckout(storeId, productId, 3, "+6595555555").getResponse().getStatus());
-        assertEquals(1, stockOf(token, storeId, productId), "untracked stock is never decremented");
     }
 
     @Test
@@ -204,7 +192,7 @@ class StockInventoryIntegrationTest extends IntegrationTestBase {
         String token = registerAndGetToken("stock-preorder@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Pre", "stock-preorder-store");
         long productId = createProduct(token, storeId,
-                "{\"name\":\"Coming Soon\",\"price\":5.00,\"stock\":5,\"trackInventory\":true,\"preOrder\":true}");
+                "{\"name\":\"Coming Soon\",\"price\":5.00,\"stock\":5,\"preOrder\":true}");
 
         assertEquals(201, postCheckout(storeId, productId, 2, "+6596666666").getResponse().getStatus());
         assertEquals(5, stockOf(token, storeId, productId), "pre-order lines are not in current stock");
@@ -213,11 +201,11 @@ class StockInventoryIntegrationTest extends IntegrationTestBase {
     // ---------- manual orders ----------
 
     @Test
-    void manualOrder_decrementsTrackedStock() throws Exception {
+    void manualOrder_decrementsStock() throws Exception {
         String token = registerAndGetToken("stock-manual@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Manual", "stock-manual-store");
         long productId = createProduct(token, storeId,
-                "{\"name\":\"Counter\",\"price\":5.00,\"stock\":5,\"trackInventory\":true}");
+                "{\"name\":\"Counter\",\"price\":5.00,\"stock\":5}");
 
         postManualOrder(token, storeId, productId, 2);
         assertEquals(3, stockOf(token, storeId, productId), "manual orders decrement too");
@@ -228,7 +216,7 @@ class StockInventoryIntegrationTest extends IntegrationTestBase {
         String token = registerAndGetToken("stock-edit@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Edit", "stock-edit-store");
         long productId = createProduct(token, storeId,
-                "{\"name\":\"Editable\",\"price\":5.00,\"stock\":5,\"trackInventory\":true}");
+                "{\"name\":\"Editable\",\"price\":5.00,\"stock\":5}");
 
         long orderId = json(postManualOrder(token, storeId, productId, 2)).get("id").asLong();
         assertEquals(3, stockOf(token, storeId, productId));

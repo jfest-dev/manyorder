@@ -54,7 +54,7 @@ class ModifierIntegrationTest extends IntegrationTestBase {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
-                                "name", name, "price", price,
+                                "name", name, "price", price, "stock", 100000,
                                 "modifierGroups", List.of(size, addons)))))
                 .andExpect(status().isCreated())
                 .andReturn();

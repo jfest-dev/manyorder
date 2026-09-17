@@ -36,7 +36,7 @@ class DiscountIntegrationTest extends IntegrationTestBase {
         MvcResult r = mockMvc.perform(post("/merchant/stores/" + storeId + "/products")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("name", name, "price", price))))
+                        .content(objectMapper.writeValueAsString(Map.of("name", name, "price", price, "stock", 100000))))
                 .andExpect(status().isCreated())
                 .andReturn();
         return json(r).get("id").asLong();

@@ -117,7 +117,7 @@ class StoreSettingsIntegrationTest extends IntegrationTestBase {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                Map.of("name", "Latte", "description", "Hot", "price", 6.50))))
+                                Map.of("name", "Latte", "description", "Hot", "price", 6.50, "stock", 100000))))
                 .andExpect(status().isCreated())
                 .andReturn();
         long productId = json(productResult).get("id").asLong();

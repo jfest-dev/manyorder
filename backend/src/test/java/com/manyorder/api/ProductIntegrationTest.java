@@ -295,7 +295,7 @@ class ProductIntegrationTest extends IntegrationTestBase {
     void unitsSold_sumsQuantityAcrossCompletedAndDelivered_excludesOthers() throws Exception {
         String token = registerAndGetToken("prod-units@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Units Store", "units-store");
-        long productId = createProduct(token, storeId, "{\"name\":\"Coffee\",\"price\":4.00}");
+        long productId = createProduct(token, storeId, "{\"name\":\"Coffee\",\"price\":4.00,\"stock\":100000}");
 
         // COMPLETED order, qty 3.
         long o1 = createOrderWithItem(token, storeId, productId, 3);
@@ -337,7 +337,7 @@ class ProductIntegrationTest extends IntegrationTestBase {
     void manualOrder_isTaggedSourceManual() throws Exception {
         String token = registerAndGetToken("prod-source@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Src Store", "src-store");
-        long productId = createProduct(token, storeId, "{\"name\":\"Thing\",\"price\":1.00}");
+        long productId = createProduct(token, storeId, "{\"name\":\"Thing\",\"price\":1.00,\"stock\":100000}");
         long orderId = createOrderWithItem(token, storeId, productId, 1);
 
         assertEquals(OrderSource.MANUAL, orderRepository.findById(orderId).orElseThrow().getSource());

@@ -200,19 +200,19 @@ public class OrderService {
     }
 
     /**
-     * Atomically draw down tracked inventory for one ordered line, or reject the
-     * whole order. Pre-order lines and products that don't track inventory are
-     * no-ops (return false). Otherwise a single conditional UPDATE decrements the
-     * stock iff enough remains; if it doesn't, the order is rejected with the
-     * quantity left. Returns true when stock was actually decremented, so the
-     * caller can record it on the order line for an exact restock on cancel.
+     * Atomically draw down stock for one ordered line, or reject the whole order.
+     * Applies to every product; only pre-order lines are exempt (they sell before
+     * the item is in stock). A single conditional UPDATE decrements the stock iff
+     * enough remains; if it doesn't, the order is rejected with the quantity left.
+     * Returns true when stock was actually decremented, so the caller can record
+     * it on the order line for an exact restock on cancel.
      *
      * <p>Runs in the caller's transaction (guest checkout and manual-order create
      * are both {@code @Transactional}), so a rejection here rolls back the whole
      * order — including any lines already decremented in the same cart.
      */
     public boolean decrementStockForOrderLine(Product product, int quantity) {
-        if (product.isPreOrder() || !product.isTrackInventory()) {
+        if (product.isPreOrder()) {
             return false;
         }
         int updated = productRepository.decrementStockIfAvailable(product.getId(), quantity);

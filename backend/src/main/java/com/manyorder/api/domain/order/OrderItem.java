@@ -54,9 +54,9 @@ public class OrderItem {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
-    /** True when this line drew down tracked inventory at order time. Recorded per
-     *  line so cancelling restocks exactly what was taken, immune to the product's
-     *  trackInventory/pre-order flags changing afterwards. */
+    /** True when this line drew down stock at order time (i.e. not a pre-order
+     *  line). Recorded per line so cancelling restocks exactly what was taken,
+     *  immune to the product's pre-order flag changing afterwards. */
     @Column(nullable = false, columnDefinition = "boolean default false not null")
     private boolean stockDecremented = false;
 

@@ -34,9 +34,6 @@ public class UpdateProductRequest {
     @PositiveOrZero
     private Integer stock;
 
-    /** null = leave inventory-tracking unchanged; true/false sets it. */
-    private Boolean trackInventory;
-
     @Size(max = 255, message = "SKU must be 255 characters or fewer")
     private String sku;
 
@@ -76,8 +73,6 @@ public class UpdateProductRequest {
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
     public Integer getStock() { return stock; }
     public void setStock(Integer stock) { this.stock = stock; }
-    public Boolean getTrackInventory() { return trackInventory; }
-    public void setTrackInventory(Boolean trackInventory) { this.trackInventory = trackInventory; }
     public String getSku() { return sku; }
     public void setSku(String sku) { this.sku = sku; }
     public String getPhotoUrl() { return photoUrl; }
