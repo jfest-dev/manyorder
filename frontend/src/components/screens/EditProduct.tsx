@@ -249,13 +249,9 @@ export function EditProduct({
         // Always sent → replace-on-save. An empty array clears the product's modifiers.
         modifierGroups: editorGroupsToInputs(modifierGroups),
       };
-      // Status maps to isActive via a dedicated call (update doesn't carry it).
+      // Active/draft is managed solely from the Products list row now, so Edit
+      // Product no longer writes it here (one control, no duplicated logic).
       await productsApi.update(storeId, productId, payload);
-      if (status === 'draft') {
-        await productsApi.deactivate(storeId, productId);
-      } else {
-        await productsApi.activate(storeId, productId);
-      }
       dirtyRef.current = false; // saved - no unsaved changes to guard
       return true;
     } catch (e: any) {
@@ -404,16 +400,7 @@ export function EditProduct({
 
               <FieldInput label="SKU" placeholder="e.g. HDPH-001" value={sku} onChange={setSku} helperText="Optional stock-keeping unit" maxLength={255} />
 
-              {/* Status */}
-              <div>
-                <ToggleSwitch
-                  checked={status === 'active'}
-                  onChange={(c) => setStatus(c ? 'active' : 'draft')}
-                  label="Visible to customers"
-                  description={status === 'active' ? 'Active. Shown on your storefront.' : 'Draft. Hidden from customers.'}
-                />
-                <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>Out of stock shows automatically when stock reaches 0.</p>
-              </div>
+              {/* Active/draft is set from the Products list row now, not here. */}
 
               {/* Pre-order */}
               <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
