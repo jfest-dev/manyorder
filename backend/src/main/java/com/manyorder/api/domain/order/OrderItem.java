@@ -54,6 +54,12 @@ public class OrderItem {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    /** True when this line drew down tracked inventory at order time. Recorded per
+     *  line so cancelling restocks exactly what was taken, immune to the product's
+     *  trackInventory/pre-order flags changing afterwards. */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean stockDecremented = false;
+
     @OneToMany(mappedBy = "orderItem", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderItemModifier> modifiers = new ArrayList<>();
 
@@ -113,6 +119,9 @@ public class OrderItem {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public boolean isStockDecremented() { return stockDecremented; }
+    public void setStockDecremented(boolean stockDecremented) { this.stockDecremented = stockDecremented; }
 
     public List<OrderItemModifier> getModifiers() { return modifiers; }
 }

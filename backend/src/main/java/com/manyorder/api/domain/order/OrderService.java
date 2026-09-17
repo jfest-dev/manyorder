@@ -133,7 +133,13 @@ public class OrderService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Line items can only be edited while the order is Pending or Confirmed");
             }
-            orderItemRepository.deleteAll(orderItemRepository.findByOrder(order));
+            // Return the old lines' drawn-down inventory before replacing them, so
+            // the recreated lines decrement from a correct base (no double count).
+            List<OrderItem> oldItems = orderItemRepository.findByOrder(order);
+            for (OrderItem oi : oldItems) {
+                restockOrderLine(oi);
+            }
+            orderItemRepository.deleteAll(oldItems);
             orderItemRepository.flush();
 
             BigDecimal subtotal = BigDecimal.ZERO;
@@ -180,6 +186,8 @@ public class OrderService {
         // Honour an active sale on manual orders too, snapshotting the effective base.
         OrderItem item = new OrderItem(order, product, itemReq.getQuantity(),
                 product.effectivePriceAt(java.time.LocalDateTime.now()));
+        // Draw down tracked inventory (rejects the whole order if it would oversell).
+        item.setStockDecremented(decrementStockForOrderLine(product, itemReq.getQuantity()));
         if (itemReq.getNotes() != null && !itemReq.getNotes().isBlank()) {
             item.setNotes(itemReq.getNotes().trim());
         }
@@ -191,6 +199,42 @@ public class OrderService {
         return item.getLineSubtotal();
     }
 
+    /**
+     * Atomically draw down tracked inventory for one ordered line, or reject the
+     * whole order. Pre-order lines and products that don't track inventory are
+     * no-ops (return false). Otherwise a single conditional UPDATE decrements the
+     * stock iff enough remains; if it doesn't, the order is rejected with the
+     * quantity left. Returns true when stock was actually decremented, so the
+     * caller can record it on the order line for an exact restock on cancel.
+     *
+     * <p>Runs in the caller's transaction (guest checkout and manual-order create
+     * are both {@code @Transactional}), so a rejection here rolls back the whole
+     * order — including any lines already decremented in the same cart.
+     */
+    public boolean decrementStockForOrderLine(Product product, int quantity) {
+        if (product.isPreOrder() || !product.isTrackInventory()) {
+            return false;
+        }
+        int updated = productRepository.decrementStockIfAvailable(product.getId(), quantity);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only " + product.getStock() + " of " + product.getName() + " left");
+        }
+        return true;
+    }
+
+    /**
+     * Return an order line's drawn-down units to stock, once. No-op unless the
+     * line actually decremented and its product still exists (a deleted product
+     * has no stock to restore). Clears the flag so a repeat call can't double-add.
+     */
+    void restockOrderLine(OrderItem item) {
+        if (item.isStockDecremented() && item.getProduct() != null) {
+            productRepository.restock(item.getProduct().getId(), item.getQuantity());
+            item.setStockDecremented(false);
+        }
+    }
+
     @Transactional
     public OrderResponse updateOrderStatus(Merchant merchant, Long orderId, OrderStatus newStatus) {
         Order order = getOrder(merchant, orderId);
@@ -199,6 +243,17 @@ public class OrderService {
         if (!isValidStatusTransition(currentStatus, newStatus)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Invalid status transition from " + currentStatus + " to " + newStatus);
+        }
+
+        // Cancelling releases any inventory the order drew down. CANCELLED is a
+        // terminal state (unreachable once COMPLETED or already CANCELLED), so this
+        // restock runs exactly once per order.
+        if (newStatus == OrderStatus.CANCELLED) {
+            List<OrderItem> items = orderItemRepository.findByOrder(order);
+            for (OrderItem oi : items) {
+                restockOrderLine(oi);
+            }
+            orderItemRepository.saveAll(items);
         }
 
         order.setStatus(newStatus);

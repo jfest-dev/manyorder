@@ -68,6 +68,13 @@ public class Product {
     @Column(nullable = false, columnDefinition = "integer default 0 not null")
     private Integer stock = 0;
 
+    /** Opt-in inventory tracking. When true, placing an order atomically draws
+     *  down {@link #stock} and is rejected if a line would oversell; cancelling
+     *  restocks it. Default false: stock is display-only and orders never touch
+     *  it, so stores that don't manage inventory are unaffected. */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean trackInventory = false;
+
     /** Merchant-defined ordering for the products list + storefront (lower first). */
     @Column(nullable = false, columnDefinition = "integer default 0 not null")
     private Integer displayOrder = 0;
@@ -183,6 +190,8 @@ public class Product {
 
     public Integer getStock() { return stock; }
     public void setStock(Integer stock) { this.stock = stock; }
+    public boolean isTrackInventory() { return trackInventory; }
+    public void setTrackInventory(boolean trackInventory) { this.trackInventory = trackInventory; }
 
     public Integer getDisplayOrder() { return displayOrder; }
     public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }

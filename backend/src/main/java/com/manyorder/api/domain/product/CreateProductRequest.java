@@ -38,6 +38,9 @@ public class CreateProductRequest {
     @PositiveOrZero
     private Integer stock;
 
+    /** Opt in to inventory tracking (atomic decrement + oversell rejection). */
+    private Boolean trackInventory;
+
     @Size(max = 255, message = "SKU must be 255 characters or fewer")
     private String sku;
 
@@ -73,6 +76,8 @@ public class CreateProductRequest {
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
     public Integer getStock() { return stock; }
     public void setStock(Integer stock) { this.stock = stock; }
+    public Boolean getTrackInventory() { return trackInventory; }
+    public void setTrackInventory(Boolean trackInventory) { this.trackInventory = trackInventory; }
     public String getSku() { return sku; }
     public void setSku(String sku) { this.sku = sku; }
     public String getPhotoUrl() { return photoUrl; }

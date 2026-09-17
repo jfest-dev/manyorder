@@ -34,4 +34,24 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Modifying
     @Query("UPDATE Product p SET p.category = null WHERE p.category = :category")
     int clearCategory(@Param("category") Category category);
+
+    /**
+     * Atomically draw down stock only if enough remains. Returns the number of
+     * rows updated: 1 = decremented, 0 = insufficient stock (the caller rejects
+     * the order). The {@code stock >= :qty} guard in a single UPDATE is what makes
+     * two concurrent last-unit orders safe without explicit locking — exactly one
+     * matches, the other sees the already-lowered stock and updates nothing.
+     */
+    // Native UPDATEs: the plain arithmetic is identical on H2 and Postgres, and it
+    // sidesteps Hibernate's JPQL type-cast, which would otherwise wrap the param in
+    // a cast built from the stock column's full definition ("integer default 0 ...").
+    @Modifying
+    @Query(value = "UPDATE products SET stock = stock - :qty WHERE id = :id AND stock >= :qty",
+           nativeQuery = true)
+    int decrementStockIfAvailable(@Param("id") Long id, @Param("qty") int qty);
+
+    /** Add stock back (order cancellation / manual-order edit). Unconditional. */
+    @Modifying
+    @Query(value = "UPDATE products SET stock = stock + :qty WHERE id = :id", nativeQuery = true)
+    int restock(@Param("id") Long id, @Param("qty") int qty);
 }

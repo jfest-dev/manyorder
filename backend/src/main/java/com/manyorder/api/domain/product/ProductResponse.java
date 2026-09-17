@@ -35,6 +35,7 @@ public class ProductResponse {
     /** The category's displayOrder, so the storefront can order its chips. */
     private final Integer categoryDisplayOrder;
     private final Integer stock;
+    private final boolean trackInventory;
     private final String sku;
     private final String photoUrl;
     private final boolean preOrder;
@@ -74,6 +75,7 @@ public class ProductResponse {
         this.categoryName = p.getCategory() != null ? p.getCategory().getName() : null;
         this.categoryDisplayOrder = p.getCategory() != null ? p.getCategory().getDisplayOrder() : null;
         this.stock = p.getStock();
+        this.trackInventory = p.isTrackInventory();
         this.sku = p.getSku();
         this.photoUrl = p.getPhotoUrl();
         this.preOrder = p.isPreOrder();
@@ -107,6 +109,7 @@ public class ProductResponse {
     public String getCategoryName() { return categoryName; }
     public Integer getCategoryDisplayOrder() { return categoryDisplayOrder; }
     public Integer getStock() { return stock; }
+    public boolean isTrackInventory() { return trackInventory; }
     public String getSku() { return sku; }
     public String getPhotoUrl() { return photoUrl; }
     public boolean isPreOrder() { return preOrder; }

@@ -251,6 +251,9 @@ public class GuestCheckoutController {
             // Snapshot the effective base price (sale-aware) so history reflects
             // what was actually charged, immune to later price/sale changes.
             OrderItem item = new OrderItem(order, l.product(), l.quantity(), l.effectiveBase());
+            // Draw down tracked inventory; rejects (and rolls back the whole
+            // checkout) if this line would oversell. Pre-order lines are no-ops.
+            item.setStockDecremented(orderService.decrementStockForOrderLine(l.product(), l.quantity()));
             item.setNotes(l.notes());
             for (ModifierResolver.Selection s : l.resolution().selections()) {
                 item.addModifier(new OrderItemModifier(
