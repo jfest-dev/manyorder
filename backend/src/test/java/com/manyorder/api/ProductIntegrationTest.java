@@ -86,6 +86,9 @@ class ProductIntegrationTest extends IntegrationTestBase {
         long storeId = createStore(token, "Prod Store", "prod-store");
         long categoryId = createCategory(token, storeId, "Drinks");
 
+        // Relative future date so the pre-order date stays valid as time passes.
+        String readyDate = java.time.LocalDate.now().plusDays(30).toString();
+
         mockMvc.perform(post("/merchant/stores/" + storeId + "/products")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -99,12 +102,12 @@ class ProductIntegrationTest extends IntegrationTestBase {
                                   "sku": "MAT-001",
                                   "photoUrl": "https://res.cloudinary.com/x/image/upload/v1/manyorder/1/9/products/1/a.png",
                                   "preOrder": true,
-                                  "preOrderReadyDate": "2026-09-01",
+                                  "preOrderReadyDate": "%s",
                                   "preOrderReadyTimeStart": "14:00",
                                   "preOrderReadyTimeEnd": "18:00",
                                   "preOrderNote": "Ships in September"
                                 }
-                                """.formatted(categoryId)))
+                                """.formatted(categoryId, readyDate)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Matcha Latte"))
                 .andExpect(jsonPath("$.categoryId").value((int) categoryId))
@@ -113,7 +116,7 @@ class ProductIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.sku").value("MAT-001"))
                 .andExpect(jsonPath("$.photoUrl").value("https://res.cloudinary.com/x/image/upload/v1/manyorder/1/9/products/1/a.png"))
                 .andExpect(jsonPath("$.preOrder").value(true))
-                .andExpect(jsonPath("$.preOrderReadyDate").value("2026-09-01"))
+                .andExpect(jsonPath("$.preOrderReadyDate").value(readyDate))
                 .andExpect(jsonPath("$.preOrderReadyTimeStart").value(org.hamcrest.Matchers.startsWith("14:00")))
                 .andExpect(jsonPath("$.preOrderReadyTimeEnd").value(org.hamcrest.Matchers.startsWith("18:00")))
                 .andExpect(jsonPath("$.preOrderNote").value("Ships in September"))
@@ -166,27 +169,30 @@ class ProductIntegrationTest extends IntegrationTestBase {
     void updateProduct_clearsPreOrderScheduleWhenFieldsOmitted() throws Exception {
         String token = registerAndGetToken("prod-preorder-clear@test.com", "MERCHANT", null);
         long storeId = createStore(token, "PreOrder Store", "preorder-store");
+        // Relative future dates so the pre-order dates stay valid as time passes.
+        String readyDate = java.time.LocalDate.now().plusDays(30).toString();
+        String laterDate = java.time.LocalDate.now().plusDays(60).toString();
         long id = createProduct(token, storeId, """
                 {
                   "name": "Mooncake",
                   "price": 12.00,
                   "preOrder": true,
-                  "preOrderReadyDate": "2026-09-01",
+                  "preOrderReadyDate": "%s",
                   "preOrderReadyTimeStart": "14:00",
                   "preOrderReadyTimeEnd": "18:00",
                   "preOrderNote": "Ships in September"
                 }
-                """);
+                """.formatted(readyDate));
 
         // Still a pre-order, but the times + note are cleared (omitted). Under the
         // old "null = unchanged" rule these stuck; now an omitted sub-field clears.
         mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + id)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"preOrder\":true,\"preOrderReadyDate\":\"2026-10-05\"}"))
+                        .content("{\"preOrder\":true,\"preOrderReadyDate\":\"" + laterDate + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.preOrder").value(true))
-                .andExpect(jsonPath("$.preOrderReadyDate").value("2026-10-05"))
+                .andExpect(jsonPath("$.preOrderReadyDate").value(laterDate))
                 .andExpect(jsonPath("$.preOrderReadyTimeStart").doesNotExist())
                 .andExpect(jsonPath("$.preOrderReadyTimeEnd").doesNotExist())
                 .andExpect(jsonPath("$.preOrderNote").doesNotExist());
@@ -217,17 +223,19 @@ class ProductIntegrationTest extends IntegrationTestBase {
         // persist as genuinely empty, not revert to the previously-saved schedule.
         String token = registerAndGetToken("prod-preorder-noschedule@test.com", "MERCHANT", null);
         long storeId = createStore(token, "NoSchedule Store", "noschedule-store");
+        // Relative future date so the pre-order date stays valid as time passes.
+        String readyDate = java.time.LocalDate.now().plusDays(30).toString();
         long id = createProduct(token, storeId, """
                 {
                   "name": "Seasonal Bake",
                   "price": 9.00,
                   "preOrder": true,
-                  "preOrderReadyDate": "2026-09-01",
+                  "preOrderReadyDate": "%s",
                   "preOrderReadyTimeStart": "14:00",
                   "preOrderReadyTimeEnd": "18:00",
                   "preOrderNote": "Ships in September"
                 }
-                """);
+                """.formatted(readyDate));
 
         // Pre-order stays on; date AND both times are cleared, only a note remains.
         mockMvc.perform(patch("/merchant/stores/" + storeId + "/products/" + id)
