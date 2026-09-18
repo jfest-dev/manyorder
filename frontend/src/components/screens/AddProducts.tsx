@@ -331,9 +331,8 @@ export function AddProducts({
                       </p>
                     )}
 
-                    <FieldInput label="SKU" placeholder="e.g. ICW-001" value={product.sku} onChange={(v) => update(product.id, 'sku', v)} helperText="Optional stock-keeping unit" maxLength={255} />
-
-                    {/* Sale price (optional): a temporary reduced price shown automatically. */}
+                    {/* Sale price (optional): a temporary reduced price shown automatically.
+                        Sits right after the base price so pricing fields stay grouped. */}
                     <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
                       <MoneyField label="Sale price (optional)" currency={currency} value={product.salePrice} onChange={(v) => patch(product.id, { salePrice: v })} min={limits.min} max={limits.max} error={errors[product.id]?.salePrice} helperText="Shown automatically to customers during the sale window. Leave blank for no sale." />
                       {product.salePrice != null && (
@@ -349,6 +348,8 @@ export function AddProducts({
                         </div>
                       )}
                     </div>
+
+                    <FieldInput label="SKU" placeholder="e.g. ICW-001" value={product.sku} onChange={(v) => update(product.id, 'sku', v)} helperText="Optional stock-keeping unit" maxLength={255} />
 
                     {/* Pre-order */}
                     <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '12px' }}>
