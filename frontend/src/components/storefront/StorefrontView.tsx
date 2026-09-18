@@ -6,7 +6,7 @@ import { formatPreorderReady } from '../../lib/datetime';
 import { bestsellerProductIds } from '../../lib/bestsellers';
 import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from '../../lib/offers';
 import type { ProductResponse, PublicOffer } from '../../lib/api';
-import { StorefrontStore, isOrderable, initialsOf } from './storefrontTypes';
+import { StorefrontStore, isOrderable, initialsOf, maxOrderQuantity } from './storefrontTypes';
 import { QuantityStepper } from './QuantityStepper';
 
 interface StorefrontViewProps {
@@ -443,7 +443,7 @@ export function StorefrontView({
                       </button>
                     ) : plainQty > 0 && onSetQuantity ? (
                       <div style={{ background: 'white', borderRadius: '999px', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>
-                        <QuantityStepper quantity={plainQty} onChange={(q) => onSetQuantity(p.id, q)} min={0} size="sm" />
+                        <QuantityStepper quantity={plainQty} onChange={(q) => onSetQuantity(p.id, q)} min={0} max={maxOrderQuantity(p)} size="sm" />
                       </div>
                     ) : (
                       <button

@@ -5,6 +5,8 @@ interface QuantityStepperProps {
   onChange: (quantity: number) => void;
   /** Smallest allowed value. 0 lets the minus button remove the item (cart/shop). */
   min?: number;
+  /** Largest allowed value (e.g. a product's stock). Undefined = no cap. */
+  max?: number;
   size?: 'sm' | 'md';
   disabled?: boolean;
 }
@@ -14,7 +16,7 @@ interface QuantityStepperProps {
  * spacing/alignment is identical everywhere. Evenly-sized touch targets with a
  * centered value between them.
  */
-export function QuantityStepper({ quantity, onChange, min = 0, size = 'sm', disabled = false }: QuantityStepperProps) {
+export function QuantityStepper({ quantity, onChange, min = 0, max, size = 'sm', disabled = false }: QuantityStepperProps) {
   const dim = size === 'md' ? 44 : 34;
   const valueWidth = size === 'md' ? 44 : 38;
   const icon = size === 'md' ? 18 : 15;
@@ -28,7 +30,7 @@ export function QuantityStepper({ quantity, onChange, min = 0, size = 'sm', disa
   });
 
   const canDec = !disabled && quantity > min;
-  const canInc = !disabled;
+  const canInc = !disabled && (max === undefined || quantity < max);
 
   return (
     <div

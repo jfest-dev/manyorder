@@ -3,7 +3,7 @@ import { Package, ArrowLeft } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import type { ProductResponse, ModifierGroupView } from '../../lib/api';
-import { isOrderable } from './storefrontTypes';
+import { isOrderable, maxOrderQuantity } from './storefrontTypes';
 import { QuantityStepper } from './QuantityStepper';
 
 interface ProductDetailViewProps {
@@ -264,7 +264,7 @@ export function ProductDetailView({
               </div>
             )}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <QuantityStepper quantity={qty} onChange={setQty} min={1} size="md" disabled={!orderable} />
+              <QuantityStepper quantity={qty} onChange={setQty} min={1} max={maxOrderQuantity(product)} size="md" disabled={!orderable} />
               <button
                 disabled={!canSubmit}
                 onClick={submit}

@@ -26,6 +26,13 @@ export function isOrderable(p: ProductResponse): boolean {
   return p.preOrder || (p.stock ?? 0) > 0;
 }
 
+/** The most a customer may order of a product: a normal product is capped at its
+ *  current stock (orders can't oversell); a pre-order item draws from future
+ *  stock, so it stays uncapped (undefined = no limit). */
+export function maxOrderQuantity(p: ProductResponse): number | undefined {
+  return p.preOrder ? undefined : (p.stock ?? 0);
+}
+
 export function initialsOf(name: string): string {
   return (name || 'MS')
     .split(' ')
