@@ -246,3 +246,24 @@ covers both in one code, once such a combined type exists, without needing true
 multi-code support. Reach for that first; only build real multi-code stacking if
 a genuine need for two independently-managed codes on one order emerges. Not
 scoped further here; needs its own session.
+
+## General notification inbox (bell icon + aggregated feed)
+
+A single notification centre (bell icon or similar) that aggregates multiple
+distinct event types into one browsable feed with per-item read/unread state:
+new orders, low-stock alerts, and whatever event types come later. A real
+notifications model (event rows with a type, payload, created-at, and a per-user
+read flag), a feed UI (list, mark-one-read, mark-all-read, unread count on the
+bell), and a fan-out point where each event type writes a notification.
+
+Deliberately deferred: today only ONE event type is genuinely
+notification-worthy on the dashboard (new orders), and that is already covered
+by the simpler Orders-nav unread badge (per-store lastOrdersViewedAt +
+unseen-counts). Building a general inbox now would be infrastructure with a
+single feeder — more moving parts than the one signal justifies.
+
+Revisit trigger: once there are actually 2-3+ distinct notification-worthy event
+types competing for the merchant's attention (e.g. new orders AND low-stock AND
+a third), so a unified feed earns its keep over per-feature badges. At that point
+fold the existing Orders badge into the feed rather than running both. Needs its
+own build session; not scoped further here.

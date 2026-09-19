@@ -18,6 +18,7 @@ import com.manyorder.api.domain.order.CreateMerchantOrderRequest;
 import com.manyorder.api.domain.order.OrderResponse;
 import com.manyorder.api.domain.order.OrderService;
 import com.manyorder.api.domain.order.OrderStatus;
+import com.manyorder.api.domain.order.StoreUnseenCountResponse;
 import com.manyorder.api.domain.order.UpdateMerchantOrderRequest;
 import com.manyorder.api.domain.order.UpdateOrderStatusRequest;
 import com.manyorder.api.domain.order.UpdatePaymentStatusRequest;
@@ -109,5 +110,16 @@ public class MerchantOrderController {
         User user = currentUserService.require(authentication);
         Merchant merchant = storeAccessService.requireStoreMembership(user, storeId);
         return orderService.updatePaymentStatus(merchant, orderId, request.getPaymentStatus());
+    }
+
+    /** Mark this store's orders as seen (owner or staff), clearing the new-order
+     *  badge. The literal path takes precedence over the /{orderId} pattern. */
+    @PatchMapping("/mark-seen")
+    public StoreUnseenCountResponse markSeen(@PathVariable Long storeId,
+                                             Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        Merchant merchant = storeAccessService.requireStoreMembership(user, storeId);
+        orderService.markOrdersSeen(merchant);
+        return new StoreUnseenCountResponse(storeId, 0);
     }
 }

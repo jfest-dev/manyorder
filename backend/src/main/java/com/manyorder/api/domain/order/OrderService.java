@@ -59,6 +59,22 @@ public class OrderService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
     }
 
+    /** Unseen new-order count for one store: storefront orders (not the merchant's
+     *  own manual entries), not cancelled, placed since the Orders screen was last
+     *  opened. Drives the sidebar badge. */
+    @Transactional(readOnly = true)
+    public long unseenOrderCount(Merchant merchant) {
+        return orderRepository.countUnseen(merchant, OrderSource.STOREFRONT,
+                OrderStatus.CANCELLED, merchant.getLastOrdersViewedAt());
+    }
+
+    /** Mark this store's orders as seen (stamps now), so the badge clears to 0. */
+    @Transactional
+    public void markOrdersSeen(Merchant merchant) {
+        merchant.setLastOrdersViewedAt(LocalDateTime.now());
+        merchantRepository.save(merchant);
+    }
+
     @Transactional
     public OrderResponse createMerchantOrder(Merchant merchant, CreateMerchantOrderRequest request) {
         Customer customer = findOrCreateCustomer(

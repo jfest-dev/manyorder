@@ -24,6 +24,23 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
      *  (cancelled) - drives the "first order only" discount check. */
     long countByMerchantAndCustomerAndStatusNot(Merchant merchant, Customer customer, OrderStatus excludedStatus);
 
+    /**
+     * Unseen new-order count for the sidebar badge: storefront orders (not the
+     * merchant's own manual entries), not cancelled, placed after {@code since}.
+     * A null {@code since} (never opened Orders) counts every such order.
+     */
+    @Query("""
+            SELECT COUNT(o) FROM Order o
+            WHERE o.merchant = :merchant
+              AND o.source = :source
+              AND o.status <> :excludedStatus
+              AND (:since IS NULL OR o.createdAt > :since)
+            """)
+    long countUnseen(@Param("merchant") Merchant merchant,
+                     @Param("source") OrderSource source,
+                     @Param("excludedStatus") OrderStatus excludedStatus,
+                     @Param("since") LocalDateTime since);
+
     /** Null out the customer FK on this customer's orders before the customer row
      *  is deleted, so past orders survive (their contact snapshot stays intact),
      *  mirroring how deleting a product detaches its order lines. */

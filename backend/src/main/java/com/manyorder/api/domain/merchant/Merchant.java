@@ -118,6 +118,11 @@ public class Merchant {
     @Column(nullable = false, columnDefinition = "boolean default true not null")
     private boolean itemNotesEnabled = true;
 
+    /** When the merchant last opened this store's Orders screen. Drives the
+     *  "new orders" sidebar badge: storefront orders placed after this are unseen.
+     *  Null = never opened, so every storefront order counts as unseen. */
+    private LocalDateTime lastOrdersViewedAt;
+
     private LocalDateTime createdAt;
 
     /**
@@ -188,6 +193,8 @@ public class Merchant {
     public void setNotifyUrgentWhatsapp(boolean v) { this.notifyUrgentWhatsapp = v; }
     public boolean isItemNotesEnabled() { return itemNotesEnabled; }
     public void setItemNotesEnabled(boolean v) { this.itemNotesEnabled = v; }
+    public LocalDateTime getLastOrdersViewedAt() { return lastOrdersViewedAt; }
+    public void setLastOrdersViewedAt(LocalDateTime v) { this.lastOrdersViewedAt = v; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getArchivedAt() { return archivedAt; }
     public void setArchivedAt(LocalDateTime archivedAt) { this.archivedAt = archivedAt; }
