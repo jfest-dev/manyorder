@@ -19,16 +19,23 @@ interface OrdersProps {
   onEditOrder?: (orderId: number) => void;
 }
 
-const STATUS_TABS: (OrderStatus | 'ALL')[] = [
-  'ALL', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY',
+// 'NEW' is a synthetic tab (not a status): a customer order not yet acted on.
+type TabKey = OrderStatus | 'ALL' | 'NEW';
+
+const STATUS_TABS: TabKey[] = [
+  'ALL', 'NEW', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY',
   'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED', 'CANCELLED',
 ];
 
 const STATUS_LABEL: Record<string, string> = {
-  ALL: 'All', PENDING: 'Pending', CONFIRMED: 'Confirmed', PREPARING: 'Preparing',
+  ALL: 'All', NEW: 'New', PENDING: 'Pending', CONFIRMED: 'Confirmed', PREPARING: 'Preparing',
   READY: 'Ready', OUT_FOR_DELIVERY: 'Out for Delivery', DELIVERED: 'Delivered',
   COMPLETED: 'Completed', CANCELLED: 'Cancelled',
 };
+
+/** A customer order not yet acted on: still in its initial (forward-only) status.
+ *  Drives both the per-row "New" tag and the "New" filter tab. */
+const isNewOrder = (o: OrderResponse) => o.source === 'STOREFRONT' && o.status === 'PENDING';
 
 const STATUS_STYLE: Record<OrderStatus, { bg: string; fg: string }> = {
   PENDING: { bg: '#FFF7ED', fg: '#C2410C' },
@@ -164,7 +171,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<OrderStatus | 'ALL'>(initialStatus);
+  const [tab, setTab] = useState<TabKey>(initialStatus);
   const [query, setQuery] = useState('');
   // Time-range scope (default 'all' preserves the all-orders view on load).
   const [range, setRange] = useState<TileRange>('all');
@@ -220,7 +227,11 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rangedOrders.filter((o) => {
-      if (tab !== 'ALL' && o.status !== tab) return false;
+      if (tab === 'NEW') {
+        if (!isNewOrder(o)) return false;
+      } else if (tab !== 'ALL' && o.status !== tab) {
+        return false;
+      }
       if (!q) return true;
       const status = STATUS_LABEL[o.status] || o.status;
       const haystack = [
@@ -473,7 +484,9 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {STATUS_TABS.map((s) => {
           const active = tab === s;
-          const count = s === 'ALL' ? rangedOrders.length : rangedOrders.filter((o) => o.status === s).length;
+          const count = s === 'ALL' ? rangedOrders.length
+            : s === 'NEW' ? rangedOrders.filter(isNewOrder).length
+            : rangedOrders.filter((o) => o.status === s).length;
           return (
             <button
               key={s}
@@ -514,16 +527,13 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
           </p>
         ) : filtered.length === 0 ? (
           <p className="text-small" style={{ padding: '32px 20px', color: 'var(--text-secondary)' }}>
-            No orders {tab !== 'ALL' ? `with status ${STATUS_LABEL[tab]}` : 'in this range'}.
+            No orders {tab === 'NEW' ? 'tagged New' : tab !== 'ALL' ? `with status ${STATUS_LABEL[tab]}` : 'in this range'}.
           </p>
         ) : (
           filtered.map((o) => {
             const expanded = expandedIds.has(o.id);
             const busy = busyOrderId === o.id;
-            // "New" = a customer order not yet acted on. It clears the moment the
-            // merchant advances the status (PENDING is the initial, forward-only
-            // state); manual orders the merchant entered themselves never tag.
-            const isNew = o.source === 'STOREFRONT' && o.status === 'PENDING';
+            const isNew = isNewOrder(o);
             return (
               <div
                 key={o.id}
