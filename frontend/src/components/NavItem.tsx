@@ -9,6 +9,8 @@ interface NavItemProps {
   subItems?: { label: string; id: string }[];
   activeSubItem?: string;
   onSubItemClick?: (id: string) => void;
+  /** Unread count shown as a red badge on the item (e.g. new orders). 0 hides it. */
+  badge?: number;
   // Expansion is controlled by the Sidebar so multiple submenus can stay open
   // independently (each toggles only via its own header - no click-outside close).
   isExpanded?: boolean;
@@ -23,6 +25,7 @@ export function NavItem({
   subItems,
   activeSubItem,
   onSubItemClick,
+  badge = 0,
   isExpanded = false,
   onToggleExpand,
 }: NavItemProps) {
@@ -76,6 +79,18 @@ export function NavItem({
       >
         <Icon size={18} color="currentColor" />
         <span style={{ flex: 1 }}>{label}</span>
+        {badge > 0 && (
+          <span
+            aria-label={`${badge} new`}
+            style={{
+              minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '9px',
+              background: '#DC2626', color: '#FFFFFF', fontSize: '11px', fontWeight: 700,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+            }}
+          >
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
         {subItems && (
           <ChevronDown
             size={16}

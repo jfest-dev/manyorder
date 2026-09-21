@@ -533,7 +533,20 @@ export const ordersApi = {
       method: 'PATCH',
       body: { paymentStatus },
     }),
+
+  /** Unseen new-order count per accessible store — powers the sidebar badge. */
+  unseenCounts: () => request<StoreUnseenCount[]>('/merchant/orders/unseen-counts'),
+
+  /** Mark a store's orders as seen (clears its badge). */
+  markSeen: (storeId: number) =>
+    request<StoreUnseenCount>(`/merchant/stores/${storeId}/orders/mark-seen`, { method: 'PATCH' }),
 };
+
+/** One store's unseen new-order count (sidebar badge). */
+export interface StoreUnseenCount {
+  storeId: number;
+  count: number;
+}
 
 export const productsApi = {
   list: (storeId: number, activeOnly = false) =>

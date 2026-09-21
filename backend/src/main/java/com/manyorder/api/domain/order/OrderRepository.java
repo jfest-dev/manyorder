@@ -27,14 +27,17 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     /**
      * Unseen new-order count for the sidebar badge: storefront orders (not the
      * merchant's own manual entries), not cancelled, placed after {@code since}.
-     * A null {@code since} (never opened Orders) counts every such order.
+     * Caller passes a real timestamp for "never viewed" (a far-past epoch) rather
+     * than null: a bare null bound into an "IS NULL" test has no inferable type on
+     * Postgres ("could not determine data type of parameter"), even though H2
+     * tolerates it — so the null branch is kept out of the SQL entirely.
      */
     @Query("""
             SELECT COUNT(o) FROM Order o
             WHERE o.merchant = :merchant
               AND o.source = :source
               AND o.status <> :excludedStatus
-              AND (:since IS NULL OR o.createdAt > :since)
+              AND o.createdAt > :since
             """)
     long countUnseen(@Param("merchant") Merchant merchant,
                      @Param("source") OrderSource source,

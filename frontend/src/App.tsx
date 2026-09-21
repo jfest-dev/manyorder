@@ -27,7 +27,7 @@ import { VerifyEmail } from './components/screens/VerifyEmail';
 import { StorefrontApp } from './components/storefront/StorefrontApp';
 
 import { useAuth } from './context/AuthContext';
-import { ApiError, storesApi, uploadsApi, StoreResponse } from './lib/api';
+import { ApiError, storesApi, uploadsApi, ordersApi, StoreResponse } from './lib/api';
 
 type Screen =
   | 'dashboard'
@@ -204,6 +204,9 @@ function MerchantApp() {
   const [stores, setStores] = useState<Store[]>([]);
   const [storeLimit, setStoreLimit] = useState(3);
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
+  // Unseen new-order count per store id (drives the sidebar badge). Best-effort:
+  // fetch failures leave the last known counts rather than surfacing an error.
+  const [unseenCounts, setUnseenCounts] = useState<Record<string, number>>({});
   const [editingOrderId, setEditingOrderId] = useState<number | null>(null);
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -359,6 +362,36 @@ function MerchantApp() {
     [stores, activeStoreId],
   );
 
+  // Sidebar new-order badge: pull the per-store unseen counts on load, every 60s,
+  // and whenever the tab regains focus. Best-effort and silent (a failed poll
+  // keeps the last known counts rather than clearing the badge or erroring).
+  const unseenWarnedRef = useRef(false);
+  const refreshUnseenCounts = useCallback(async () => {
+    try {
+      const counts = await ordersApi.unseenCounts();
+      const next: Record<string, number> = {};
+      for (const c of counts) next[String(c.storeId)] = c.count;
+      setUnseenCounts(next);
+      unseenWarnedRef.current = false; // recovered; allow a fresh warning next time
+    } catch (e) {
+      // Badge is best-effort (a failed poll keeps the last counts), but warn once
+      // so a real backend failure isn't completely invisible in the console.
+      if (!unseenWarnedRef.current) {
+        unseenWarnedRef.current = true;
+        console.warn('Could not refresh unseen order counts (badge may be stale):', e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading || stores.length === 0) return;
+    refreshUnseenCounts();
+    const id = window.setInterval(refreshUnseenCounts, 60_000);
+    const onFocus = () => refreshUnseenCounts();
+    window.addEventListener('focus', onFocus);
+    return () => { window.clearInterval(id); window.removeEventListener('focus', onFocus); };
+  }, [loading, stores.length, refreshUnseenCounts]);
+
   // Switching stores is instant (all stores are already loaded), so it can feel
   // like nothing happened. A brief toast confirms the switch.
   const [storeSwitchNotice, setStoreSwitchNotice] = useState<string | null>(null);
@@ -494,7 +527,16 @@ function MerchantApp() {
       alert('Staff accounts can view orders and products only.');
       return;
     }
-    const apply = () => setActiveScreen(screen as Screen);
+    const apply = () => {
+      setActiveScreen(screen as Screen);
+      // Opening the Orders screen marks that store's orders seen (badge -> 0).
+      // Clear optimistically, then persist and re-sync from the server.
+      if (screen === 'orders-all' && activeStoreId) {
+        const sid = activeStoreId;
+        setUnseenCounts((c) => (c[sid] ? { ...c, [sid]: 0 } : c));
+        ordersApi.markSeen(Number(sid)).then(refreshUnseenCounts).catch(() => {});
+      }
+    };
     // A registered guard (unsaved edits) intercepts and prompts before leaving.
     if (leaveGuardRef.current && !leaveGuardRef.current(apply)) return;
     apply();
@@ -716,6 +758,7 @@ function MerchantApp() {
         stores={stores}
         activeStoreId={activeStoreId || ''}
         onStoreChange={handleStoreChange}
+        unseenCounts={unseenCounts}
       >
         {content}
       </AppShell>

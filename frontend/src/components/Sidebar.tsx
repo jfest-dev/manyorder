@@ -18,16 +18,20 @@ interface SidebarProps {
   stores: StoreData[];
   activeStoreId: string;
   onStoreChange: (storeId: string) => void;
+  /** Unseen new-order count per store id: badges the Orders item for the active
+   *  store, and dots the switcher for any other store with new orders. */
+  unseenCounts?: Record<string, number>;
   isOpen?: boolean;
 }
 
-export function Sidebar({ 
-  activeItem, 
-  onNavigate, 
+export function Sidebar({
+  activeItem,
+  onNavigate,
   stores,
   activeStoreId,
   onStoreChange,
-  isOpen = true 
+  unseenCounts = {},
+  isOpen = true
 }: SidebarProps) {
   const confirm = useConfirm();
   const { logout } = useAuth();
@@ -37,6 +41,12 @@ export function Sidebar({
   const dropdownOpenRef = useRef(showStoreDropdown);
   dropdownOpenRef.current = showStoreDropdown;
   const activeStore = stores.find(s => s.id === activeStoreId) || stores[0];
+  // Any store other than the active one with unseen orders — surfaces on the
+  // switcher (collapsed dot + per-store dots) so cross-store activity is visible
+  // without switching. The active store's own count shows on the Orders item.
+  const otherStoreHasNew = stores.some(
+    (s) => s.id !== activeStoreId && (unseenCounts[s.id] ?? 0) > 0,
+  );
 
   // Which submenu sections are expanded. A set so multiple can stay open at
   // once - each toggles only via its own header (no click-outside close).
@@ -187,13 +197,19 @@ export function Sidebar({
                 </div>
               </div>
 
-              <ChevronDown 
-                size={16} 
-                style={{ 
+              {otherStoreHasNew && !showStoreDropdown && (
+                <span
+                  aria-label="Another store has new orders"
+                  style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#DC2626', flexShrink: 0 }}
+                />
+              )}
+              <ChevronDown
+                size={16}
+                style={{
                   color: 'var(--text-muted)',
                   transform: showStoreDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
                   transition: 'transform 0.2s ease',
-                }} 
+                }}
               />
             </button>
 
@@ -291,6 +307,19 @@ export function Sidebar({
                           {store.name}
                         </div>
                       </div>
+                      {(unseenCounts[store.id] ?? 0) > 0 && (
+                        <span
+                          aria-label={`${unseenCounts[store.id]} new orders`}
+                          style={{
+                            minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '9px',
+                            background: '#DC2626', color: '#FFFFFF', fontSize: '11px', fontWeight: 700,
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            lineHeight: 1, flexShrink: 0,
+                          }}
+                        >
+                          {(unseenCounts[store.id] ?? 0) > 99 ? '99+' : unseenCounts[store.id]}
+                        </span>
+                      )}
                       {isActive && (
                         <Check size={16} color="var(--primary-solid)" style={{ flexShrink: 0 }} />
                       )}
@@ -351,6 +380,7 @@ export function Sidebar({
               label="Orders"
               active={activeItem.startsWith('orders-')}
               onClick={() => {}}
+              badge={unseenCounts[activeStoreId] ?? 0}
               subItems={orderSubItems}
               activeSubItem={activeItem}
               onSubItemClick={handleOrderSubItem}

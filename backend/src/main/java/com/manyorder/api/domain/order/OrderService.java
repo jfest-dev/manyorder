@@ -62,10 +62,16 @@ public class OrderService {
     /** Unseen new-order count for one store: storefront orders (not the merchant's
      *  own manual entries), not cancelled, placed since the Orders screen was last
      *  opened. Drives the sidebar badge. */
+    /** "Never opened Orders" (null lastOrdersViewedAt) → everything counts. A real
+     *  far-past timestamp stands in for null so the query binds a typed parameter. */
+    private static final LocalDateTime NEVER_VIEWED = LocalDateTime.of(1970, 1, 1, 0, 0);
+
     @Transactional(readOnly = true)
     public long unseenOrderCount(Merchant merchant) {
-        return orderRepository.countUnseen(merchant, OrderSource.STOREFRONT,
-                OrderStatus.CANCELLED, merchant.getLastOrdersViewedAt());
+        LocalDateTime since = merchant.getLastOrdersViewedAt() != null
+                ? merchant.getLastOrdersViewedAt()
+                : NEVER_VIEWED;
+        return orderRepository.countUnseen(merchant, OrderSource.STOREFRONT, OrderStatus.CANCELLED, since);
     }
 
     /** Mark this store's orders as seen (stamps now), so the badge clears to 0. */

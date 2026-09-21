@@ -21,6 +21,8 @@ interface AppShellProps {
   stores: Store[];
   activeStoreId: string;
   onStoreChange: (storeId: string) => void;
+  /** Unseen new-order count per store id, for the sidebar badge/dots. */
+  unseenCounts?: Record<string, number>;
 }
 
 export function AppShell({
@@ -30,6 +32,7 @@ export function AppShell({
   stores,
   activeStoreId,
   onStoreChange,
+  unseenCounts,
 }: AppShellProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const { user } = useAuth();
@@ -194,6 +197,7 @@ export function AppShell({
           stores={stores}
           activeStoreId={activeStoreId}
           onStoreChange={onStoreChange}
+          unseenCounts={unseenCounts}
           isOpen={isSidebarOpen}
         />
       )}
@@ -239,6 +243,7 @@ export function AppShell({
               stores={stores}
               activeStoreId={activeStoreId}
               onStoreChange={onStoreChange}
+              unseenCounts={unseenCounts}
               isOpen={true}
             />
           </div>
