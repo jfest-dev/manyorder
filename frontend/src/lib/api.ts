@@ -107,6 +107,9 @@ export type OrderStatus =
 
 export type OrderType = 'PICKUP' | 'DELIVERY';
 
+/** How an order was placed: STOREFRONT = customer checkout, MANUAL = merchant-entered. */
+export type OrderSource = 'STOREFRONT' | 'MANUAL';
+
 export type PaymentStatus = 'UNPAID' | 'PAID' | 'REFUNDED';
 
 /** A line item in a manual create/update order payload. Prices re-derived server-side. */
@@ -165,6 +168,7 @@ export interface OrderResponse {
   discountCode: string | null;
   orderGroupId: string | null;
   totalAmount: number;
+  source: OrderSource;
   items: OrderItemResponse[];
 }
 

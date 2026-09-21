@@ -520,6 +520,10 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
           filtered.map((o) => {
             const expanded = expandedIds.has(o.id);
             const busy = busyOrderId === o.id;
+            // "New" = a customer order not yet acted on. It clears the moment the
+            // merchant advances the status (PENDING is the initial, forward-only
+            // state); manual orders the merchant entered themselves never tag.
+            const isNew = o.source === 'STOREFRONT' && o.status === 'PENDING';
             return (
               <div
                 key={o.id}
@@ -534,7 +538,16 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                     opacity: busy ? 0.6 : 1,
                   }}
                 >
-                  <span className="order-id text-small" style={{ fontWeight: 600 }}>#{o.id}</span>
+                  <span className="order-id text-small" style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    #{o.id}
+                    {isNew && (
+                      <span style={{
+                        fontSize: '10px', fontWeight: 700, letterSpacing: '0.02em',
+                        padding: '1px 6px', borderRadius: '999px', background: '#DC2626',
+                        color: '#FFFFFF', lineHeight: 1.5,
+                      }}>New</span>
+                    )}
+                  </span>
                   <span className="text-small"><span className="m-label">Customer</span>{o.contactName || o.customerName || '-'}</span>
                   <span><span className="m-label">Fulfilment</span>
                     <span style={{

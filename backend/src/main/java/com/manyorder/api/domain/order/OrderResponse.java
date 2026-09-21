@@ -38,6 +38,9 @@ public class OrderResponse {
     private String orderGroupId;
     private BigDecimal totalAmount;
     private List<OrderItemResponse> items;
+    /** How the order was placed (STOREFRONT vs MANUAL). Lets the Orders list tag a
+     *  storefront order still in its initial status as "New". */
+    private OrderSource source;
 
     public OrderResponse(
             Long id,
@@ -67,7 +70,8 @@ public class OrderResponse {
             String discountCode,
             String orderGroupId,
             BigDecimal totalAmount,
-            List<OrderItemResponse> items) {
+            List<OrderItemResponse> items,
+            OrderSource source) {
         this.id = id;
         this.customerId = customerId;
         this.customerName = customerName;
@@ -96,6 +100,7 @@ public class OrderResponse {
         this.orderGroupId = orderGroupId;
         this.totalAmount = totalAmount;
         this.items = items;
+        this.source = source;
     }
 
     public Long getId() { return id; }
@@ -126,4 +131,5 @@ public class OrderResponse {
     public String getOrderGroupId() { return orderGroupId; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public List<OrderItemResponse> getItems() { return items; }
+    public OrderSource getSource() { return source; }
 }

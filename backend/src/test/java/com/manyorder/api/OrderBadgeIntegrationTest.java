@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -149,6 +150,27 @@ class OrderBadgeIntegrationTest extends IntegrationTestBase {
         markSeen(token, storeA, 200);
         assertEquals(0, unseenCount(token, storeA));
         assertEquals(2, unseenCount(token, storeB));
+    }
+
+    @Test
+    void orderResponse_exposesSource_forTheNewTag() throws Exception {
+        String token = registerAndGetToken("badge-source@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Src", "badge-source-store");
+        long productId = createProduct(token, storeId, 100);
+        placeStorefrontOrder(storeId, productId, "+6591230000"); // STOREFRONT, starts PENDING
+        createManualOrder(token, storeId, productId);            // MANUAL
+
+        JsonNode arr = json(getWithToken("/merchant/stores/" + storeId + "/orders", token, 200));
+        boolean storefrontPending = false;
+        boolean manualPresent = false;
+        for (JsonNode o : arr) {
+            String source = o.get("source").asText();
+            if ("STOREFRONT".equals(source) && "PENDING".equals(o.get("status").asText())) storefrontPending = true;
+            if ("MANUAL".equals(source)) manualPresent = true;
+        }
+        // The frontend "New" tag = source STOREFRONT && status PENDING; manual orders never tag.
+        assertTrue(storefrontPending, "storefront order exposes source=STOREFRONT and is PENDING (New)");
+        assertTrue(manualPresent, "manual order exposes source=MANUAL");
     }
 
     @Test
