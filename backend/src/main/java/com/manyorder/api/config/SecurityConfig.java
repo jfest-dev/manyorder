@@ -30,11 +30,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final List<String> allowedOrigins;
 
     public SecurityConfig(JwtFilter jwtFilter,
+                          RateLimitFilter rateLimitFilter,
                           @Value("${app.cors.allowed-origins}") String allowedOrigins) {
         this.jwtFilter = jwtFilter;
+        this.rateLimitFilter = rateLimitFilter;
         this.allowedOrigins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
@@ -86,6 +89,9 @@ public class SecurityConfig {
                 // "authenticated but not allowed". Without this, Spring's default
                 // returns 403 for both, and the SPA can't tell them apart.
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                // Rate limit first (added before jwt), then JWT auth; both sit ahead
+                // of the username/password filter.
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

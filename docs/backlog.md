@@ -267,3 +267,21 @@ types competing for the merchant's attention (e.g. new orders AND low-stock AND
 a third), so a unified feed earns its keep over per-feature badges. At that point
 fold the existing Orders badge into the feed rather than running both. Needs its
 own build session; not scoped further here.
+
+## Editable email templates
+
+A way to customize the wording/design of transactional emails (email
+verification, new-order notification, low-stock alert) without editing backend
+code. Today every email body is hardcoded in the mailer classes
+(ResendEmailVerificationMailer, ResendOrderNotificationMailer, the low-stock
+content builder). Editing copy means a code change + redeploy.
+
+Open design question to settle when picked up: is this a Platform Admin
+capability (one set of templates edited centrally by the platform owner) or a
+per-merchant capability (each merchant customizes their own store's emails)?
+Per-merchant is more flexible but bigger: storage per merchant, a template
+editor UI, safe variable interpolation (order number, customer name, etc.) with
+escaping, and sensible fallbacks to the default template. Platform-admin-only is
+much smaller (one editable template set, admin-gated). Decide the audience
+first, since it drives the whole data model. Needs its own build session; not
+scoped further here.

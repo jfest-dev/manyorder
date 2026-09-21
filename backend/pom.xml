@@ -116,6 +116,20 @@
             <version>1.39.0</version>
         </dependency>
 
+        <!-- Rate limiting on public endpoints (in-memory token buckets per IP).
+             bucket4j-core is the token-bucket engine; caffeine holds one bucket
+             per client IP and evicts idle ones so memory stays bounded. Both are
+             single-instance only. -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>8.14.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

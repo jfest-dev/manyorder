@@ -9,6 +9,10 @@ spring:
       ddl-auto: create-drop
 
 app:
+  # Off by default in tests (they share MockMvc's default client IP, so limits
+  # would throttle the suite). The rate-limit test re-enables it via @TestPropertySource.
+  ratelimit:
+    enabled: false
   jwt:
     secret: test-secret-test-secret-test-secret-test-secret-64-bytes-min!!
     expiration-ms: 3600000

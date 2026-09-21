@@ -1,3 +1,9 @@
+server:
+  # Behind a reverse proxy (host platform / nginx), make getRemoteAddr() reflect
+  # the real client IP from X-Forwarded-For so rate-limit buckets are per-client,
+  # not one shared proxy bucket. Only safe when the proxy is trusted.
+  forward-headers-strategy: framework
+
 spring:
   application:
     name: manyorder-api
@@ -21,6 +27,14 @@ spring:
       max-request-size: 8MB
 
 app:
+  # Per-IP rate limiting on public endpoints (single-instance, in-memory). Limits
+  # are requests per minute per client IP; see RateLimitFilter for the tiers.
+  ratelimit:
+    enabled: ${RATELIMIT_ENABLED:true}
+    strict-per-minute: ${RATELIMIT_STRICT:5}      # forgot-password, resend-verification, register
+    standard-per-minute: ${RATELIMIT_STANDARD:10} # login, checkout, discount validate, token submits, lookup
+    reads-per-minute: ${RATELIMIT_READS:60}       # public GETs
+    global-per-minute: ${RATELIMIT_GLOBAL:120}    # backstop across all public endpoints
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
