@@ -43,6 +43,22 @@ function StatusTag({ active }: { active: boolean }) {
   );
 }
 
+/** Read-only tag chips shown under a customer's name in the list. */
+function TagChips({ tags }: { tags: string[] }) {
+  if (!tags || tags.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
+      {tags.map((t) => (
+        <span key={t} style={{
+          padding: '1px 7px', borderRadius: '999px', background: 'var(--bg-card-subtle)',
+          border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)',
+          fontSize: '11px', fontWeight: 500, whiteSpace: 'nowrap',
+        }}>{t}</span>
+      ))}
+    </div>
+  );
+}
+
 export function Customers({ storeId, currency }: CustomersProps) {
   const confirm = useConfirm();
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
@@ -71,7 +87,8 @@ export function Customers({ storeId, currency }: CustomersProps) {
 
   // Editing an existing customer (null = closed). Same fields as Add, pre-filled.
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ fullName: '', phoneNumber: '', email: '' });
+  const [editForm, setEditForm] = useState({ fullName: '', phoneNumber: '', email: '', tags: [] as string[] });
+  const [tagInput, setTagInput] = useState(''); // the in-progress tag being typed in the editor
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -160,9 +177,22 @@ export function Customers({ storeId, currency }: CustomersProps) {
 
   const openEdit = (c: CustomerResponse) => {
     setEditError(null);
+    setTagInput('');
     setEditingId(c.id);
-    setEditForm({ fullName: c.fullName, phoneNumber: c.phoneNumber ?? '', email: c.email ?? '' });
+    setEditForm({ fullName: c.fullName, phoneNumber: c.phoneNumber ?? '', email: c.email ?? '', tags: c.tags ?? [] });
   };
+
+  // Add the typed tag to the edit form (deduped case-insensitively, trimmed).
+  const commitTag = () => {
+    const t = tagInput.trim();
+    if (!t) return;
+    setEditForm((s) => (
+      s.tags.some((x) => x.toLowerCase() === t.toLowerCase()) ? s : { ...s, tags: [...s.tags, t] }
+    ));
+    setTagInput('');
+  };
+  const removeTag = (tag: string) =>
+    setEditForm((s) => ({ ...s, tags: s.tags.filter((x) => x !== tag) }));
 
   const handleUpdateCustomer = async () => {
     if (editingId == null) return;
@@ -175,6 +205,7 @@ export function Customers({ storeId, currency }: CustomersProps) {
         fullName: editForm.fullName.trim(),
         phoneNumber: editForm.phoneNumber.trim(),
         email: editForm.email.trim() || undefined,
+        tags: editForm.tags,
       });
       setCustomers((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
       setEditingId(null);
@@ -294,7 +325,10 @@ export function Customers({ storeId, currency }: CustomersProps) {
                 <tbody>
                   {pageItems.map((c) => (
                     <tr key={c.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{c.fullName}</td>
+                      <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>
+                        {c.fullName}
+                        <TagChips tags={c.tags} />
+                      </td>
                       <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
                         <div>{c.phoneNumber || '—'}</div>
                         {c.email ? <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{c.email}</div> : null}
@@ -336,6 +370,7 @@ export function Customers({ storeId, currency }: CustomersProps) {
                       <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>{c.fullName}</div>
                       <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{c.phoneNumber || '—'}{c.email ? ` · ${c.email}` : ''}</div>
                       <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>Joined {fmtDate(c.createdAt)}</div>
+                      <TagChips tags={c.tags} />
                     </div>
                     <StatusTag active={isActive(c)} />
                   </div>
@@ -432,6 +467,47 @@ export function Customers({ storeId, currency }: CustomersProps) {
               <FieldInput label="Name" value={editForm.fullName} onChange={(v) => setEditForm((s) => ({ ...s, fullName: v }))} maxLength={255} required />
               <FieldInput label="Phone" placeholder="+65 8123 4567" value={editForm.phoneNumber} onChange={(v) => setEditForm((s) => ({ ...s, phoneNumber: v }))} maxLength={255} helperText="Used to reach the customer on WhatsApp, and to avoid duplicates." required />
               <FieldInput label="Email" type="email" value={editForm.email} onChange={(v) => setEditForm((s) => ({ ...s, email: v }))} maxLength={255} helperText="Optional." />
+
+              <div>
+                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 500 }}>Tags</label>
+                {editForm.tags.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                    {editForm.tags.map((t) => (
+                      <span key={t} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '2px 6px 2px 9px',
+                        borderRadius: '999px', background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
+                        color: 'var(--text-primary)', fontSize: '12px', fontWeight: 500,
+                      }}>
+                        {t}
+                        <button type="button" onClick={() => removeTag(t)} aria-label={`Remove ${t}`}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'inline-flex' }}>
+                          <X size={13} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <input
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitTag(); }
+                    else if (e.key === 'Backspace' && tagInput === '' && editForm.tags.length > 0) {
+                      removeTag(editForm.tags[editForm.tags.length - 1]);
+                    }
+                  }}
+                  onBlur={commitTag}
+                  maxLength={30}
+                  placeholder="Add a tag, e.g. VIP"
+                  style={{
+                    width: '100%', height: 40, padding: '0 12px', boxSizing: 'border-box',
+                    border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)',
+                    background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit',
+                  }}
+                />
+                <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>Press Enter to add. Informational only.</p>
+              </div>
+
               <p className="text-xs" style={{ color: 'var(--text-muted)', margin: 0 }}>Changes apply going forward. Past orders keep the name and contact recorded at the time.</p>
               {editError && <p className="text-small" style={{ color: 'var(--error-color)', margin: 0 }}>{editError}</p>}
             </div>

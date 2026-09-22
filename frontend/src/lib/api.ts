@@ -626,6 +626,8 @@ export interface CustomerResponse {
   totalSpent: number;
   firstOrderAt: string | null;
   lastOrderAt: string | null;
+  /** Free-form informational labels (e.g. "VIP"). No behaviour keys off them. */
+  tags: string[];
 }
 
 export const customersApi = {
@@ -637,7 +639,7 @@ export const customersApi = {
     request<CustomerResponse>(`/merchant/stores/${storeId}/customers`, { method: 'POST', body: payload }),
 
   /** Edit a customer (full-record replace). 409 if the phone/email now matches another customer. */
-  update: (storeId: number, customerId: number, payload: { fullName: string; phoneNumber: string; email?: string }) =>
+  update: (storeId: number, customerId: number, payload: { fullName: string; phoneNumber: string; email?: string; tags?: string[] }) =>
     request<CustomerResponse>(`/merchant/stores/${storeId}/customers/${customerId}`, { method: 'PUT', body: payload }),
 
   /** Permanently delete a customer (data erasure). Past orders survive detached. */
