@@ -6,7 +6,7 @@ import { formatPreorderReady } from '../../lib/datetime';
 import { bestsellerProductIds } from '../../lib/bestsellers';
 import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from '../../lib/offers';
 import type { ProductResponse, PublicOffer } from '../../lib/api';
-import { StorefrontStore, isOrderable, initialsOf, maxOrderQuantity } from './storefrontTypes';
+import { StorefrontStore, isOrderable, initialsOf, maxOrderQuantity, lowStockRemaining } from './storefrontTypes';
 import { QuantityStepper } from './QuantityStepper';
 
 interface StorefrontViewProps {
@@ -476,6 +476,7 @@ export function StorefrontView({
                     {bestsellerIds.has(p.id) && <span style={{ fontSize: '9px', fontWeight: 600, color: '#1D4ED8', background: '#EFF6FF', padding: '2px 6px', borderRadius: '4px' }}>Bestseller</span>}
                     {p.preOrder && <span style={{ fontSize: '9px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', padding: '2px 6px', borderRadius: '4px' }}>Pre-order</span>}
                     {!orderable && <span style={{ fontSize: '9px', fontWeight: 600, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: '4px' }}>Sold Out</span>}
+                    {lowStockRemaining(p) !== null && <span style={{ fontSize: '9px', fontWeight: 600, color: '#C2410C', background: '#FFEDD5', padding: '2px 6px', borderRadius: '4px' }}>Only {lowStockRemaining(p)} left</span>}
                   </div>
                   {readyLine && (
                     <div style={{ fontSize: '10px', color: '#92400E', marginTop: '3px' }}>Ready {readyLine}</div>

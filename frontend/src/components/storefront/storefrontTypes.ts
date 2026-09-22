@@ -33,6 +33,18 @@ export function maxOrderQuantity(p: ProductResponse): number | undefined {
   return p.preOrder ? undefined : (p.stock ?? 0);
 }
 
+/** At/below this remaining stock a product is "low" — the storefront nudges with
+ *  an "Only N left" label. Shared with the merchant Products list. */
+export const LOW_STOCK_AT = 5;
+
+/** Remaining units when a product is low on stock (1..LOW_STOCK_AT), else null.
+ *  Pre-order items draw from future stock, so they're never "low". */
+export function lowStockRemaining(p: ProductResponse): number | null {
+  if (p.preOrder) return null;
+  const stock = p.stock ?? 0;
+  return stock > 0 && stock <= LOW_STOCK_AT ? stock : null;
+}
+
 export function initialsOf(name: string): string {
   return (name || 'MS')
     .split(' ')

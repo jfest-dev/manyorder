@@ -6,6 +6,7 @@ import { ReorderableList } from '../ReorderableList';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { productsApi, storesApi, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { LOW_STOCK_AT } from '../storefront/storefrontTypes';
 
 interface ProductsListProps {
   storeId: number;
@@ -41,7 +42,6 @@ const STATUS_LABEL: Record<DisplayStatus, string> = {
 
 /** Active, non-pre-order products at or below this on-hand quantity are "Low Stock"
  *  in the summary. No per-product threshold exists yet, so one value is shared. */
-const LOW_STOCK_AT = 5;
 
 function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string; label: string; value: string }) {
   return (

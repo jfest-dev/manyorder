@@ -7,6 +7,9 @@ interface QuantityStepperProps {
   min?: number;
   /** Largest allowed value (e.g. a product's stock). Undefined = no cap. */
   max?: number;
+  /** When true and the quantity has hit `max`, show a small "Max N" caption so
+   *  the disabled "+" isn't silent. */
+  maxHint?: boolean;
   size?: 'sm' | 'md';
   disabled?: boolean;
 }
@@ -16,7 +19,7 @@ interface QuantityStepperProps {
  * spacing/alignment is identical everywhere. Evenly-sized touch targets with a
  * centered value between them.
  */
-export function QuantityStepper({ quantity, onChange, min = 0, max, size = 'sm', disabled = false }: QuantityStepperProps) {
+export function QuantityStepper({ quantity, onChange, min = 0, max, maxHint = false, size = 'sm', disabled = false }: QuantityStepperProps) {
   const dim = size === 'md' ? 44 : 34;
   const valueWidth = size === 'md' ? 44 : 38;
   const icon = size === 'md' ? 18 : 15;
@@ -29,10 +32,11 @@ export function QuantityStepper({ quantity, onChange, min = 0, max, size = 'sm',
     color: active ? 'var(--text-primary)' : 'var(--text-muted)',
   });
 
+  const atMax = max !== undefined && quantity >= max;
   const canDec = !disabled && quantity > min;
-  const canInc = !disabled && (max === undefined || quantity < max);
+  const canInc = !disabled && !atMax;
 
-  return (
+  const control = (
     <div
       style={{
         display: 'inline-flex', alignItems: 'center',
@@ -51,4 +55,15 @@ export function QuantityStepper({ quantity, onChange, min = 0, max, size = 'sm',
       </button>
     </div>
   );
+
+  // When maxed and asked to, explain the disabled "+" with a compact caption.
+  if (maxHint && atMax) {
+    return (
+      <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+        {control}
+        <span style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Max {max}</span>
+      </div>
+    );
+  }
+  return control;
 }

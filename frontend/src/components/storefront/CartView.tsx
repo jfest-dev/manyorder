@@ -73,7 +73,7 @@ export function CartView({ items, currency, onQtyChange, onRemove, onEditLine, o
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>{formatMoney(l.unitPrice, currency)} each</div>
                 </div>
                 <div style={{ marginTop: '8px' }}>
-                  <QuantityStepper quantity={l.quantity} onChange={(q) => onQtyChange(l.signature, q)} min={0} max={maxOrderQuantity(l.product)} size="sm" />
+                  <QuantityStepper quantity={l.quantity} onChange={(q) => onQtyChange(l.signature, q)} min={0} max={maxOrderQuantity(l.product)} maxHint size="sm" />
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', alignSelf: 'stretch' }}>
