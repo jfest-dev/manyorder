@@ -276,12 +276,10 @@ code. Today every email body is hardcoded in the mailer classes
 (ResendEmailVerificationMailer, ResendOrderNotificationMailer, the low-stock
 content builder). Editing copy means a code change + redeploy.
 
-Open design question to settle when picked up: is this a Platform Admin
-capability (one set of templates edited centrally by the platform owner) or a
-per-merchant capability (each merchant customizes their own store's emails)?
-Per-merchant is more flexible but bigger: storage per merchant, a template
-editor UI, safe variable interpolation (order number, customer name, etc.) with
-escaping, and sensible fallbacks to the default template. Platform-admin-only is
-much smaller (one editable template set, admin-gated). Decide the audience
-first, since it drives the whole data model. Needs its own build session; not
-scoped further here.
+Audience: **Platform Admin only.** Sellers/merchants do NOT edit templates
+themselves — there is one shared set of templates controlled by the platform
+owner, applied across every store. This keeps it small: a single editable
+template set (admin-gated under /admin), no per-merchant storage or per-store
+overrides. Still needs safe variable interpolation (order number, customer name,
+store name, etc.) with escaping, and a fallback to the built-in default if a
+template is blank. Needs its own build session; not scoped further here.
