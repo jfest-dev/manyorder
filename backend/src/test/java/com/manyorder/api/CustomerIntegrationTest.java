@@ -13,7 +13,9 @@ import com.manyorder.api.domain.customer.CustomerPhoneBackfill;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Customers list derives order activity, and every creation path dedupes by phone. */
@@ -340,5 +342,49 @@ class CustomerIntegrationTest extends IntegrationTestBase {
             if (phone.equals(n.get("phoneNumber").asText())) return n;
         }
         return null;
+    }
+
+    // ---------- tags ----------
+
+    @Test
+    void update_setsNormalizedTags_nullLeavesUnchanged_emptyClears() throws Exception {
+        String token = registerAndGetToken("cust-tags@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Tags Store", "cust-tags-store");
+        long id = json(mockMvc.perform(post("/merchant/stores/" + storeId + "/customers")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("fullName", "Tagged", "phoneNumber", "+6590007000"))))
+                .andExpect(status().isCreated()).andReturn()).get("id").asLong();
+
+        // Messy input: case-insensitive dupes, surrounding spaces, blanks — all normalized.
+        JsonNode updated = putCustomer(token, storeId, id,
+                java.util.List.of("VIP", " vip ", "Wholesale", "  ", "VIP"));
+        assertEquals(java.util.List.of("VIP", "Wholesale"), tagsOf(updated), "deduped, trimmed, order kept");
+
+        // A later update with NO tags key leaves them unchanged.
+        JsonNode noTags = json(mockMvc.perform(put("/merchant/stores/" + storeId + "/customers/" + id)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("fullName", "Tagged", "phoneNumber", "+6590007000"))))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(java.util.List.of("VIP", "Wholesale"), tagsOf(noTags), "null tags = unchanged");
+
+        // An empty list clears them.
+        assertTrue(tagsOf(putCustomer(token, storeId, id, java.util.List.of())).isEmpty(), "empty list clears");
+    }
+
+    private JsonNode putCustomer(String token, long storeId, long id, java.util.List<String> tags) throws Exception {
+        var body = new java.util.HashMap<String, Object>();
+        body.put("fullName", "Tagged");
+        body.put("phoneNumber", "+6590007000");
+        body.put("tags", tags);
+        return json(mockMvc.perform(put("/merchant/stores/" + storeId + "/customers/" + id)
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isOk()).andReturn());
+    }
+
+    private java.util.List<String> tagsOf(JsonNode customer) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        customer.get("tags").forEach(n -> out.add(n.asText()));
+        return out;
     }
 }

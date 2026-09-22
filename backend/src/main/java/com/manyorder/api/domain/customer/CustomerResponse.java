@@ -15,6 +15,7 @@ public class CustomerResponse {
     private final BigDecimal totalSpent;
     private final LocalDateTime firstOrderAt;
     private final LocalDateTime lastOrderAt;
+    private final java.util.List<String> tags;
 
     public CustomerResponse(Customer c, long ordersCount, BigDecimal totalSpent,
                             LocalDateTime firstOrderAt, LocalDateTime lastOrderAt) {
@@ -27,6 +28,7 @@ public class CustomerResponse {
         this.totalSpent = totalSpent != null ? totalSpent : BigDecimal.ZERO;
         this.firstOrderAt = firstOrderAt;
         this.lastOrderAt = lastOrderAt;
+        this.tags = java.util.List.copyOf(c.getTags());
     }
 
     public Long getId() { return id; }
@@ -38,4 +40,5 @@ public class CustomerResponse {
     public BigDecimal getTotalSpent() { return totalSpent; }
     public LocalDateTime getFirstOrderAt() { return firstOrderAt; }
     public LocalDateTime getLastOrderAt() { return lastOrderAt; }
+    public java.util.List<String> getTags() { return tags; }
 }

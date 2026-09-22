@@ -18,6 +18,10 @@ public class UpdateCustomerRequest {
     @Size(max = 255)
     private String email;
 
+    /** Free-form informational tags; null leaves them unchanged, a list (incl.
+     *  empty) replaces them. Normalized server-side (trim/dedupe/cap). */
+    private java.util.List<String> tags;
+
     public UpdateCustomerRequest() {}
 
     public String getFullName() { return fullName; }
@@ -26,4 +30,6 @@ public class UpdateCustomerRequest {
     public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
+    public java.util.List<String> getTags() { return tags; }
+    public void setTags(java.util.List<String> tags) { this.tags = tags; }
 }

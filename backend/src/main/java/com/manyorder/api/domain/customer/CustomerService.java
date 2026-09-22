@@ -93,6 +93,10 @@ public class CustomerService {
         }
 
         customer.updateDetails(req.getFullName(), email != null ? email : "", phone);
+        // null = leave tags unchanged; a list (even empty) replaces them.
+        if (req.getTags() != null) {
+            customer.setTags(req.getTags());
+        }
         Customer saved = customerRepository.save(customer);
 
         // Return the row with its derived order stats, consistent with the list.
