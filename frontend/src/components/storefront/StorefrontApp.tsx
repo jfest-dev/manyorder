@@ -14,9 +14,9 @@ import { OrderLookupView } from './OrderLookupView';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { getRecentOrder, clearRecentOrder, anyOrderStatusActive, type RecentOrder } from '../../lib/orderRecall';
 import {
-  parseCart, addLine, setLineQty, removeLine, updateLine, hydrateCart, healCart,
+  parseCart, addLine, setLineQty, removeLine, updateLine, hydrateCart, healCart, reconcileStock,
   cartLineCount, plainQuantities, productTotals, plainSignature, lineSignature,
-  type CartItem, type CartLine,
+  type CartItem, type CartLine, type StockAdjustment,
 } from '../../lib/cart';
 
 /**
@@ -39,6 +39,10 @@ export function StorefrontApp() {
   const [recentOrder, setRecentOrder] = useState<RecentOrder | null>(null);
   // Product whose "already in cart?" decision sheet is open (shop grid). null = closed.
   const [decisionProductId, setDecisionProductId] = useState<number | null>(null);
+  // Pre-flight stock reconcile: set when a checkout attempt clamped the cart, so
+  // the cart page shows what changed and the customer re-confirms (stay-and-review).
+  const [stockAdjustments, setStockAdjustments] = useState<StockAdjustment[]>([]);
+  const [checkingStock, setCheckingStock] = useState(false);
 
   const cartKey = store ? `manyorder_cart_${store.id}` : null;
 
@@ -127,6 +131,7 @@ export function StorefrontApp() {
   const addToCart = (
     productId: number, quantity = 1, modifierOptionIds: number[] = [], notes?: string,
   ) => {
+    setStockAdjustments([]); // a new add is a fresh intent; drop any stale notice
     setCart((prev) => addLine(prev, { productId, quantity, modifierOptionIds, notes }));
   };
 
@@ -134,11 +139,16 @@ export function StorefrontApp() {
   const setPlainQty = (productId: number, quantity: number) =>
     setCart((prev) => setLineQty(prev, plainSignature(productId), quantity));
 
-  // Cart-page handlers operate on a specific line by its signature.
-  const setLineQtyBySig = (signature: string, quantity: number) =>
+  // Cart-page handlers operate on a specific line by its signature. Editing the
+  // cart dismisses any stale "we updated your cart" notice.
+  const setLineQtyBySig = (signature: string, quantity: number) => {
+    setStockAdjustments([]);
     setCart((prev) => setLineQty(prev, signature, quantity));
-  const removeLineBySig = (signature: string) =>
+  };
+  const removeLineBySig = (signature: string) => {
+    setStockAdjustments([]);
     setCart((prev) => removeLine(prev, signature));
+  };
   // Bump an existing line by one (from the shop-grid "already in cart?" sheet).
   // Stays on the shop; the cart bar reflects the new total.
   const incrementLineBySig = (signature: string) => {
@@ -163,6 +173,31 @@ export function StorefrontApp() {
   const goShop = () => navigate(`/${slug}`);
   const goCart = () => navigate(`/${slug}/cart`);
   const goCheckout = () => navigate(`/${slug}/checkout`);
+
+  // Pre-flight before checkout: pull live stock, clamp the cart to it (combined
+  // per product), and if anything changed, stay on the cart with a clear notice
+  // so the customer reviews before paying. Otherwise proceed. A failed re-check
+  // falls through to checkout — the server checkout is still the final guard.
+  const handleCheckout = async () => {
+    if (!store || checkingStock) return;
+    setCheckingStock(true);
+    try {
+      const fresh = await storefrontApi.getProducts(store.id);
+      setProducts(fresh);
+      const { cart: reconciled, adjustments } = reconcileStock(cart, fresh);
+      if (adjustments.length > 0) {
+        setCart(reconciled);
+        setStockAdjustments(adjustments);
+      } else {
+        setStockAdjustments([]);
+        goCheckout();
+      }
+    } catch {
+      goCheckout();
+    } finally {
+      setCheckingStock(false);
+    }
+  };
   const goTrack = () => navigate(`/${slug}/track`);
   const goProduct = (id: number) => navigate(`/${slug}/p/${id}`);
 
@@ -242,7 +277,9 @@ export function StorefrontApp() {
               onQtyChange={setLineQtyBySig}
               onRemove={removeLineBySig}
               onEditLine={(line) => navigate(`/${slug}/p/${line.product.id}`, { state: { editSignature: line.signature } })}
-              onCheckout={goCheckout}
+              onCheckout={handleCheckout}
+              checkingStock={checkingStock}
+              stockAdjustments={stockAdjustments}
               onBack={goBack}
               onBrowseShop={goShop}
             />

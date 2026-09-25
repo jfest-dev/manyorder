@@ -3,7 +3,7 @@ import type { ProductResponse } from './api';
 import {
   lineSignature, plainSignature, normalizeOptionIds, normalizeNotes,
   parseCart, addLine, setLineQty, removeLine, updateLine, cartCount, cartLineCount, plainQuantities, productTotals,
-  hydrateCart, healCart, cartLineToCheckoutItem, type CartItem,
+  hydrateCart, healCart, reconcileStock, cartLineToCheckoutItem, type CartItem,
 } from './cart';
 
 // --- product factory -------------------------------------------------------
@@ -316,5 +316,52 @@ describe('cartLineToCheckoutItem', () => {
   it('omits empty modifiers and blank notes', () => {
     const plain = hydrateCart([item({ productId: 1, quantity: 1 })], [product()])[0];
     expect(cartLineToCheckoutItem(plain)).toEqual({ productId: 1, quantity: 1 });
+  });
+});
+
+describe('reconcileStock', () => {
+  const ci = (o: Partial<CartItem> & { productId: number }): CartItem =>
+    ({ quantity: 1, modifierOptionIds: [], ...o });
+
+  it('leaves the cart untouched when everything is within stock', () => {
+    const cart = [ci({ productId: 1, quantity: 3 })];
+    const r = reconcileStock(cart, [product({ id: 1, stock: 5 })]);
+    expect(r.adjustments).toEqual([]);
+    expect(r.cart).toBe(cart); // no changes -> same array reference is fine, but contents equal
+  });
+
+  it('clamps a single line down to available stock and reports it', () => {
+    const r = reconcileStock([ci({ productId: 1, quantity: 4 })], [product({ id: 1, name: 'Cappuccino', stock: 1 })]);
+    expect(r.cart).toEqual([ci({ productId: 1, quantity: 1 })]);
+    expect(r.adjustments).toEqual([{ productId: 1, name: 'Cappuccino', previousQty: 4, newQty: 1, removed: false }]);
+  });
+
+  it('clamps the COMBINED total across multiple lines of the same product', () => {
+    const cart = [
+      ci({ productId: 1, quantity: 2, modifierOptionIds: [100] }),
+      ci({ productId: 1, quantity: 3, modifierOptionIds: [101] }),
+    ];
+    const r = reconcileStock(cart, [product({ id: 1, stock: 3 })]);
+    // 2 + 3 = 5 wanted, stock 3: first line keeps 2, second is trimmed to 1.
+    expect(r.cart.map((l) => l.quantity)).toEqual([2, 1]);
+    expect(r.adjustments).toEqual([{ productId: 1, name: 'Milk Tea', previousQty: 5, newQty: 3, removed: false }]);
+  });
+
+  it('removes the line(s) entirely when stock is 0, marked removed', () => {
+    const r = reconcileStock([ci({ productId: 1, quantity: 2 })], [product({ id: 1, name: 'Cappuccino', stock: 0 })]);
+    expect(r.cart).toEqual([]);
+    expect(r.adjustments).toEqual([{ productId: 1, name: 'Cappuccino', previousQty: 2, newQty: 0, removed: true }]);
+  });
+
+  it('never clamps a pre-order item, even above its stock', () => {
+    const r = reconcileStock([ci({ productId: 1, quantity: 9 })], [product({ id: 1, stock: 0, preOrder: true })]);
+    expect(r.cart).toEqual([ci({ productId: 1, quantity: 9 })]);
+    expect(r.adjustments).toEqual([]);
+  });
+
+  it('leaves a product missing from the live list untouched (server is the guard)', () => {
+    const r = reconcileStock([ci({ productId: 99, quantity: 4 })], [product({ id: 1, stock: 1 })]);
+    expect(r.cart).toEqual([ci({ productId: 99, quantity: 4 })]);
+    expect(r.adjustments).toEqual([]);
   });
 });

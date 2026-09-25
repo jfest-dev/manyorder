@@ -1,6 +1,7 @@
 import { Package, Trash2, ArrowLeft, Pencil } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { type CartLine, maxOrderQuantity } from './storefrontTypes';
+import type { StockAdjustment } from '../../lib/cart';
 import { QuantityStepper } from './QuantityStepper';
 
 interface CartViewProps {
@@ -11,6 +12,10 @@ interface CartViewProps {
   /** Reopen a customized line (modifiers/notes) in the PDP to change its choices. */
   onEditLine?: (line: CartLine) => void;
   onCheckout: () => void;
+  /** True while the pre-flight stock re-check is in progress. */
+  checkingStock?: boolean;
+  /** Set when the last checkout attempt clamped the cart to live stock. */
+  stockAdjustments?: StockAdjustment[];
   /** Header back - returns to the actual previous screen. */
   onBack: () => void;
   /** Empty-state "Browse the shop" CTA - always goes to the shop. Defaults to onBack. */
@@ -19,8 +24,15 @@ interface CartViewProps {
 
 const BRAND = 'var(--primary-solid)';
 
+/** Plain-language message for one stock adjustment. */
+function adjustmentMessage(a: StockAdjustment): string {
+  return a.removed
+    ? `${a.name} is sold out and was removed from your cart.`
+    : `We updated ${a.name} to ${a.newQty} — that's all that's left.`;
+}
+
 /** Full-page cart - part of the multi-page shop → cart → checkout → confirmation flow. */
-export function CartView({ items, currency, onQtyChange, onRemove, onEditLine, onCheckout, onBack, onBrowseShop }: CartViewProps) {
+export function CartView({ items, currency, onQtyChange, onRemove, onEditLine, onCheckout, checkingStock = false, stockAdjustments = [], onBack, onBrowseShop }: CartViewProps) {
   const subtotal = items.reduce((sum, l) => sum + l.lineSubtotal, 0);
 
   return (
@@ -31,6 +43,17 @@ export function CartView({ items, currency, onQtyChange, onRemove, onEditLine, o
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {stockAdjustments.length > 0 && (
+          <div role="status" style={{ padding: '10px 12px', borderRadius: '10px', background: '#FFEDD5', border: '1px solid #FED7AA' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, color: '#9A3412', marginBottom: '4px' }}>Your cart was updated</div>
+            {stockAdjustments.map((a) => (
+              <div key={a.productId} style={{ fontSize: '12px', color: '#9A3412', lineHeight: 1.45 }}>{adjustmentMessage(a)}</div>
+            ))}
+            {items.length > 0 && (
+              <div style={{ fontSize: '11px', color: '#9A3412', opacity: 0.85, marginTop: '4px' }}>Review your cart, then tap Checkout again.</div>
+            )}
+          </div>
+        )}
         {items.length === 0 ? (
           <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
             <div style={{ marginBottom: '12px' }}>Your cart is empty.</div>
@@ -94,9 +117,10 @@ export function CartView({ items, currency, onQtyChange, onRemove, onEditLine, o
           </div>
           <button
             onClick={onCheckout}
-            style={{ width: '100%', height: '48px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: BRAND, color: 'white', fontSize: '15px', fontWeight: 700 }}
+            disabled={checkingStock}
+            style={{ width: '100%', height: '48px', borderRadius: '12px', border: 'none', cursor: checkingStock ? 'not-allowed' : 'pointer', background: BRAND, color: 'white', fontSize: '15px', fontWeight: 700, opacity: checkingStock ? 0.7 : 1 }}
           >
-            Checkout
+            {checkingStock ? 'Checking stock…' : 'Checkout'}
           </button>
         </div>
       )}

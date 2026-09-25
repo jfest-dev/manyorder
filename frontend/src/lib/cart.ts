@@ -208,6 +208,73 @@ export function healCart(cart: CartItem[], products: ProductResponse[]): CartIte
   return changed ? healed : cart;
 }
 
+/** One product whose cart quantity was clamped to available stock. */
+export interface StockAdjustment {
+  productId: number;
+  name: string;
+  /** Combined quantity across the product's lines, before and after. */
+  previousQty: number;
+  newQty: number;
+  /** True when the product dropped to 0 and its line(s) were removed. */
+  removed: boolean;
+}
+
+export interface ReconcileResult {
+  cart: CartItem[];
+  adjustments: StockAdjustment[];
+}
+
+/**
+ * Clamp cart quantities to what's currently in stock, per product (COMBINED
+ * across all of that product's lines, since stock is per-product not per-line).
+ * Pre-order items are uncapped; products missing from the live list (deleted /
+ * unseen) are left untouched — the server checkout is the final guard. A line
+ * clamped to 0 is dropped; a product fully dropped is reported as `removed`.
+ * Pure: returns a new cart + a per-product description of what changed.
+ */
+export function reconcileStock(cart: CartItem[], products: ProductResponse[]): ReconcileResult {
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const allowance = new Map<number, number>(); // remaining stock per product id
+  const before = new Map<number, number>();     // combined qty before, per product
+  const after = new Map<number, number>();      // combined qty after, per product
+
+  const result: CartItem[] = [];
+  for (const it of cart) {
+    before.set(it.productId, (before.get(it.productId) ?? 0) + it.quantity);
+    const product = productById.get(it.productId);
+    if (!product || product.preOrder) {
+      result.push(it); // unknown or pre-order → never clamped
+      after.set(it.productId, (after.get(it.productId) ?? 0) + it.quantity);
+      continue;
+    }
+    if (!allowance.has(it.productId)) allowance.set(it.productId, Math.max(0, product.stock ?? 0));
+    const remaining = allowance.get(it.productId)!;
+    const newQty = Math.min(it.quantity, remaining);
+    allowance.set(it.productId, remaining - newQty);
+    if (newQty > 0) {
+      result.push(newQty === it.quantity ? it : { ...it, quantity: newQty });
+      after.set(it.productId, (after.get(it.productId) ?? 0) + newQty);
+    }
+    // newQty === 0 → line dropped (not pushed to result).
+  }
+
+  const adjustments: StockAdjustment[] = [];
+  for (const [productId, prev] of before) {
+    const now = after.get(productId) ?? 0;
+    if (now < prev) {
+      adjustments.push({
+        productId,
+        name: productById.get(productId)?.name ?? 'Item',
+        previousQty: prev,
+        newQty: now,
+        removed: now === 0,
+      });
+    }
+  }
+  // Nothing clamped → hand back the original cart (stable reference, no re-render).
+  return adjustments.length === 0 ? { cart, adjustments } : { cart: result, adjustments };
+}
+
 /**
  * Resolve every line against the freshly-fetched products, computing the chosen
  * options + effective unit price + line subtotal. Lines whose product no longer
