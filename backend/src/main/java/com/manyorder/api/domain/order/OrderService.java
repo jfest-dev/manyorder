@@ -408,6 +408,9 @@ public class OrderService {
                 .toList();
 
         Long customerId = order.getCustomer() != null ? order.getCustomer().getId() : null;
+        List<com.manyorder.api.domain.customer.CustomerTag> customerTags = order.getCustomer() != null
+                ? List.copyOf(order.getCustomer().getTags())
+                : List.of();
 
         return new OrderResponse(
                 order.getId(),
@@ -438,6 +441,7 @@ public class OrderService {
                 order.getOrderGroupId(),
                 order.getTotalAmount(),
                 items,
-                order.getSource());
+                order.getSource(),
+                customerTags);
     }
 }

@@ -95,7 +95,9 @@ public class CustomerService {
         customer.updateDetails(req.getFullName(), email != null ? email : "", phone);
         // null = leave tags unchanged; a list (even empty) replaces them.
         if (req.getTags() != null) {
-            customer.setTags(req.getTags());
+            customer.setTags(req.getTags().stream()
+                    .map(t -> new CustomerTag(t.getName(), t.getColor()))
+                    .toList());
         }
         Customer saved = customerRepository.save(customer);
 

@@ -347,7 +347,7 @@ class CustomerIntegrationTest extends IntegrationTestBase {
     // ---------- tags ----------
 
     @Test
-    void update_setsNormalizedTags_nullLeavesUnchanged_emptyClears() throws Exception {
+    void update_setsNormalizedTags_withColors_nullLeavesUnchanged_emptyClears() throws Exception {
         String token = registerAndGetToken("cust-tags@test.com", "MERCHANT", null);
         long storeId = createStore(token, "Tags Store", "cust-tags-store");
         long id = json(mockMvc.perform(post("/merchant/stores/" + storeId + "/customers")
@@ -356,22 +356,43 @@ class CustomerIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isCreated()).andReturn()).get("id").asLong();
 
         // Messy input: case-insensitive dupes, surrounding spaces, blanks — all normalized.
-        JsonNode updated = putCustomer(token, storeId, id,
-                java.util.List.of("VIP", " vip ", "Wholesale", "  ", "VIP"));
-        assertEquals(java.util.List.of("VIP", "Wholesale"), tagsOf(updated), "deduped, trimmed, order kept");
+        JsonNode updated = putCustomer(token, storeId, id, java.util.List.of(
+                tag("VIP", "red"), tag(" vip ", "blue"), tag("Wholesale", "chartreuse"), tag("  ", "green")));
+        assertEquals(java.util.List.of("VIP", "Wholesale"), tagNames(updated), "deduped, trimmed, order kept");
+        assertEquals(java.util.List.of("red", "gray"), tagColors(updated), "first color kept; unknown coerced to gray");
 
         // A later update with NO tags key leaves them unchanged.
         JsonNode noTags = json(mockMvc.perform(put("/merchant/stores/" + storeId + "/customers/" + id)
                         .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("fullName", "Tagged", "phoneNumber", "+6590007000"))))
                 .andExpect(status().isOk()).andReturn());
-        assertEquals(java.util.List.of("VIP", "Wholesale"), tagsOf(noTags), "null tags = unchanged");
+        assertEquals(java.util.List.of("VIP", "Wholesale"), tagNames(noTags), "null tags = unchanged");
 
         // An empty list clears them.
-        assertTrue(tagsOf(putCustomer(token, storeId, id, java.util.List.of())).isEmpty(), "empty list clears");
+        assertTrue(tagNames(putCustomer(token, storeId, id, java.util.List.<Map<String, Object>>of())).isEmpty(), "empty list clears");
     }
 
-    private JsonNode putCustomer(String token, long storeId, long id, java.util.List<String> tags) throws Exception {
+    @Test
+    void orderResponse_carriesTheLinkedCustomersTags() throws Exception {
+        String token = registerAndGetToken("cust-ordertags@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "OrderTags", "cust-ordertags-store");
+        // A manual order creates/links the customer by phone; then we tag them.
+        createManualOrder(token, storeId, "Buyer", "+6590007000");
+        long id = findByPhone(json(getWithToken("/merchant/stores/" + storeId + "/customers", token, 200)),
+                "+6590007000").get("id").asLong();
+        putCustomer(token, storeId, id, java.util.List.of(tag("VIP", "purple")));
+
+        JsonNode order = json(getWithToken("/merchant/stores/" + storeId + "/orders", token, 200)).get(0);
+        JsonNode tags = order.get("customerTags");
+        assertEquals(1, tags.size(), "the order carries the customer's live tags");
+        assertEquals("VIP", tags.get(0).get("name").asText());
+        assertEquals("purple", tags.get(0).get("color").asText());
+    }
+
+    private Map<String, Object> tag(String name, String color) {
+        return Map.of("name", name, "color", color);
+    }
+    private JsonNode putCustomer(String token, long storeId, long id, java.util.List<Map<String, Object>> tags) throws Exception {
         var body = new java.util.HashMap<String, Object>();
         body.put("fullName", "Tagged");
         body.put("phoneNumber", "+6590007000");
@@ -382,9 +403,14 @@ class CustomerIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk()).andReturn());
     }
 
-    private java.util.List<String> tagsOf(JsonNode customer) {
+    private java.util.List<String> tagNames(JsonNode customer) {
         java.util.List<String> out = new java.util.ArrayList<>();
-        customer.get("tags").forEach(n -> out.add(n.asText()));
+        customer.get("tags").forEach(n -> out.add(n.get("name").asText()));
+        return out;
+    }
+    private java.util.List<String> tagColors(JsonNode customer) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        customer.get("tags").forEach(n -> out.add(n.get("color").asText()));
         return out;
     }
 }

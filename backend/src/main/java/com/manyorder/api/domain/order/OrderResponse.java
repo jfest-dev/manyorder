@@ -6,6 +6,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
+import com.manyorder.api.domain.customer.CustomerTag;
+
 public class OrderResponse {
 
     private Long id;
@@ -41,6 +43,9 @@ public class OrderResponse {
     /** How the order was placed (STOREFRONT vs MANUAL). Lets the Orders list tag a
      *  storefront order still in its initial status as "New". */
     private OrderSource source;
+    /** The linked customer's current tags (empty when the order has no customer).
+     *  Live labels, not a per-order snapshot. */
+    private List<CustomerTag> customerTags;
 
     public OrderResponse(
             Long id,
@@ -71,7 +76,8 @@ public class OrderResponse {
             String orderGroupId,
             BigDecimal totalAmount,
             List<OrderItemResponse> items,
-            OrderSource source) {
+            OrderSource source,
+            List<CustomerTag> customerTags) {
         this.id = id;
         this.customerId = customerId;
         this.customerName = customerName;
@@ -101,6 +107,7 @@ public class OrderResponse {
         this.totalAmount = totalAmount;
         this.items = items;
         this.source = source;
+        this.customerTags = customerTags;
     }
 
     public Long getId() { return id; }
@@ -132,4 +139,5 @@ public class OrderResponse {
     public BigDecimal getTotalAmount() { return totalAmount; }
     public List<OrderItemResponse> getItems() { return items; }
     public OrderSource getSource() { return source; }
+    public List<CustomerTag> getCustomerTags() { return customerTags; }
 }

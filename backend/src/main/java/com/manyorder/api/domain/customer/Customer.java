@@ -51,12 +51,12 @@ public class Customer {
     private LocalDateTime createdAt;
 
     /** Free-form, informational labels the merchant applies (e.g. "VIP",
-     *  "Wholesale"). No automatic behaviour keys off them. */
+     *  "Wholesale"), each with a palette color. No automatic behaviour keys off
+     *  them. Columns (tag/color) are defined on {@link CustomerTag}. */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "customer_tags", joinColumns = @JoinColumn(name = "customer_id"))
     @OrderColumn(name = "position")
-    @Column(name = "tag", nullable = false, length = 30)
-    private List<String> tags = new ArrayList<>();
+    private List<CustomerTag> tags = new ArrayList<>();
 
     private static final int MAX_TAG_LENGTH = 30;
     private static final int MAX_TAGS = 20;
@@ -108,33 +108,34 @@ public class Customer {
         return createdAt;
     }
 
-    public List<String> getTags() {
+    public List<CustomerTag> getTags() {
         return tags;
     }
 
     /**
-     * Replace the tag set. Normalizes: trims, drops blanks, truncates to
-     * {@value #MAX_TAG_LENGTH} chars, dedupes case-insensitively (keeping the
-     * first casing and order), and caps at {@value #MAX_TAGS} tags.
+     * Replace the tag set. Normalizes each tag's name: trims, drops blanks,
+     * truncates to {@value #MAX_TAG_LENGTH} chars, dedupes case-insensitively
+     * (keeping the first name + order), and caps at {@value #MAX_TAGS} tags. The
+     * color is coerced to a valid palette key by {@link CustomerTag}.
      */
-    public void setTags(Collection<String> incoming) {
+    public void setTags(Collection<CustomerTag> incoming) {
         this.tags.clear();
         if (incoming == null) {
             return;
         }
         Set<String> seen = new HashSet<>();
-        for (String raw : incoming) {
-            if (raw == null) {
+        for (CustomerTag raw : incoming) {
+            if (raw == null || raw.getName() == null) {
                 continue;
             }
-            String tag = raw.trim();
-            if (tag.length() > MAX_TAG_LENGTH) {
-                tag = tag.substring(0, MAX_TAG_LENGTH).trim();
+            String name = raw.getName().trim();
+            if (name.length() > MAX_TAG_LENGTH) {
+                name = name.substring(0, MAX_TAG_LENGTH).trim();
             }
-            if (tag.isEmpty() || !seen.add(tag.toLowerCase())) {
+            if (name.isEmpty() || !seen.add(name.toLowerCase())) {
                 continue;
             }
-            this.tags.add(tag);
+            this.tags.add(new CustomerTag(name, raw.getColor())); // ctor validates the color
             if (this.tags.size() >= MAX_TAGS) {
                 break;
             }
