@@ -24,11 +24,10 @@ interface CartViewProps {
 
 const BRAND = 'var(--primary-solid)';
 
-/** Plain-language message for one stock adjustment. */
+/** Short message for one stock adjustment: product + new quantity, nothing else
+ *  (the cart itself shows the change). */
 function adjustmentMessage(a: StockAdjustment): string {
-  return a.removed
-    ? `${a.name} is sold out and was removed from your cart.`
-    : `We updated ${a.name} to ${a.newQty} — that's all that's left.`;
+  return a.removed ? `${a.name}: removed` : `${a.name}: ${a.newQty} left`;
 }
 
 /** Full-page cart - part of the multi-page shop → cart → checkout → confirmation flow. */
@@ -49,9 +48,6 @@ export function CartView({ items, currency, onQtyChange, onRemove, onEditLine, o
             {stockAdjustments.map((a) => (
               <div key={a.productId} style={{ fontSize: '12px', color: '#9A3412', lineHeight: 1.45 }}>{adjustmentMessage(a)}</div>
             ))}
-            {items.length > 0 && (
-              <div style={{ fontSize: '11px', color: '#9A3412', opacity: 0.85, marginTop: '4px' }}>Review your cart, then tap Checkout again.</div>
-            )}
           </div>
         )}
         {items.length === 0 ? (
