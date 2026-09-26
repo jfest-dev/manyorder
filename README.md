@@ -65,7 +65,7 @@ role-based access control. All use the password `password123`:
 
 | Account | What it can do | Email |
 |---|---|---|
-| Merchant | Owns and fully manages all three stores | hello@manyorder.com |
+| Merchant | Owns and fully manages all three stores | manyorder.app@gmail.com |
 | Staff | Works a single store's orders, without owner-level settings | staff@manyorder.com |
 | Platform admin | Cross-store administration | admin@manyorder.com |
 

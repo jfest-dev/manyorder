@@ -44,7 +44,7 @@ import com.manyorder.api.domain.user.UserRole;
  * realistic mix of in-stock / sold-out (stock 0) / pre-order states, and a few
  * sample orders per store.
  *
- * <p>Accounts (all password123): hello@manyorder.com (merchant, owns all three),
+ * <p>Accounts (all password123): manyorder.app@gmail.com (merchant, owns all three),
  * staff@manyorder.com (staff on Kiri Brew), admin@manyorder.com (platform admin).
  *
  * <p>Photo URLs point at the app's own Cloudinary (folder manyorder/demo). They
@@ -86,14 +86,14 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        if (userRepository.existsByEmail("hello@manyorder.com")) {
+        if (userRepository.existsByEmail("manyorder.app@gmail.com")) {
             return; // already seeded
         }
 
         String hash = passwordEncoder.encode("password123");
 
         // Demo accounts ship pre-verified so recruiters never see the nag banner.
-        User merchantUser = new User("Demo Merchant", "hello@manyorder.com", hash, UserRole.MERCHANT);
+        User merchantUser = new User("Demo Merchant", "manyorder.app@gmail.com", hash, UserRole.MERCHANT);
         merchantUser.setVerified(true);
         merchantUser = userRepository.save(merchantUser);
 
@@ -109,7 +109,7 @@ public class DataSeeder implements CommandLineRunner {
     // ---------------------------------------------------------------- Kiri Brew
 
     private void seedKiriBrew(User owner, String hash) {
-        Merchant kiri = store(owner, "Kiri Brew", "kirikiri-brew", "hello@manyorder.com", "+6581234567",
+        Merchant kiri = store(owner, "Kiri Brew", "kirikiri-brew", "manyorder.app@gmail.com", "+6581234567",
                 "Food & Beverage", "#000000", "Singapore", "12345", "Test St 922 Test Test",
                 "Mon-Sat, 11am-11pm | Closed on Sun",
                 "Small-batch specialty coffee roasted in-house every morning. Pour-overs, espresso, cold brew and seasonal pastries; brewed with a lot of care and a little obsession, right here in the neighbourhood.",

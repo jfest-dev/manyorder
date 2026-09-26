@@ -111,7 +111,7 @@ export function SignIn() {
         </div>
 
         <p className="text-xs" style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
-          Demo account: hello@manyorder.com / password123
+          Demo account: manyorder.app@gmail.com / password123
         </p>
       </div>
     </AuthLayout>
