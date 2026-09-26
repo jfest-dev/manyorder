@@ -283,3 +283,73 @@ template set (admin-gated under /admin), no per-merchant storage or per-store
 overrides. Still needs safe variable interpolation (order number, customer name,
 store name, etc.) with escaping, and a fallback to the built-in default if a
 template is blank. Needs its own build session; not scoped further here.
+
+
+---
+
+# Deferred feature backlog (post-launch)
+
+The four features below were deliberately deferred to prioritize finishing core
+launch-readiness (email verification, production migrations, rate limiting) for a
+job-application portfolio deadline. They are not deprioritized because they are
+weak ideas; each is genuinely large new scope best tackled with fresh focus. Do
+not fold any of them into a "small" change.
+
+## Booth Pickup + map integration (third fulfilment type)
+
+A third fulfilment type alongside Delivery and Pickup, for temporary physical
+locations such as market stalls and event booths. Distinct from a fixed store
+pickup address: it carries a limited availability window (specific dates and
+time ranges) and a location shown to customers on a map.
+
+This is the first time the app would need real map integration (geocoding a
+booth address and rendering a map for customers). Open questions to work through
+when picked up: map provider and its cost/keys, how the availability window
+interacts with ordering (orders only accepted for a booth while it is live),
+whether a store can run several booths at once, and how the booth location and
+window surface in cart, order, and WhatsApp. Needs its own investigation session.
+
+## Mix-and-match bundle ("choose any N for a set deal")
+
+Let a merchant offer "choose any N items for a set deal" across the menu, where
+the N picks can be the same item repeated or a mix of different items.
+
+Real open questions before building: pricing model (a flat bundle price vs. a
+discount applied on the sum of the chosen items), how the pool of eligible items
+is defined (whole menu, a category, a hand-picked set), whether items chosen into
+a bundle can still carry their own modifiers, and how a bundle is represented
+end to end in the cart, the order record, and the WhatsApp summary. Needs its own
+build session.
+
+## Scheduled fulfillment calendar (day view for future-dated orders)
+
+When customers can choose a future delivery or pickup date (distinct from the
+existing Pre-order concept), merchants need a way to see what is due on a given
+day rather than reading a flat, chronological order list. A calendar or per-day
+grouped view of scheduled orders, so a merchant can plan a day's fulfilment.
+
+Depends on customers being able to pick a fulfilment date in the first place, so
+scope that customer-facing date selection alongside, or confirm it already
+exists, when this is picked up. Needs its own build session.
+
+## Day-of-week product availability
+
+Let a merchant restrict a product to being orderable only on certain days of the
+week (e.g. a weekend-only special). This is separate from stock (a product can be
+in stock but simply not offered on a Monday) and separate from Pre-order (it is a
+recurring weekly rule, not a one-off future window). Needs a per-product
+day-of-week rule, enforcement in the storefront and at checkout, and a clear
+customer-facing message when a product is not available today. Needs its own
+build session.
+
+## Tech debt: ddl-auto emits invalid Postgres DDL for orders.source (startup warning)
+
+Found while restarting the dev backend. On every startup, Hibernate ddl-auto
+tries to re-apply the orders.source column type and emits Postgres-invalid DDL:
+"alter table if exists orders alter column source set data type varchar(20)
+default 'MANUAL'" which fails with 'syntax error at or near "default"'. It is a
+logged WARN only: the column already exists so the app starts and runs fine, but
+it adds a scary stack trace to every boot. Root: the varchar(20) default 'MANUAL'
+columnDefinition on Order.source (Order.java) is fine as ADD COLUMN but not as a
+SET DATA TYPE clause on Postgres. Low priority; clean up alongside a proper
+migration story rather than ddl-auto.
