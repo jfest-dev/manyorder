@@ -98,3 +98,35 @@ describe('Customer tag colors — armed color is applied at creation', () => {
     }
   });
 });
+
+describe('Customer list — tag color filter', () => {
+  function cust(id: number, fullName: string, tags: Array<{ name: string; color: string }>): CustomerResponse {
+    return { ...CUSTOMER, id, fullName, tags };
+  }
+
+  it('shows only customers with at least one tag of the selected color', async () => {
+    listMock.mockReset().mockResolvedValue([
+      cust(1, 'Alice Blue', [{ name: 'VIP', color: 'blue' }]),
+      cust(2, 'Bob Orange', [{ name: 'Wholesale', color: 'orange' }]),
+      cust(3, 'Carol Both', [{ name: 'New', color: 'blue' }, { name: 'Reg', color: 'gray' }]),
+      cust(4, 'Dave None', []),
+    ]);
+    const user = userEvent.setup();
+    render(<Customers storeId={1} currency="SGD" />);
+    await screen.findAllByText('Alice Blue');
+
+    await user.click(screen.getByRole('button', { name: /Filters/ }));
+    await user.click(screen.getByLabelText('Filter by blue tags'));
+
+    // Blue-tagged customers remain; others are filtered out.
+    expect(screen.queryAllByText('Alice Blue').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Carol Both').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Bob Orange')).toHaveLength(0);
+    expect(screen.queryAllByText('Dave None')).toHaveLength(0);
+
+    // Clicking the active color again clears the filter (back to all).
+    await user.click(screen.getByLabelText('Filter by blue tags'));
+    expect(screen.queryAllByText('Bob Orange').length).toBeGreaterThan(0);
+    expect(screen.queryAllByText('Dave None').length).toBeGreaterThan(0);
+  });
+});

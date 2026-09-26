@@ -73,6 +73,7 @@ export function Customers({ storeId, currency }: CustomersProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterOrders, setFilterOrders] = useState('all');
+  const [filterColor, setFilterColor] = useState('all'); // 'all' or a palette key
   const [page, setPage] = useState(1);
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -117,14 +118,16 @@ export function Customers({ storeId, currency }: CustomersProps) {
         (filterOrders === '10+' && n >= 10) ||
         (filterOrders === '5-9' && n >= 5 && n < 10) ||
         (filterOrders === '1-4' && n >= 1 && n < 5);
-      return matchesSearch && matchesStatus && matchesOrders;
+      const matchesColor =
+        filterColor === 'all' || c.tags.some((t) => t.color === filterColor);
+      return matchesSearch && matchesStatus && matchesOrders && matchesColor;
     });
-  }, [customers, searchQuery, filterStatus, filterOrders]);
+  }, [customers, searchQuery, filterStatus, filterOrders, filterColor]);
 
   // Client-side pagination over the filtered set. Reset to page 1 whenever the
   // search or filters change, and clamp so a shrinking list (e.g. after a
   // delete on the last page) never strands us on an empty page.
-  useEffect(() => { setPage(1); }, [searchQuery, filterStatus, filterOrders]);
+  useEffect(() => { setPage(1); }, [searchQuery, filterStatus, filterOrders, filterColor]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageItems = useMemo(
@@ -297,6 +300,23 @@ export function Customers({ storeId, currency }: CustomersProps) {
               { value: '5-9', label: '5-9 orders' },
               { value: '1-4', label: '1-4 orders' },
             ]} />
+          </div>
+          <div>
+            <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Tag color</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: 40 }}>
+              <button type="button" onClick={() => setFilterColor('all')} aria-label="Any tag color" aria-pressed={filterColor === 'all'}
+                style={{ height: 28, padding: '0 10px', borderRadius: '999px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  background: 'var(--bg-card)', color: 'var(--text-secondary)',
+                  border: filterColor === 'all' ? '2px solid var(--text-primary)' : '1px solid var(--border-strong)' }}>
+                All
+              </button>
+              {TAG_COLOR_KEYS.map((key) => (
+                <button key={key} type="button" onClick={() => setFilterColor((cur) => (cur === key ? 'all' : key))}
+                  aria-label={`Filter by ${key} tags`} aria-pressed={filterColor === key}
+                  style={{ width: 24, height: 24, borderRadius: '50%', background: tagColor(key).text, cursor: 'pointer', padding: 0,
+                    border: filterColor === key ? '2px solid var(--text-primary)' : '1px solid rgba(0,0,0,0.15)' }} />
+              ))}
+            </div>
           </div>
         </div>
       )}
