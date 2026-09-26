@@ -482,7 +482,8 @@ export function Customers({ storeId, currency }: CustomersProps) {
                       return (
                         <span key={t.name} style={{
                           position: 'relative', display: 'inline-flex', alignItems: 'center',
-                          borderRadius: '999px', background: c.bg, color: c.text, fontSize: '12px', fontWeight: 600,
+                          borderRadius: '999px', background: c.bg, color: c.text, border: `1px solid ${c.border}`,
+                          fontSize: '12px', fontWeight: 600,
                         }}>
                           <button type="button" onClick={() => setColorPickerFor((cur) => (cur === t.name ? null : t.name))} aria-label={`Change color of ${t.name}`}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', font: 'inherit', padding: '3px 4px 3px 9px' }}>
