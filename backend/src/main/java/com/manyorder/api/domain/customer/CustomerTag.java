@@ -14,7 +14,7 @@ import jakarta.persistence.Embeddable;
 public class CustomerTag {
 
     /** Allowed palette keys. Kept in sync with the frontend TAG_COLORS map. */
-    public static final Set<String> COLORS = Set.of("gray", "blue", "green", "amber", "red", "purple");
+    public static final Set<String> COLORS = Set.of("gray", "orange", "blue", "pink", "purple");
     public static final String DEFAULT_COLOR = "gray";
 
     @Column(name = "tag", nullable = false, length = 30)

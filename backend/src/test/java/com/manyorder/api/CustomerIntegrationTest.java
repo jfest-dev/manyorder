@@ -357,9 +357,9 @@ class CustomerIntegrationTest extends IntegrationTestBase {
 
         // Messy input: case-insensitive dupes, surrounding spaces, blanks — all normalized.
         JsonNode updated = putCustomer(token, storeId, id, java.util.List.of(
-                tag("VIP", "red"), tag(" vip ", "blue"), tag("Wholesale", "chartreuse"), tag("  ", "green")));
+                tag("VIP", "blue"), tag(" vip ", "pink"), tag("Wholesale", "chartreuse"), tag("  ", "orange")));
         assertEquals(java.util.List.of("VIP", "Wholesale"), tagNames(updated), "deduped, trimmed, order kept");
-        assertEquals(java.util.List.of("red", "gray"), tagColors(updated), "first color kept; unknown coerced to gray");
+        assertEquals(java.util.List.of("blue", "gray"), tagColors(updated), "first color kept; unknown coerced to gray");
 
         // A later update with NO tags key leaves them unchanged.
         JsonNode noTags = json(mockMvc.perform(put("/merchant/stores/" + storeId + "/customers/" + id)
@@ -387,6 +387,66 @@ class CustomerIntegrationTest extends IntegrationTestBase {
         assertEquals(1, tags.size(), "the order carries the customer's live tags");
         assertEquals("VIP", tags.get(0).get("name").asText());
         assertEquals("purple", tags.get(0).get("color").asText());
+    }
+
+    @Test
+    void update_acceptsManyDistinctTags_upToTheCap() throws Exception {
+        String token = registerAndGetToken("cust-manytags@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "ManyTags", "cust-manytags-store");
+        long id = json(mockMvc.perform(post("/merchant/stores/" + storeId + "/customers")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("fullName", "Tagged", "phoneNumber", "+6590007000"))))
+                .andExpect(status().isCreated()).andReturn()).get("id").asLong();
+
+        // Five distinct tags in one save must all persist (regression: merchant was capped at 2).
+        JsonNode five = putCustomer(token, storeId, id, java.util.List.of(
+                tag("VIP", "blue"), tag("Wholesale", "orange"), tag("Regular", "pink"),
+                tag("Corporate", "purple"), tag("New", "gray")));
+        assertEquals(java.util.List.of("VIP", "Wholesale", "Regular", "Corporate", "New"), tagNames(five),
+                "all five distinct tags persist");
+
+        // A follow-up save that grows the set further also persists (re-save path).
+        JsonNode seven = putCustomer(token, storeId, id, java.util.List.of(
+                tag("VIP", "blue"), tag("Wholesale", "orange"), tag("Regular", "pink"),
+                tag("Corporate", "purple"), tag("New", "gray"), tag("Lapsed", "gray"), tag("Trial", "blue")));
+        assertEquals(7, tagNames(seven).size(), "re-saving with more tags keeps them all");
+    }
+
+    @Test
+    void update_tagsSurviveRemovalAndReorderAcrossResaves() throws Exception {
+        String token = registerAndGetToken("cust-reorder@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Reorder", "cust-reorder-store");
+        long id = json(mockMvc.perform(post("/merchant/stores/" + storeId + "/customers")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("fullName", "Tagged", "phoneNumber", "+6590007000"))))
+                .andExpect(status().isCreated()).andReturn()).get("id").asLong();
+
+        putCustomer(token, storeId, id, java.util.List.of(tag("A", "blue"), tag("B", "orange"), tag("C", "pink")));
+        // Remove the middle one and reorder (@OrderColumn position shuffle — the classic Postgres PK-violation path).
+        assertEquals(java.util.List.of("C", "A"), tagNames(
+                putCustomer(token, storeId, id, java.util.List.of(tag("C", "pink"), tag("A", "blue")))));
+        // Grow again past the previous max.
+        assertEquals(java.util.List.of("C", "A", "D", "E"), tagNames(
+                putCustomer(token, storeId, id, java.util.List.of(
+                        tag("C", "pink"), tag("A", "blue"), tag("D", "purple"), tag("E", "gray")))));
+    }
+
+    @Test
+    void update_persistsEveryPaletteColor_andCoercesUnknownToGray() throws Exception {
+        // Guards against a palette/enum mismatch: every key the frontend can arm must
+        // survive round-trip as itself; anything outside the set falls back to gray.
+        String token = registerAndGetToken("cust-palette@test.com", "MERCHANT", null);
+        long storeId = createStore(token, "Palette", "cust-palette-store");
+        long id = json(mockMvc.perform(post("/merchant/stores/" + storeId + "/customers")
+                        .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("fullName", "Tagged", "phoneNumber", "+6590007000"))))
+                .andExpect(status().isCreated()).andReturn()).get("id").asLong();
+
+        JsonNode updated = putCustomer(token, storeId, id, java.util.List.of(
+                tag("G", "gray"), tag("O", "orange"), tag("B", "blue"),
+                tag("P", "pink"), tag("U", "purple"), tag("X", "chartreuse")));
+        assertEquals(java.util.List.of("gray", "orange", "blue", "pink", "purple", "gray"), tagColors(updated),
+                "each palette color persists as itself; an unknown color coerces to gray");
     }
 
     private Map<String, Object> tag(String name, String color) {
