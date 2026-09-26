@@ -7,8 +7,9 @@ import { Select } from '../Select';
 import { Toast } from '../Toast';
 import { useConfirm } from '../ConfirmDialog';
 import { WhatsAppIcon } from '../icons/WhatsAppIcon';
-import { customersApi, CustomerResponse, ApiError } from '../../lib/api';
+import { customersApi, CustomerResponse, type CustomerTag, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { TagChip, TAG_COLOR_KEYS, tagColor, DEFAULT_TAG_COLOR } from '../TagChip';
 
 interface CustomersProps {
   storeId: number;
@@ -44,17 +45,11 @@ function StatusTag({ active }: { active: boolean }) {
 }
 
 /** Read-only tag chips shown under a customer's name in the list. */
-function TagChips({ tags }: { tags: string[] }) {
+function TagChips({ tags }: { tags: CustomerTag[] }) {
   if (!tags || tags.length === 0) return null;
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-      {tags.map((t) => (
-        <span key={t} style={{
-          padding: '1px 7px', borderRadius: '999px', background: 'var(--bg-card-subtle)',
-          border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)',
-          fontSize: '11px', fontWeight: 500, whiteSpace: 'nowrap',
-        }}>{t}</span>
-      ))}
+      {tags.map((t) => <TagChip key={t.name} tag={t} />)}
     </div>
   );
 }
@@ -87,8 +82,10 @@ export function Customers({ storeId, currency }: CustomersProps) {
 
   // Editing an existing customer (null = closed). Same fields as Add, pre-filled.
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState({ fullName: '', phoneNumber: '', email: '', tags: [] as string[] });
+  const [editForm, setEditForm] = useState({ fullName: '', phoneNumber: '', email: '', tags: [] as CustomerTag[] });
   const [tagInput, setTagInput] = useState(''); // the in-progress tag being typed in the editor
+  const [armedColor, setArmedColor] = useState(DEFAULT_TAG_COLOR); // color the next added tag will take
+  const [colorPickerFor, setColorPickerFor] = useState<string | null>(null); // tag name whose recolor popover is open
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -178,21 +175,29 @@ export function Customers({ storeId, currency }: CustomersProps) {
   const openEdit = (c: CustomerResponse) => {
     setEditError(null);
     setTagInput('');
+    setArmedColor(DEFAULT_TAG_COLOR);
+    setColorPickerFor(null);
     setEditingId(c.id);
     setEditForm({ fullName: c.fullName, phoneNumber: c.phoneNumber ?? '', email: c.email ?? '', tags: c.tags ?? [] });
   };
 
-  // Add the typed tag to the edit form (deduped case-insensitively, trimmed).
+  // Add the typed tag (deduped case-insensitively, trimmed) in the currently armed color.
   const commitTag = () => {
-    const t = tagInput.trim();
-    if (!t) return;
+    const name = tagInput.trim();
+    if (!name) return;
     setEditForm((s) => (
-      s.tags.some((x) => x.toLowerCase() === t.toLowerCase()) ? s : { ...s, tags: [...s.tags, t] }
+      s.tags.some((x) => x.name.toLowerCase() === name.toLowerCase())
+        ? s
+        : { ...s, tags: [...s.tags, { name, color: armedColor }] }
     ));
     setTagInput('');
   };
-  const removeTag = (tag: string) =>
-    setEditForm((s) => ({ ...s, tags: s.tags.filter((x) => x !== tag) }));
+  const removeTag = (name: string) =>
+    setEditForm((s) => ({ ...s, tags: s.tags.filter((x) => x.name !== name) }));
+  const setTagColor = (name: string, color: string) => {
+    setEditForm((s) => ({ ...s, tags: s.tags.map((x) => (x.name === name ? { ...x, color } : x)) }));
+    setColorPickerFor(null);
+  };
 
   const handleUpdateCustomer = async () => {
     if (editingId == null) return;
@@ -465,50 +470,74 @@ export function Customers({ storeId, currency }: CustomersProps) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <FieldInput label="Name" value={editForm.fullName} onChange={(v) => setEditForm((s) => ({ ...s, fullName: v }))} maxLength={255} required />
-              <FieldInput label="Phone" placeholder="+65 8123 4567" value={editForm.phoneNumber} onChange={(v) => setEditForm((s) => ({ ...s, phoneNumber: v }))} maxLength={255} helperText="Used to reach the customer on WhatsApp, and to avoid duplicates." required />
-              <FieldInput label="Email" type="email" value={editForm.email} onChange={(v) => setEditForm((s) => ({ ...s, email: v }))} maxLength={255} helperText="Optional." />
+              <FieldInput label="Phone" placeholder="+65 8123 4567" value={editForm.phoneNumber} onChange={(v) => setEditForm((s) => ({ ...s, phoneNumber: v }))} maxLength={255} required />
+              <FieldInput label="Email (optional)" type="email" value={editForm.email} onChange={(v) => setEditForm((s) => ({ ...s, email: v }))} maxLength={255} />
 
               <div>
                 <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontWeight: 500 }}>Tags</label>
                 {editForm.tags.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-                    {editForm.tags.map((t) => (
-                      <span key={t} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '2px 6px 2px 9px',
-                        borderRadius: '999px', background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
-                        color: 'var(--text-primary)', fontSize: '12px', fontWeight: 500,
-                      }}>
-                        {t}
-                        <button type="button" onClick={() => removeTag(t)} aria-label={`Remove ${t}`}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'inline-flex' }}>
-                          <X size={13} />
-                        </button>
-                      </span>
-                    ))}
+                    {editForm.tags.map((t) => {
+                      const c = tagColor(t.color);
+                      return (
+                        <span key={t.name} style={{
+                          position: 'relative', display: 'inline-flex', alignItems: 'center',
+                          borderRadius: '999px', background: c.bg, color: c.text, fontSize: '12px', fontWeight: 600,
+                        }}>
+                          <button type="button" onClick={() => setColorPickerFor((cur) => (cur === t.name ? null : t.name))} aria-label={`Change color of ${t.name}`}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', font: 'inherit', padding: '3px 4px 3px 9px' }}>
+                            {t.name}
+                          </button>
+                          <button type="button" onClick={() => removeTag(t.name)} aria-label={`Remove ${t.name}`}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: c.text, padding: '3px 8px 3px 2px', display: 'inline-flex', alignItems: 'center', opacity: 0.7 }}>
+                            <X size={13} />
+                          </button>
+                          {colorPickerFor === t.name && (
+                            <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 10, display: 'flex', gap: '6px', padding: '8px', background: 'var(--bg-card)', border: '1px solid var(--border-strong)', borderRadius: '10px', boxShadow: 'var(--shadow-overlay)' }}>
+                              {TAG_COLOR_KEYS.map((key) => (
+                                <button key={key} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setTagColor(t.name, key)} aria-label={key}
+                                  style={{ width: 18, height: 18, borderRadius: '50%', background: tagColor(key).text, cursor: 'pointer', padding: 0, border: t.color === key ? '2px solid var(--text-primary)' : '1px solid rgba(0,0,0,0.15)' }} />
+                              ))}
+                            </div>
+                          )}
+                        </span>
+                      );
+                    })}
                   </div>
                 )}
-                <input
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitTag(); }
-                    else if (e.key === 'Backspace' && tagInput === '' && editForm.tags.length > 0) {
-                      removeTag(editForm.tags[editForm.tags.length - 1]);
-                    }
-                  }}
-                  onBlur={commitTag}
-                  maxLength={30}
-                  placeholder="Add a tag, e.g. VIP"
-                  style={{
-                    width: '100%', height: 40, padding: '0 12px', boxSizing: 'border-box',
-                    border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)',
-                    background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit',
-                  }}
-                />
-                <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>Press Enter to add. Informational only.</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                  {TAG_COLOR_KEYS.map((key) => (
+                    <button key={key} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setArmedColor(key)} aria-label={`Use ${key} for the next tag`} aria-pressed={armedColor === key}
+                      style={{ width: 20, height: 20, borderRadius: '50%', background: tagColor(key).text, cursor: 'pointer', padding: 0, border: armedColor === key ? '2px solid var(--text-primary)' : '1px solid rgba(0,0,0,0.15)' }} />
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitTag(); }
+                      else if (e.key === 'Backspace' && tagInput === '' && editForm.tags.length > 0) {
+                        removeTag(editForm.tags[editForm.tags.length - 1].name);
+                      }
+                    }}
+                    onBlur={commitTag}
+                    maxLength={30}
+                    placeholder="Add a tag"
+                    style={{
+                      flex: 1, minWidth: 0, height: 40, padding: '0 12px', boxSizing: 'border-box',
+                      border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)',
+                      background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit',
+                    }}
+                  />
+                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={commitTag} disabled={!tagInput.trim()} aria-label="Add tag"
+                    style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 'var(--radius-field)', border: '1px solid var(--border-strong)', background: 'var(--bg-card)', cursor: tagInput.trim() ? 'pointer' : 'not-allowed', color: tagInput.trim() ? 'var(--text-primary)' : 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Plus size={18} />
+                  </button>
+                </div>
               </div>
 
-              <p className="text-xs" style={{ color: 'var(--text-muted)', margin: 0 }}>Changes apply going forward. Past orders keep the name and contact recorded at the time.</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)', margin: 0 }}>Changes apply going forward.</p>
               {editError && <p className="text-small" style={{ color: 'var(--error-color)', margin: 0 }}>{editError}</p>}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>

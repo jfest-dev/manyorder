@@ -169,6 +169,8 @@ export interface OrderResponse {
   orderGroupId: string | null;
   totalAmount: number;
   source: OrderSource;
+  /** The linked customer's current tags (empty when no customer). */
+  customerTags: CustomerTag[];
   items: OrderItemResponse[];
 }
 
@@ -627,7 +629,14 @@ export interface CustomerResponse {
   firstOrderAt: string | null;
   lastOrderAt: string | null;
   /** Free-form informational labels (e.g. "VIP"). No behaviour keys off them. */
-  tags: string[];
+  tags: CustomerTag[];
+}
+
+/** A customer label with a palette color key. Colors are keyed (gray/blue/…);
+ *  see TAG_COLORS in components/TagChip for the actual styling. */
+export interface CustomerTag {
+  name: string;
+  color: string;
 }
 
 export const customersApi = {
@@ -639,7 +648,7 @@ export const customersApi = {
     request<CustomerResponse>(`/merchant/stores/${storeId}/customers`, { method: 'POST', body: payload }),
 
   /** Edit a customer (full-record replace). 409 if the phone/email now matches another customer. */
-  update: (storeId: number, customerId: number, payload: { fullName: string; phoneNumber: string; email?: string; tags?: string[] }) =>
+  update: (storeId: number, customerId: number, payload: { fullName: string; phoneNumber: string; email?: string; tags?: CustomerTag[] }) =>
     request<CustomerResponse>(`/merchant/stores/${storeId}/customers/${customerId}`, { method: 'PUT', body: payload }),
 
   /** Permanently delete a customer (data erasure). Past orders survive detached. */

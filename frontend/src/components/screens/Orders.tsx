@@ -8,6 +8,7 @@ import { formatMoney } from '../../lib/currency';
 import { orderSummaryLines, waLink, type WaOrderSection } from '../../lib/whatsapp';
 import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersToday, type RangeKey } from '../../lib/orderStats';
 import { DatePicker } from '../DatePicker';
+import { TagChip } from '../TagChip';
 import type { Store } from '../../App';
 import { useConfirm } from '../ConfirmDialog';
 
@@ -558,7 +559,9 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                       }}>New</span>
                     )}
                   </span>
-                  <span className="text-small"><span className="m-label">Customer</span>{o.contactName || o.customerName || '-'}</span>
+                  <span className="text-small" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}><span className="m-label">Customer</span>{o.contactName || o.customerName || '-'}
+                    {o.customerTags.map((t) => <TagChip key={t.name} tag={t} size="xs" />)}
+                  </span>
                   <span><span className="m-label">Fulfilment</span>
                     <span style={{
                       display: 'inline-block', fontSize: '11px', fontWeight: 600,
@@ -639,6 +642,11 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                               ? <CopyValue text={o.contactPhone} muted />
                               : <div style={{ color: 'var(--text-secondary)' }}>No phone</div>}
                             {o.contactEmail && <CopyValue text={o.contactEmail} muted />}
+                            {o.customerTags.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '2px' }}>
+                                {o.customerTags.map((t) => <TagChip key={t.name} tag={t} size="xs" />)}
+                              </div>
+                            )}
                           </>
                         } />
                         {o.orderType === 'DELIVERY' && (

@@ -22,7 +22,7 @@ function order(overrides: Partial<OrderResponse> = {}): OrderResponse {
     orderType: 'PICKUP', contactName: null, contactPhone: null, contactEmail: null,
     deliveryAddress: null, notes: null, createdAt: '2026-09-13T00:00:00Z',
     subtotal: 0, deliveryFee: 0, deliveryFeePending: false, discountAmount: 0,
-    discountCode: null, orderGroupId: null, totalAmount: 0, source: 'STOREFRONT', items: [],
+    discountCode: null, orderGroupId: null, totalAmount: 0, source: 'STOREFRONT', customerTags: [], items: [],
     ...overrides,
   };
 }
