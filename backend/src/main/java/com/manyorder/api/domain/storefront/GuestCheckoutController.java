@@ -71,8 +71,8 @@ public class GuestCheckoutController {
 
         Merchant merchant = merchantRepository.findById(request.getMerchantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
-        // Archived stores are closed to new orders.
-        if (merchant.isArchived()) {
+        // Archived (merchant-closed) or suspended (admin-blocked) stores are closed to new orders.
+        if (merchant.isArchived() || merchant.isSuspended()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found");
         }
 
@@ -493,7 +493,7 @@ public class GuestCheckoutController {
     @Transactional(readOnly = true)
     public GuestCheckoutResponse lookupOrder(@org.springframework.web.bind.annotation.PathVariable String slug,
                                              @Valid @RequestBody OrderLookupRequest request) {
-        Merchant merchant = merchantRepository.findBySlugAndArchivedAtIsNull(slug.toLowerCase())
+        Merchant merchant = merchantRepository.findBySlugAndArchivedAtIsNullAndSuspendedAtIsNull(slug.toLowerCase())
                 .orElseThrow(GuestCheckoutController::orderNotFound);
 
         Order order = orderRepository.findById(request.getOrderId()).orElseThrow(GuestCheckoutController::orderNotFound);

@@ -85,6 +85,7 @@ public class ProductService {
     @Transactional(readOnly = true)
     public List<ProductResponse> getActiveProductsByMerchantId(Long merchantId) {
         Merchant merchant = merchantRepository.findById(merchantId)
+                .filter(m -> !m.isArchived() && !m.isSuspended())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
         return withStorefrontUnitsSold(merchant, productRepository.findByMerchantAndIsActiveTrueOrderByDisplayOrderAscIdAsc(merchant));
     }

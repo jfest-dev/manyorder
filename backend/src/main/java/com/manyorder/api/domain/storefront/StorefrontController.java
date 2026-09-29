@@ -45,7 +45,7 @@ public class StorefrontController {
     /** Public store lookup by slug — powers the storefront and Sign In to Store branding. */
     @GetMapping("/stores/{slug}")
     public PublicStoreResponse getStoreBySlug(@PathVariable String slug) {
-        Merchant merchant = merchantRepository.findBySlugAndArchivedAtIsNull(slug.toLowerCase())
+        Merchant merchant = merchantRepository.findBySlugAndArchivedAtIsNullAndSuspendedAtIsNull(slug.toLowerCase())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
         // Public "sold" tally counts STOREFRONT orders only (manual dashboard
         // orders don't inflate the number a customer sees).
@@ -64,7 +64,7 @@ public class StorefrontController {
     @GetMapping("/storefront/{merchantId}/offers")
     public List<PublicOfferResponse> getPublicOffers(@PathVariable Long merchantId) {
         Merchant merchant = merchantRepository.findById(merchantId)
-                .filter(m -> !m.isArchived())
+                .filter(m -> !m.isArchived() && !m.isSuspended())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
         return discountService.listPublicOffers(merchant);
     }

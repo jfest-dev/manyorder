@@ -31,7 +31,7 @@ public class StoreAccessService {
         }
         Merchant merchant = merchantRepository.findById(storeId)
                 .orElseThrow(this::notFound);
-        if (!merchant.getOwner().getId().equals(user.getId()) || merchant.isArchived()) {
+        if (!merchant.getOwner().getId().equals(user.getId()) || merchant.isArchived() || merchant.isSuspended()) {
             throw notFound();
         }
         return merchant;
@@ -48,7 +48,7 @@ public class StoreAccessService {
                 throw notFound();
             }
             Merchant merchant = merchantRepository.findById(storeId).orElseThrow(this::notFound);
-            if (merchant.isArchived()) {
+            if (merchant.isArchived() || merchant.isSuspended()) {
                 throw notFound();
             }
             return merchant;

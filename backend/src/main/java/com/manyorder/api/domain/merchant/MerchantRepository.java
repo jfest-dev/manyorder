@@ -19,5 +19,11 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long> {
     // store-limit count, and public/staff slug lookups.
     List<Merchant> findByOwnerAndArchivedAtIsNullOrderByCreatedAtAsc(User owner);
     long countByOwnerAndArchivedAtIsNull(User owner);
-    Optional<Merchant> findBySlugAndArchivedAtIsNull(String slug);
+
+    // Public/staff slug lookup: a store must be neither archived (merchant closed
+    // it) nor suspended (admin blocked it) to be reachable.
+    Optional<Merchant> findBySlugAndArchivedAtIsNullAndSuspendedAtIsNull(String slug);
+
+    /** True if this owner has at least one admin-suspended store (drives the login gate). */
+    boolean existsByOwnerAndSuspendedAtIsNotNull(User owner);
 }

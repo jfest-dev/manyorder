@@ -132,6 +132,15 @@ public class Merchant {
      */
     private LocalDateTime archivedAt;
 
+    /**
+     * Platform-admin suspension marker. Null = active; non-null = suspended by an
+     * admin (storefront hidden, owner/staff login blocked). Distinct from
+     * {@link #archivedAt}: archiving is the merchant's own "I closed this store"
+     * and is merchant-reversible, whereas suspension is a punitive admin state the
+     * merchant cannot lift themselves.
+     */
+    private LocalDateTime suspendedAt;
+
     protected Merchant() {}
 
     public Merchant(User owner, String name, String slug, String email, String phoneNumber) {
@@ -199,4 +208,7 @@ public class Merchant {
     public LocalDateTime getArchivedAt() { return archivedAt; }
     public void setArchivedAt(LocalDateTime archivedAt) { this.archivedAt = archivedAt; }
     public boolean isArchived() { return archivedAt != null; }
+    public LocalDateTime getSuspendedAt() { return suspendedAt; }
+    public void setSuspendedAt(LocalDateTime suspendedAt) { this.suspendedAt = suspendedAt; }
+    public boolean isSuspended() { return suspendedAt != null; }
 }

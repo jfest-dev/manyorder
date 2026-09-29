@@ -56,7 +56,22 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw badCredentials();
         }
+        requireNotSuspended(user);
         return toLoginResponse(user);
+    }
+
+    /** Block sign-in for an admin-suspended account: a MERCHANT with any suspended
+     *  store, or STAFF whose assigned store is suspended. */
+    private void requireNotSuspended(User user) {
+        boolean suspended = switch (user.getRole()) {
+            case MERCHANT -> merchantRepository.existsByOwnerAndSuspendedAtIsNotNull(user);
+            case STAFF -> user.getStaffStore() != null && user.getStaffStore().isSuspended();
+            default -> false;
+        };
+        if (suspended) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "This account has been suspended. Please contact support.");
+        }
     }
 
     public LoginResponse register(RegisterRequest request) {
@@ -73,7 +88,7 @@ public class AuthService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Store code is required for staff accounts");
             }
-            staffStore = merchantRepository.findBySlugAndArchivedAtIsNull(slug)
+            staffStore = merchantRepository.findBySlugAndArchivedAtIsNullAndSuspendedAtIsNull(slug)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             "Store code not found. Ask the store owner for the store link."));
         }
@@ -138,6 +153,7 @@ public class AuthService {
             return userRepository.save(created);
         });
 
+        requireNotSuspended(user);
         return toLoginResponse(user);
     }
 
