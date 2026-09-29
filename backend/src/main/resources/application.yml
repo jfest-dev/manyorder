@@ -17,6 +17,11 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false
+    # Set the dialect explicitly so Hibernate does not need a live connection to
+    # auto-detect it. Without this, a datasource that cannot connect surfaces as
+    # the misleading "Unable to determine Dialect without JDBC metadata"; with it,
+    # boot fails with the real cause instead (connection refused, SSL, bad host).
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
 
   servlet:
     multipart:
