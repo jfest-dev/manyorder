@@ -56,6 +56,19 @@ public class StoreAccessService {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not a store member");
     }
 
+    /**
+     * PLATFORM_ADMIN acting on ANY store, with no ownership requirement and no
+     * archived/suspended exclusion (an admin must be able to view and act on
+     * suspended stores). Used only by /admin endpoints, which SecurityConfig
+     * already restricts to PLATFORM_ADMIN; the role check here is defense in depth.
+     */
+    public Merchant requireStoreForAdmin(User user, Long storeId) {
+        if (user.getRole() != UserRole.PLATFORM_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Platform admin role required");
+        }
+        return merchantRepository.findById(storeId).orElseThrow(this::notFound);
+    }
+
     private ResponseStatusException notFound() {
         return new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found");
     }

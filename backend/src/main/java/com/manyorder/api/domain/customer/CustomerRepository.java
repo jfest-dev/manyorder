@@ -10,6 +10,7 @@ import com.manyorder.api.domain.merchant.Merchant;
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
 
     List<Customer> findByMerchant(Merchant merchant);
+    long countByMerchant(Merchant merchant);
     Optional<Customer> findByMerchantAndId(Merchant merchant, Long id);
     Optional<Customer> findByMerchantAndEmail(Merchant merchant, String email);
 

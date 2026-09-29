@@ -16,6 +16,7 @@ import com.manyorder.api.domain.merchant.Merchant;
 public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByMerchantOrderByCreatedAtDesc(Merchant merchant);
     Optional<Order> findByMerchantAndId(Merchant merchant, Long id);
+    long countByMerchant(Merchant merchant);
     List<Order> findByMerchantAndOrderGroupIdOrderByIdAsc(Merchant merchant, String orderGroupId);
     List<Order> findByMerchantAndStatusOrderByCreatedAtDesc(Merchant merchant, OrderStatus status);
     List<Order> findByMerchantAndCreatedAtBetween(Merchant merchant, LocalDateTime start, LocalDateTime end);

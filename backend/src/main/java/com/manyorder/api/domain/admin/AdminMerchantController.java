@@ -1,10 +1,12 @@
 package com.manyorder.api.domain.admin;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,13 +30,28 @@ public class AdminMerchantController {
     private final MerchantRepository merchantRepository;
     private final CurrentUserService currentUserService;
     private final AdminAuditService adminAuditService;
+    private final AdminMerchantService adminMerchantService;
 
     public AdminMerchantController(MerchantRepository merchantRepository,
                                    CurrentUserService currentUserService,
-                                   AdminAuditService adminAuditService) {
+                                   AdminAuditService adminAuditService,
+                                   AdminMerchantService adminMerchantService) {
         this.merchantRepository = merchantRepository;
         this.currentUserService = currentUserService;
         this.adminAuditService = adminAuditService;
+        this.adminMerchantService = adminMerchantService;
+    }
+
+    /** All merchants (including suspended/archived), newest first, with per-store counts. */
+    @GetMapping
+    public List<AdminMerchantSummary> list() {
+        return adminMerchantService.listMerchants();
+    }
+
+    /** Drill-down on one merchant. */
+    @GetMapping("/{merchantId}")
+    public AdminMerchantSummary get(@PathVariable Long merchantId, Authentication authentication) {
+        return adminMerchantService.getMerchant(currentUserService.require(authentication), merchantId);
     }
 
     /** Suspend a merchant: hides its storefront and blocks owner/staff login. Idempotent. */

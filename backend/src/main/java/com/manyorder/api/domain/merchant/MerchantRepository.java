@@ -26,4 +26,11 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long> {
 
     /** True if this owner has at least one admin-suspended store (drives the login gate). */
     boolean existsByOwnerAndSuspendedAtIsNotNull(User owner);
+
+    // Admin dashboard metrics.
+    long countByArchivedAtIsNullAndSuspendedAtIsNull();   // active
+    long countBySuspendedAtIsNotNull();                   // suspended
+    long countByArchivedAtIsNotNull();                    // archived
+    long countByCreatedAtAfter(java.time.LocalDateTime cutoff);
+    java.util.List<Merchant> findAllByOrderByCreatedAtDesc();
 }

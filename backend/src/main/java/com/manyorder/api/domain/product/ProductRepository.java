@@ -16,6 +16,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findByMerchantOrderByDisplayOrderAscIdAsc(Merchant merchant);
     List<Product> findByMerchantAndIsActiveTrueOrderByDisplayOrderAscIdAsc(Merchant merchant);
     Optional<Product> findByMerchantAndId(Merchant merchant, Long id);
+    long countByMerchant(Merchant merchant);
 
     /** The subset of the given ids that are products owned by this store (used to
      *  validate a discount's product scope). */
