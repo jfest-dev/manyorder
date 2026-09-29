@@ -353,3 +353,14 @@ it adds a scary stack trace to every boot. Root: the varchar(20) default 'MANUAL
 columnDefinition on Order.source (Order.java) is fine as ADD COLUMN but not as a
 SET DATA TYPE clause on Postgres. Low priority; clean up alongside a proper
 migration story rather than ddl-auto.
+
+## Mobile UX pass (lowest priority, last in the queue)
+
+A dedicated pass over the app's mobile experience: general layout/customization
+work plus fixing outstanding mobile-specific issues across screens. Deliberately
+NOT scoped to specifics here. When this is picked up, first gather the concrete
+list of what is actually broken or needs adjusting on mobile at that time (walk
+the real screens on a phone viewport and note issues) rather than guessing now,
+since the UI will have moved on by then. Explicitly the lowest priority: do this
+last, after everything else currently planned (including the Platform Admin
+dashboard work) is done.
