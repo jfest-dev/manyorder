@@ -364,3 +364,37 @@ the real screens on a phone viewport and note issues) rather than guessing now,
 since the UI will have moved on by then. Explicitly the lowest priority: do this
 last, after everything else currently planned (including the Platform Admin
 dashboard work) is done.
+
+## Settings vs Create Store consistency
+
+Discrepancies between the Settings screen and the Create Store screen that should
+reconcile to one source of truth: the phone field format differs, the business-type
+option count differs (6 vs 4), and the currency display differs between the two.
+Needs investigation when picked up to identify which is authoritative and align both.
+
+## Production email notifications verification
+
+Only the email-verification message has been proven end-to-end on live production.
+New-order notification, low-stock alert, and password-reset emails have NOT yet been
+confirmed working on production. Verify each one live once outbound email is fully
+configured there (RESEND_API_KEY set, MAIL_FROM on the verified domain).
+
+## Google Sign-In setup
+
+Before creating Google Cloud Console credentials, investigate the exact OAuth flow
+this app expects (popup vs redirect) and the exact redirect URI and client ID values
+needed, so the console credentials are created correctly the first time. GOOGLE_CLIENT_ID
+gates the sign-in button; the flow specifics need nailing down first.
+
+## Cloudinary secrets missing in production
+
+CLOUDINARY_API_SECRET (and likely CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY) were never
+added to Railway's backend variables, so product-photo and logo uploads probably do not
+work on live production right now (the upload endpoint returns 503 until all three are set).
+Add the three Cloudinary values to Railway once the deploy issues clear.
+
+## Slow product/page load times
+
+A real performance concern: product/page loads feel slow. Not yet investigated. When
+picked up, profile before optimizing: API latency, response payload sizes, potential
+N+1 queries, and frontend bundle/render cost.
