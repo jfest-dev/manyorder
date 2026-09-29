@@ -45,7 +45,7 @@ import com.manyorder.api.domain.user.UserRole;
  * sample orders per store.
  *
  * <p>Accounts (all password123): manyorder.app@gmail.com (merchant, owns all three),
- * staff@manyorder.com (staff on Kiri Brew), admin@manyorder.com (platform admin).
+ * staff@manyorder.com (staff on Kiri Brew), admin@manyorder.app (platform admin).
  *
  * <p>Photo URLs point at the app's own Cloudinary (folder manyorder/demo). They
  * are persistent assets; if those images are ever deleted, the seeded URLs 404.
@@ -97,7 +97,7 @@ public class DataSeeder implements CommandLineRunner {
         merchantUser.setVerified(true);
         merchantUser = userRepository.save(merchantUser);
 
-        User adminUser = new User("Platform Admin", "admin@manyorder.com", hash, UserRole.PLATFORM_ADMIN);
+        User adminUser = new User("Platform Admin", "admin@manyorder.app", hash, UserRole.PLATFORM_ADMIN);
         adminUser.setVerified(true);
         userRepository.save(adminUser);
 

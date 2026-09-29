@@ -126,7 +126,7 @@ class AuthAndRbacIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(get("/admin/orders"))
                 .andExpect(status().is4xxClientError());
 
-        String adminToken = loginAndGetToken("admin@manyorder.com", "password123");
+        String adminToken = loginAndGetToken("admin@manyorder.app", "password123");
         getWithToken("/admin/orders", adminToken, 200);
     }
 

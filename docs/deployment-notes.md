@@ -50,6 +50,20 @@ UPDATE merchants SET email = 'manyorder.app@gmail.com' WHERE email = 'hello@many
 (The matching demo login account in `users` was likewise moved off
 `hello@manyorder.com`; update it separately if a given environment still has it.)
 
+### Platform-admin email (rebrand to manyorder.app)
+
+The seeded Platform Admin login moved from `admin@manyorder.com` to
+`admin@manyorder.app`. Fresh seeds already use the new address; a database seeded
+before that change still holds the old one (the seeder's duplicate guard keys on
+the demo *merchant* account, so it re-creates nothing and leaves the admin row
+untouched). Run once, keyed on the old value so it is safe to re-run and a no-op
+if already applied:
+
+```sql
+UPDATE users SET email = 'admin@manyorder.app'
+WHERE email = 'admin@manyorder.com' AND role = 'PLATFORM_ADMIN';
+```
+
 ## Granting the platform-admin role
 
 The `PLATFORM_ADMIN` role cannot be assigned through sign-up. Grant it directly

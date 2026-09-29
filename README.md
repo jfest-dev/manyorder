@@ -67,7 +67,7 @@ role-based access control. All use the password `password123`:
 |---|---|---|
 | Merchant | Owns and fully manages all three stores | manyorder.app@gmail.com |
 | Staff | Works a single store's orders, without owner-level settings | staff@manyorder.com |
-| Platform admin | Cross-store administration | admin@manyorder.com |
+| Platform admin | Cross-store administration | admin@manyorder.app |
 
 Sign in to the dashboard at http://localhost:3000.
 
