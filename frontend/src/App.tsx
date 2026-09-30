@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell';
+import { AdminApp } from './components/admin/AdminApp';
 import { Toast } from './components/Toast';
 import { Dashboard } from './components/screens/Dashboard';
 import { Orders } from './components/screens/Orders';
@@ -766,6 +767,15 @@ function MerchantApp() {
       {storeSwitchNotice && <Toast message={`Switched to ${storeSwitchNotice}`} />}
     </>
   );
+}
+
+/** Route the authenticated area by role: Platform Admins get the admin console,
+ *  everyone else (MERCHANT/STAFF) gets the merchant dashboard. The server also
+ *  enforces this — /admin/** is PLATFORM_ADMIN-only and /merchant/** is not. */
+function AuthedApp() {
+  const { user } = useAuth();
+  if (user?.role === 'PLATFORM_ADMIN') return <AdminApp />;
+  return <MerchantApp />;
 }
 
 export default function App() {

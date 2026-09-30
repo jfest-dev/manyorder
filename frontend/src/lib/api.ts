@@ -949,3 +949,37 @@ export const storefrontApi = {
   lookupOrder: (slug: string, payload: { orderId: number; phone: string }) =>
     request<GuestCheckoutResult>(`/public/stores/${encodeURIComponent(slug)}/orders/lookup`, { method: 'POST', body: payload, auth: false }),
 };
+
+// --- Platform Admin ---------------------------------------------------------
+
+export interface AdminMetrics {
+  totalMerchants: number;
+  activeMerchants: number;
+  suspendedMerchants: number;
+  archivedMerchants: number;
+  totalOrders: number;
+  totalCustomers: number;
+  newMerchantsLast30Days: number;
+}
+
+export interface AdminMerchantSummary {
+  id: number;
+  name: string;
+  slug: string;
+  ownerName: string;
+  ownerEmail: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+  currency: string;
+  createdAt: string;
+  productCount: number;
+  orderCount: number;
+  customerCount: number;
+}
+
+export const adminApi = {
+  metrics: () => request<AdminMetrics>('/admin/metrics'),
+  listMerchants: () => request<AdminMerchantSummary[]>('/admin/merchants'),
+  getMerchant: (merchantId: number) => request<AdminMerchantSummary>(`/admin/merchants/${merchantId}`),
+  suspend: (merchantId: number) => request<void>(`/admin/merchants/${merchantId}/suspend`, { method: 'POST' }),
+  unsuspend: (merchantId: number) => request<void>(`/admin/merchants/${merchantId}/unsuspend`, { method: 'POST' }),
+};
