@@ -398,3 +398,12 @@ Add the three Cloudinary values to Railway once the deploy issues clear.
 A real performance concern: product/page loads feel slow. Not yet investigated. When
 picked up, profile before optimizing: API latency, response payload sizes, potential
 N+1 queries, and frontend bundle/render cost.
+
+## Notification/toast consistency sweep
+
+A full sweep across every popup, toast, and notification in the app, confirming
+each uses the shared Toast/dialog components (and their styling) correctly, rather
+than catching inconsistencies one at a time as they surface. Not scoped in detail
+yet; needs its own dedicated pass when picked up (walk every screen, list each
+notification surface, and reconcile any that use native alert()/ad-hoc markup to
+the shared components).
