@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Toast } from './Toast';
 import { Menu, X, Eye, Link2, MailWarning } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useMediaQuery } from '../hooks/useMediaQuery';
@@ -38,6 +39,8 @@ export function AppShell({
   const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const copyNoticeTimer = useRef<number | null>(null);
 
   // Email-verification nag: a non-blocking reminder shown until the account is
   // verified, with a one-tap resend. State is local; the banner simply goes away
@@ -141,6 +144,14 @@ export function AppShell({
     window.open(`https://manyorder.app/${s.slug}`, '_blank');
   };
 
+  // Shared-Toast confirmation for the copy-link action (replaces native alert()),
+  // matching the "Customer updated." style used elsewhere. Caller owns dismissal.
+  const showCopyNotice = (msg: string) => {
+    setCopyNotice(msg);
+    if (copyNoticeTimer.current) window.clearTimeout(copyNoticeTimer.current);
+    copyNoticeTimer.current = window.setTimeout(() => setCopyNotice(null), 2400);
+  };
+
   const copyStoreLink = () => {
     const s = stores.find((x) => x.id === activeStoreId);
     if (!s) return;
@@ -151,7 +162,7 @@ export function AppShell({
     if (navigator.clipboard?.writeText) {
       navigator.clipboard
         .writeText(url)
-        .then(() => alert('Store link copied to clipboard!'))
+        .then(() => showCopyNotice('Store link copied to clipboard!'))
         .catch(() => {
           // fallback if permissions blocked
           const textarea = document.createElement('textarea');
@@ -162,9 +173,9 @@ export function AppShell({
           textarea.select();
           try {
             document.execCommand('copy');
-            alert('Store link copied to clipboard!');
+            showCopyNotice('Store link copied to clipboard!');
           } catch {
-            alert(`Copy this link: ${url}`);
+            showCopyNotice(`Copy this link: ${url}`);
           }
           document.body.removeChild(textarea);
         });
@@ -180,9 +191,9 @@ export function AppShell({
     textarea.select();
     try {
       document.execCommand('copy');
-      alert('Store link copied to clipboard!');
+      showCopyNotice('Store link copied to clipboard!');
     } catch {
-      alert(`Copy this link: ${url}`);
+      showCopyNotice(`Copy this link: ${url}`);
     }
     document.body.removeChild(textarea);
   };
@@ -436,6 +447,7 @@ export function AppShell({
           {children}
         </div>
       </div>
+      {copyNotice && <Toast message={copyNotice} />}
     </div>
   );
 }
