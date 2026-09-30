@@ -7,13 +7,17 @@ import { Select } from '../Select';
 import { Toast } from '../Toast';
 import { useConfirm } from '../ConfirmDialog';
 import { WhatsAppIcon } from '../icons/WhatsAppIcon';
-import { customersApi, CustomerResponse, type CustomerTag, ApiError } from '../../lib/api';
+import { customersApi, adminApi, CustomerResponse, type CustomerTag, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { TagChip, TAG_COLOR_KEYS, tagColor, DEFAULT_TAG_COLOR } from '../TagChip';
+import { TypedDeleteConfirm } from '../TypedDeleteConfirm';
 
 interface CustomersProps {
   storeId: number;
   currency: string;
+  /** When set, the screen manages THIS merchant's customers via the /admin API
+   *  (Platform Admin drill-down) and requires a typed-name confirm to delete. */
+  adminMerchantId?: number;
 }
 
 // A customer counts as "active" if they've ordered within this window.
@@ -54,11 +58,26 @@ function TagChips({ tags }: { tags: CustomerTag[] }) {
   );
 }
 
-export function Customers({ storeId, currency }: CustomersProps) {
+export function Customers({ storeId, currency, adminMerchantId }: CustomersProps) {
   const confirm = useConfirm();
+  const isAdmin = adminMerchantId != null;
+  // Same method shapes whether scoped to the owner's store or an admin's target
+  // merchant, so the rest of the screen is identical for both.
+  const api = useMemo(() => (isAdmin
+    ? adminApi.customersFor(adminMerchantId!)
+    : {
+        list: () => customersApi.list(storeId),
+        create: (p: { fullName: string; phoneNumber: string; email?: string }) => customersApi.create(storeId, p),
+        update: (id: number, p: { fullName: string; phoneNumber: string; email?: string; tags?: CustomerTag[] }) => customersApi.update(storeId, id, p),
+        delete: (id: number) => customersApi.delete(storeId, id),
+      }
+  ), [isAdmin, adminMerchantId, storeId]);
+
   const [customers, setCustomers] = useState<CustomerResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CustomerResponse | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<number | null>(null);
@@ -94,8 +113,8 @@ export function Customers({ storeId, currency }: CustomersProps) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    customersApi
-      .list(storeId)
+    api
+      .list()
       .then((res) => { if (!cancelled) setCustomers(res); })
       .catch((e) => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load customers'); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -160,7 +179,7 @@ export function Customers({ storeId, currency }: CustomersProps) {
     if (!newCustomer.phoneNumber.trim()) { setAddError('Phone number is required.'); return; }
     setAdding(true);
     try {
-      await customersApi.create(storeId, {
+      await api.create({
         fullName: newCustomer.fullName.trim(),
         phoneNumber: newCustomer.phoneNumber.trim(),
         email: newCustomer.email.trim() || undefined,
@@ -209,7 +228,7 @@ export function Customers({ storeId, currency }: CustomersProps) {
     if (!editForm.phoneNumber.trim()) { setEditError('Phone number is required.'); return; }
     setSavingEdit(true);
     try {
-      const updated = await customersApi.update(storeId, editingId, {
+      const updated = await api.update(editingId, {
         fullName: editForm.fullName.trim(),
         phoneNumber: editForm.phoneNumber.trim(),
         email: editForm.email.trim() || undefined,
@@ -225,7 +244,22 @@ export function Customers({ storeId, currency }: CustomersProps) {
     }
   };
 
+  const removeCustomer = async (c: CustomerResponse): Promise<boolean> => {
+    try {
+      await api.delete(c.id);
+      setCustomers((prev) => prev.filter((x) => x.id !== c.id));
+      showNotice('Customer deleted.');
+      return true;
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not delete customer');
+      return false;
+    }
+  };
+
   const handleDelete = async (c: CustomerResponse) => {
+    // Admin deletes go through a high-friction typed-name confirm; a merchant
+    // deleting their own customer keeps the lighter confirm dialog.
+    if (isAdmin) { setDeleteTarget(c); return; }
     const ok = await confirm({
       title: 'Delete customer',
       message: `Permanently delete ${c.fullName} and their personal details? This cannot be undone. Past orders are kept, with the name and contact recorded at the time of each order.`,
@@ -233,13 +267,15 @@ export function Customers({ storeId, currency }: CustomersProps) {
       tone: 'danger',
     });
     if (!ok) return;
-    try {
-      await customersApi.delete(storeId, c.id);
-      setCustomers((prev) => prev.filter((x) => x.id !== c.id));
-      showNotice('Customer deleted.');
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not delete customer');
-    }
+    await removeCustomer(c);
+  };
+
+  const confirmTypedDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const ok = await removeCustomer(deleteTarget);
+    setDeleting(false);
+    if (ok) setDeleteTarget(null);
   };
 
   const waLink = (phone: string | null) => `https://wa.me/${(phone ?? '').replace(/\D/g, '')}`;
@@ -570,6 +606,17 @@ export function Customers({ storeId, currency }: CustomersProps) {
       )}
 
       {notice && <Toast message={notice} />}
+
+      {deleteTarget && (
+        <TypedDeleteConfirm
+          title="Delete customer"
+          message={`Permanently delete ${deleteTarget.fullName} and their personal details? This cannot be undone. Past orders are kept, with the name and contact recorded at the time.`}
+          confirmText={deleteTarget.fullName}
+          busy={deleting}
+          onConfirm={confirmTypedDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

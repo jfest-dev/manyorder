@@ -982,4 +982,16 @@ export const adminApi = {
   getMerchant: (merchantId: number) => request<AdminMerchantSummary>(`/admin/merchants/${merchantId}`),
   suspend: (merchantId: number) => request<void>(`/admin/merchants/${merchantId}/suspend`, { method: 'POST' }),
   unsuspend: (merchantId: number) => request<void>(`/admin/merchants/${merchantId}/unsuspend`, { method: 'POST' }),
+
+  /** Customer management scoped to one merchant — same shape as customersApi (minus storeId),
+   *  so an admin can drive the shared Customers screen against /admin endpoints. */
+  customersFor: (merchantId: number) => ({
+    list: () => request<CustomerResponse[]>(`/admin/merchants/${merchantId}/customers`),
+    create: (payload: { fullName: string; phoneNumber: string; email?: string }) =>
+      request<CustomerResponse>(`/admin/merchants/${merchantId}/customers`, { method: 'POST', body: payload }),
+    update: (customerId: number, payload: { fullName: string; phoneNumber: string; email?: string; tags?: CustomerTag[] }) =>
+      request<CustomerResponse>(`/admin/merchants/${merchantId}/customers/${customerId}`, { method: 'PUT', body: payload }),
+    delete: (customerId: number) =>
+      request<void>(`/admin/merchants/${merchantId}/customers/${customerId}`, { method: 'DELETE' }),
+  }),
 };

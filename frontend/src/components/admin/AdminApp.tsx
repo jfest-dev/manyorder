@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../ConfirmDialog';
 import { Button } from '../Button';
 import { Toast } from '../Toast';
+import { Customers } from '../screens/Customers';
 
 const STATUS_STYLE: Record<AdminMerchantSummary['status'], { bg: string; color: string; label: string }> = {
   ACTIVE: { bg: '#ECFDF5', color: '#047857', label: 'Active' },
@@ -32,6 +33,7 @@ export function AdminApp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AdminMerchantSummary | null>(null);
+  const [tab, setTab] = useState<'customers' | 'products' | 'orders' | 'marketing'>('customers');
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
@@ -88,7 +90,7 @@ export function AdminApp() {
         {loading && <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading…</p>}
         {error && <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>}
 
-        {!loading && !error && metrics && (
+        {!selected && !loading && !error && metrics && (
           <>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
               <Tile label="Merchants" value={metrics.totalMerchants} />
@@ -151,23 +153,40 @@ export function AdminApp() {
         )}
 
         {selected && (
-          <div role="dialog" aria-label={`${selected.name} detail`} onClick={() => setSelected(null)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-medium)', border: '1px solid var(--border-strong)', width: '100%', maxWidth: 440, padding: 20 }}>
-              <h3 style={{ margin: '0 0 4px', fontSize: 16 }}>{selected.name}</h3>
-              <div className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: 12 }}>/{selected.slug} · {selected.currency}</div>
-              <div className="text-small" style={{ color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                <div>Owner: {selected.ownerName} ({selected.ownerEmail})</div>
-                <div>Status: {STATUS_STYLE[selected.status].label}</div>
-                <div>{selected.productCount} products · {selected.orderCount} orders · {selected.customerCount} customers</div>
-              </div>
-              <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 12 }}>
-                Managing this merchant's products, orders, customers and marketing is coming in the next step.
-              </p>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-                <Button variant="secondary" onClick={() => setSelected(null)}>Close</Button>
+          <div>
+            {/* "Acting as Platform Admin on {store}" context bar */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+              <div>
+                <button type="button" onClick={() => setSelected(null)}
+                  style={{ background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, padding: 0, marginBottom: 4 }}>
+                  ← All merchants
+                </button>
+                <h2 style={{ margin: 0, fontSize: 16 }}>{selected.name}</h2>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Acting as Platform Admin · /{selected.slug} · owner {selected.ownerEmail}
+                </div>
               </div>
             </div>
+
+            <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16 }}>
+              {(['customers', 'products', 'orders', 'marketing'] as const).map((t) => (
+                <button key={t} type="button" onClick={() => setTab(t)}
+                  style={{ padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                    textTransform: 'capitalize', color: tab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    borderBottom: tab === t ? '2px solid var(--primary-solid)' : '2px solid transparent' }}>
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            {tab === 'customers' && (
+              <Customers storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} />
+            )}
+            {tab !== 'customers' && (
+              <p className="text-small" style={{ color: 'var(--text-muted)' }}>
+                {tab[0].toUpperCase() + tab.slice(1)} management is wired up in the next slice.
+              </p>
+            )}
           </div>
         )}
       </main>
