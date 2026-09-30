@@ -994,4 +994,18 @@ export const adminApi = {
     delete: (customerId: number) =>
       request<void>(`/admin/merchants/${merchantId}/customers/${customerId}`, { method: 'DELETE' }),
   }),
+
+  /** Product management scoped to one merchant (admin scope: list, activate/deactivate,
+   *  delete, reorder — full field-editing/photo stays in the merchant flow). */
+  productsFor: (merchantId: number) => ({
+    list: () => request<ProductResponse[]>(`/admin/merchants/${merchantId}/products`),
+    activate: (productId: number) =>
+      request<ProductResponse>(`/admin/merchants/${merchantId}/products/${productId}/activate`, { method: 'PATCH' }),
+    deactivate: (productId: number) =>
+      request<ProductResponse>(`/admin/merchants/${merchantId}/products/${productId}/deactivate`, { method: 'PATCH' }),
+    delete: (productId: number) =>
+      request<void>(`/admin/merchants/${merchantId}/products/${productId}`, { method: 'DELETE' }),
+    reorder: (productIds: number[]) =>
+      request<ProductResponse[]>(`/admin/merchants/${merchantId}/products/reorder`, { method: 'PATCH', body: { productIds } }),
+  }),
 };

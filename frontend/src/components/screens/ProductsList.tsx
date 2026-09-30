@@ -1,18 +1,23 @@
-import { Search, Plus, Download, Edit, Package, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Search, Plus, Download, Edit, Trash2, Package, AlertTriangle, TrendingUp } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { ToggleSwitch } from '../ToggleSwitch';
 import { ReorderableList } from '../ReorderableList';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { productsApi, storesApi, ProductResponse, ApiError } from '../../lib/api';
+import { productsApi, adminApi, storesApi, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { LOW_STOCK_AT } from '../storefront/storefrontTypes';
+import { TypedDeleteConfirm } from '../TypedDeleteConfirm';
 
 interface ProductsListProps {
   storeId: number;
   currency: string;
   onNavigate?: (screen: string) => void;
   onEditProduct?: (productId: number) => void;
+  /** When set, manage THIS merchant's products via the /admin API (Platform Admin
+   *  drill-down): list, activate/deactivate, and delete (typed-name confirm).
+   *  Add/full-edit are hidden here — they stay in the merchant flow. */
+  adminMerchantId?: number;
 }
 
 type DisplayStatus = 'active' | 'draft' | 'outofstock' | 'preorder';
@@ -64,12 +69,26 @@ function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string;
 
 const ALL_CATEGORIES = '__all__';
 
-export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: ProductsListProps) {
+export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adminMerchantId }: ProductsListProps) {
+  const isAdmin = adminMerchantId != null;
+  const api = useMemo(() => (isAdmin
+    ? adminApi.productsFor(adminMerchantId!)
+    : {
+        list: () => productsApi.list(storeId),
+        activate: (pid: number) => productsApi.activate(storeId, pid),
+        deactivate: (pid: number) => productsApi.deactivate(storeId, pid),
+        delete: (pid: number) => productsApi.delete(storeId, pid),
+        reorder: (ids: number[]) => productsApi.reorder(storeId, ids),
+      }
+  ), [isAdmin, adminMerchantId, storeId]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>(ALL_CATEGORIES);
   const [products, setProducts] = useState<ProductResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ProductResponse | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Store-level item-customization setting, managed here alongside modifiers
   // (which live on each product's Add/Edit form). null until loaded.
@@ -80,16 +99,19 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
     let cancelled = false;
     setLoading(true);
     setError(null);
-    productsApi
-      .list(storeId)
+    api
+      .list()
       .then((res) => { if (!cancelled) setProducts(res); })
       .catch((e) => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load products'); })
       .finally(() => { if (!cancelled) setLoading(false); });
-    storesApi.get(storeId)
-      .then((s) => { if (!cancelled) setItemNotesEnabled(s.itemNotesEnabled); })
-      .catch(() => { /* leave the toggle hidden if the store fetch fails */ });
+    // The item-notes toggle is an owner-scoped store setting; skip it in admin mode.
+    if (!isAdmin) {
+      storesApi.get(storeId)
+        .then((s) => { if (!cancelled) setItemNotesEnabled(s.itemNotesEnabled); })
+        .catch(() => { /* leave the toggle hidden if the store fetch fails */ });
+    }
     return () => { cancelled = true; };
-  }, [storeId]);
+  }, [storeId, isAdmin]);
 
   // Optimistic toggle; revert on failure so the switch never lies.
   const toggleItemNotes = async (next: boolean) => {
@@ -150,7 +172,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
     const previous = products;
     setProducts(reordered);
     try {
-      await productsApi.reorder(storeId, reordered.map((p) => p.id));
+      await api.reorder(reordered.map((p) => p.id));
     } catch (e) {
       setProducts(previous); // revert
       setError(e instanceof ApiError ? e.message : 'Failed to save the new order.');
@@ -166,14 +188,30 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
     setTogglingIds((s) => new Set(s).add(product.id));
     try {
       const updated = next
-        ? await productsApi.activate(storeId, product.id)
-        : await productsApi.deactivate(storeId, product.id);
+        ? await api.activate(product.id)
+        : await api.deactivate(product.id);
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     } catch (e) {
       setProducts(previous); // revert so the switch never lies
       setError(e instanceof ApiError ? e.message : 'Could not change the product status.');
     } finally {
       setTogglingIds((s) => { const n = new Set(s); n.delete(product.id); return n; });
+    }
+  };
+
+  // Admin-only: permanently delete a product (typed-name confirm). Full field
+  // editing stays in the merchant flow, so admins get view + enable/disable + delete.
+  const confirmTypedDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await api.delete(deleteTarget.id);
+      setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not delete the product.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -282,12 +320,14 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
           />
         </div>
 
-        <Button onClick={() => onNavigate?.('products-add')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={16} />
-            Add Product
-          </div>
-        </Button>
+        {!isAdmin && (
+          <Button onClick={() => onNavigate?.('products-add')}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={16} />
+              Add Product
+            </div>
+          </Button>
+        )}
 
         <Button variant="secondary" onClick={handleExportProducts}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -385,20 +425,35 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
                                 label={p.isActive ? 'Active' : 'Draft'}
                               />
                             </span>
-                            <button
-                              onClick={() => onEditProduct?.(p.id)}
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
-                                background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
-                                borderRadius: 'var(--radius-field)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-app)'; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-card-subtle)'; }}
-                            >
-                              <Edit size={16} />
-                              Edit
-                            </button>
+                            {isAdmin ? (
+                              <button
+                                onClick={() => setDeleteTarget(p)}
+                                aria-label={`Delete ${p.name}`}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                                  background: 'var(--bg-card-subtle)', border: '1px solid #FCA5A5',
+                                  borderRadius: 'var(--radius-field)', color: '#B91C1C', fontSize: '13px', cursor: 'pointer',
+                                }}
+                              >
+                                <Trash2 size={16} />
+                                Delete
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => onEditProduct?.(p.id)}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                                  background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)',
+                                  borderRadius: 'var(--radius-field)', color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-app)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-card-subtle)'; }}
+                              >
+                                <Edit size={16} />
+                                Edit
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -452,17 +507,32 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
                         description={p.isActive ? 'Shown on your storefront.' : 'Hidden from customers.'}
                       />
                     </div>
-                    <button
-                      onClick={() => onEditProduct?.(p.id)}
-                      style={{
-                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px',
-                        background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)',
-                        color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
-                      }}
-                    >
-                      <Edit size={16} />
-                      Edit Product
-                    </button>
+                    {isAdmin ? (
+                      <button
+                        onClick={() => setDeleteTarget(p)}
+                        aria-label={`Delete ${p.name}`}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px',
+                          background: 'var(--bg-card)', border: '1px solid #FCA5A5', borderRadius: 'var(--radius-field)',
+                          color: '#B91C1C', fontSize: '13px', cursor: 'pointer',
+                        }}
+                      >
+                        <Trash2 size={16} />
+                        Delete Product
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onEditProduct?.(p.id)}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px',
+                          background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)',
+                          color: 'var(--text-primary)', fontSize: '13px', cursor: 'pointer',
+                        }}
+                      >
+                        <Edit size={16} />
+                        Edit Product
+                      </button>
+                    )}
                   </div>
                 )}
               />
@@ -482,6 +552,17 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct }: P
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', padding: '0 8px' }}>
           <span className="text-small" style={{ color: 'var(--text-secondary)' }}>Total {filtered.length} products</span>
         </div>
+      )}
+
+      {deleteTarget && (
+        <TypedDeleteConfirm
+          title="Delete product"
+          message={`Permanently delete ${deleteTarget.name}? This cannot be undone. Past orders keep a name/price snapshot of this item.`}
+          confirmText={deleteTarget.name}
+          busy={deleting}
+          onConfirm={confirmTypedDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );
