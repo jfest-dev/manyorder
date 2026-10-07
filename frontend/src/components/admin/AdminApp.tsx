@@ -6,6 +6,7 @@ import { Button } from '../Button';
 import { Toast } from '../Toast';
 import { Customers } from '../screens/Customers';
 import { ProductsList } from '../screens/ProductsList';
+import { Marketing } from '../screens/Marketing';
 
 const STATUS_STYLE: Record<AdminMerchantSummary['status'], { bg: string; color: string; label: string }> = {
   ACTIVE: { bg: '#ECFDF5', color: '#047857', label: 'Active' },
@@ -186,9 +187,12 @@ export function AdminApp() {
             {tab === 'products' && (
               <ProductsList storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} />
             )}
-            {(tab === 'orders' || tab === 'marketing') && (
+            {tab === 'marketing' && (
+              <Marketing storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} />
+            )}
+            {tab === 'orders' && (
               <p className="text-small" style={{ color: 'var(--text-muted)' }}>
-                {tab[0].toUpperCase() + tab.slice(1)} management is wired up in the next slice.
+                Orders management is wired up in the next slice.
               </p>
             )}
           </div>

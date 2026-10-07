@@ -1008,4 +1008,17 @@ export const adminApi = {
     reorder: (productIds: number[]) =>
       request<ProductResponse[]>(`/admin/merchants/${merchantId}/products/reorder`, { method: 'PATCH', body: { productIds } }),
   }),
+
+  /** Discount/Marketing management scoped to one merchant — same shape as discountsApi minus storeId. */
+  discountsFor: (merchantId: number) => ({
+    list: () => request<DiscountResponse[]>(`/admin/merchants/${merchantId}/discounts`),
+    create: (payload: DiscountPayload) =>
+      request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts`, { method: 'POST', body: payload }),
+    update: (discountId: number, payload: Partial<DiscountPayload>) =>
+      request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts/${discountId}`, { method: 'PATCH', body: payload }),
+    delete: (discountId: number) =>
+      request<void>(`/admin/merchants/${merchantId}/discounts/${discountId}`, { method: 'DELETE' }),
+    reorder: (discountIds: number[]) =>
+      request<DiscountResponse[]>(`/admin/merchants/${merchantId}/discounts/reorder`, { method: 'PATCH', body: { discountIds } }),
+  }),
 };

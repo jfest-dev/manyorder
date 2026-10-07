@@ -11,13 +11,17 @@ import { Checkbox } from '../Checkbox';
 import { ToggleSwitch } from '../ToggleSwitch';
 import { useConfirm } from '../ConfirmDialog';
 import { Toast } from '../Toast';
-import { discountsApi, DiscountResponse, DiscountType, DiscountPayload, ApiError, productsApi, ProductResponse } from '../../lib/api';
+import { discountsApi, adminApi, DiscountResponse, DiscountType, DiscountPayload, ApiError, productsApi, ProductResponse } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { TypedDeleteConfirm } from '../TypedDeleteConfirm';
 
 interface MarketingProps {
   storeId: number;
   /** Store currency, so a fixed-amount discount formats correctly. */
   currency?: string;
+  /** When set, manage THIS merchant's discounts via the /admin API (Platform Admin
+   *  drill-down); deletes require a typed-name confirm. */
+  adminMerchantId?: number;
 }
 
 type Status = 'active' | 'scheduled' | 'expired' | 'inactive';
@@ -91,8 +95,25 @@ const BLANK: FormState = {
   firstOrderOnly: false, canStackWithSale: false, isPublic: false, appliesToDelivery: false, appliesTo: 'ALL', productIds: [],
 };
 
-export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
+export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: MarketingProps) {
   const confirm = useConfirm();
+  const isAdmin = adminMerchantId != null;
+  const api = useMemo(() => (isAdmin
+    ? adminApi.discountsFor(adminMerchantId!)
+    : {
+        list: () => discountsApi.list(storeId),
+        create: (p: DiscountPayload) => discountsApi.create(storeId, p),
+        update: (id: number, p: Partial<DiscountPayload>) => discountsApi.update(storeId, id, p),
+        delete: (id: number) => discountsApi.delete(storeId, id),
+        reorder: (ids: number[]) => discountsApi.reorder(storeId, ids),
+      }
+  ), [isAdmin, adminMerchantId, storeId]);
+  const loadProducts = useMemo(() => (isAdmin
+    ? () => adminApi.productsFor(adminMerchantId!).list()
+    : () => productsApi.list(storeId)
+  ), [isAdmin, adminMerchantId, storeId]);
+  const [deleteTarget, setDeleteTarget] = useState<DiscountResponse | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [discounts, setDiscounts] = useState<DiscountResponse[]>([]);
   const [products, setProducts] = useState<ProductResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,7 +142,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
     const previous = discounts;
     setDiscounts(reordered);
     try {
-      await discountsApi.reorder(storeId, reordered.map((d) => d.id));
+      await api.reorder(reordered.map((d) => d.id));
     } catch (e) {
       setDiscounts(previous);
       setError(e instanceof ApiError ? e.message : 'Could not save the new order');
@@ -132,8 +153,8 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    discountsApi
-      .list(storeId)
+    api
+      .list()
       .then((res) => { if (!cancelled) setDiscounts(res); })
       .catch((e) => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load discounts'); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -145,7 +166,7 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
   // failure just leaves the picker empty (the discount stays store-wide).
   useEffect(() => {
     let cancelled = false;
-    productsApi.list(storeId)
+    loadProducts()
       .then((res) => { if (!cancelled) setProducts(res); })
       .catch(() => { /* non-fatal: picker simply has no options */ });
     return () => { cancelled = true; };
@@ -268,8 +289,8 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
     const wasEdit = editingId != null;
     setSubmitting(true);
     try {
-      if (wasEdit) await discountsApi.update(storeId, editingId!, payload);
-      else await discountsApi.create(storeId, payload);
+      if (wasEdit) await api.update(editingId!, payload);
+      else await api.create(payload);
       setFormOpen(false);
       load();
       showNotice(wasEdit ? 'Discount updated.' : 'Discount created.');
@@ -281,6 +302,8 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
   };
 
   const handleDelete = async (d: DiscountResponse) => {
+    // Admin deletes go through a typed-name confirm; merchants keep the light confirm.
+    if (isAdmin) { setDeleteTarget(d); return; }
     const ok = await confirm({
       title: 'Delete discount',
       message: `Delete the discount code ${d.code}? This cannot be undone.`,
@@ -288,12 +311,26 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       tone: 'danger',
     });
     if (!ok) return;
+    await removeDiscount(d);
+  };
+
+  const removeDiscount = async (d: DiscountResponse): Promise<boolean> => {
     try {
-      await discountsApi.delete(storeId, d.id);
+      await api.delete(d.id);
       load();
+      return true;
     } catch (e: any) {
       setError(e instanceof ApiError ? e.message : 'Could not delete discount');
+      return false;
     }
+  };
+
+  const confirmTypedDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const ok = await removeDiscount(deleteTarget);
+    setDeleting(false);
+    if (ok) setDeleteTarget(null);
   };
 
   const valueLabel = (d: DiscountResponse) =>
@@ -600,6 +637,17 @@ export function Marketing({ storeId, currency = 'sgd' }: MarketingProps) {
       )}
 
       {notice && <Toast message={notice} />}
+
+      {deleteTarget && (
+        <TypedDeleteConfirm
+          title="Delete discount"
+          message={`Permanently delete the discount code ${deleteTarget.code}? This cannot be undone.`}
+          confirmText={deleteTarget.code}
+          busy={deleting}
+          onConfirm={confirmTypedDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
