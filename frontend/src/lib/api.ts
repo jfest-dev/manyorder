@@ -1021,4 +1021,15 @@ export const adminApi = {
     reorder: (discountIds: number[]) =>
       request<DiscountResponse[]>(`/admin/merchants/${merchantId}/discounts/reorder`, { method: 'PATCH', body: { discountIds } }),
   }),
+
+  /** Order management scoped to one merchant (admin scope: list + status/payment only,
+   *  matching the backend — no admin order create/edit/delete). */
+  ordersFor: (merchantId: number) => ({
+    list: (status?: OrderStatus) =>
+      request<OrderResponse[]>(`/admin/merchants/${merchantId}/orders${status ? `?status=${status}` : ''}`),
+    updateStatus: (orderId: number, status: OrderStatus) =>
+      request<OrderResponse>(`/admin/merchants/${merchantId}/orders/${orderId}/status`, { method: 'PATCH', body: { status } }),
+    updatePaymentStatus: (orderId: number, paymentStatus: PaymentStatus) =>
+      request<OrderResponse>(`/admin/merchants/${merchantId}/orders/${orderId}/payment-status`, { method: 'PATCH', body: { paymentStatus } }),
+  }),
 };

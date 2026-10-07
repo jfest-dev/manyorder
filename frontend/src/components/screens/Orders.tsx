@@ -3,7 +3,7 @@ import { ChevronDown, Download, Plus, Search, MessageCircle, Copy, Check, Dollar
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { ordersApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from '../../lib/api';
+import { ordersApi, adminApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { orderSummaryLines, waLink, type WaOrderSection } from '../../lib/whatsapp';
 import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersToday, type RangeKey } from '../../lib/orderStats';
@@ -18,6 +18,9 @@ interface OrdersProps {
   initialStatus?: OrderStatus | 'ALL';
   canEdit?: boolean;
   onEditOrder?: (orderId: number) => void;
+  /** When set, view THIS merchant's orders via the /admin API (Platform Admin
+   *  drill-down): list + status/payment changes only (no create/edit/delete). */
+  adminMerchantId?: number;
 }
 
 // 'NEW' is a synthetic tab (not a status): a customer order not yet acted on.
@@ -166,9 +169,18 @@ function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string;
   );
 }
 
-export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = false, onEditOrder }: OrdersProps) {
+export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = false, onEditOrder, adminMerchantId }: OrdersProps) {
   const confirm = useConfirm();
   const storeId = Number(store.id);
+  const isAdmin = adminMerchantId != null;
+  const api = useMemo(() => (isAdmin
+    ? adminApi.ordersFor(adminMerchantId!)
+    : {
+        list: () => ordersApi.list(storeId),
+        updateStatus: (orderId: number, status: OrderStatus) => ordersApi.updateStatus(storeId, orderId, status),
+        updatePaymentStatus: (orderId: number, paymentStatus: PaymentStatus) => ordersApi.updatePaymentStatus(storeId, orderId, paymentStatus),
+      }
+  ), [isAdmin, adminMerchantId, storeId]);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,7 +206,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
   const load = async () => {
     setLoading(true);
     try {
-      setOrders(await ordersApi.list(storeId));
+      setOrders(await api.list());
     } catch (e: any) {
       alert(e?.message || 'Could not load orders');
     } finally {
@@ -265,7 +277,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
     }
     setBusyOrderId(order.id);
     try {
-      applyUpdated(await ordersApi.updateStatus(storeId, order.id, status));
+      applyUpdated(await api.updateStatus(order.id, status));
     } catch (e: any) {
       alert(e?.message || 'Status update failed');
     } finally {
@@ -277,7 +289,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
     if (paymentStatus === order.paymentStatus) return;
     setBusyOrderId(order.id);
     try {
-      applyUpdated(await ordersApi.updatePaymentStatus(storeId, order.id, paymentStatus));
+      applyUpdated(await api.updatePaymentStatus(order.id, paymentStatus));
     } catch (e: any) {
       alert(e?.message || 'Payment update failed');
     } finally {
@@ -363,7 +375,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
             Manage and track all customer orders
           </p>
         </div>
-        {isDesktop ? (
+        {!isAdmin && (isDesktop ? (
           <Button variant="primary" onClick={() => onNavigate('orders-add')}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Plus size={16} />
@@ -399,7 +411,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
             <Plus size={16} />
             Add
           </button>
-        )}
+        ))}
       </div>
 
       {/* Time-range scope (presets + custom start/end), applied to the whole screen. */}

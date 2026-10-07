@@ -7,6 +7,7 @@ import { Toast } from '../Toast';
 import { Customers } from '../screens/Customers';
 import { ProductsList } from '../screens/ProductsList';
 import { Marketing } from '../screens/Marketing';
+import { Orders } from '../screens/Orders';
 
 const STATUS_STYLE: Record<AdminMerchantSummary['status'], { bg: string; color: string; label: string }> = {
   ACTIVE: { bg: '#ECFDF5', color: '#047857', label: 'Active' },
@@ -191,9 +192,11 @@ export function AdminApp() {
               <Marketing storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} />
             )}
             {tab === 'orders' && (
-              <p className="text-small" style={{ color: 'var(--text-muted)' }}>
-                Orders management is wired up in the next slice.
-              </p>
+              <Orders
+                store={{ id: String(selected.id), name: selected.name, slug: selected.slug, color: '#000000', currency: selected.currency }}
+                onNavigate={() => {}}
+                adminMerchantId={selected.id}
+              />
             )}
           </div>
         )}
