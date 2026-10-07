@@ -69,13 +69,12 @@ public class SecurityBootstrap implements CommandLineRunner {
     }
 
     private void bootstrapAdmin() {
-        boolean hasEmail = !adminEmail.isEmpty();
-        boolean hasPassword = !adminPassword.isEmpty();
-        if (!hasEmail && !hasPassword) {
-            return; // unset: do nothing
-        }
-        if (hasEmail ^ hasPassword) {
-            throw new IllegalStateException("ADMIN_EMAIL and ADMIN_PASSWORD must both be set, or both unset.");
+        // A blank/unset email OR password is a valid "no admin bootstrap" config and
+        // must never crash startup. (A set-but-invalid ADMIN_PASSWORD has already
+        // failed fast in run() via requireValidStartupSecret.)
+        if (adminEmail.isEmpty() || adminPassword.isEmpty()) {
+            log.info("Admin bootstrap skipped: ADMIN_EMAIL and ADMIN_PASSWORD are not both set.");
+            return;
         }
         if (adminEmail.chars().anyMatch(Character::isWhitespace)) {
             throw new IllegalStateException("ADMIN_EMAIL must not contain spaces.");
