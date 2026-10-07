@@ -61,7 +61,8 @@ Each store has categories, products (photos, descriptions, add-on modifiers, and
 a mix of in-stock, sold-out, and pre-order items), and a few sample orders.
 
 It also seeds three sign-in accounts that together demonstrate the app's
-role-based access control. All use the password `password123`:
+role-based access control. Passwords are provisioned per environment (see
+[`docs/deployment-notes.md`](docs/deployment-notes.md)), not committed:
 
 | Account | What it can do | Email |
 |---|---|---|

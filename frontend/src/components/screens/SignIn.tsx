@@ -110,9 +110,6 @@ export function SignIn() {
           </Button>
         </div>
 
-        <p className="text-xs" style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
-          Demo account: manyorder.app@gmail.com / password123
-        </p>
       </div>
     </AuthLayout>
   );
