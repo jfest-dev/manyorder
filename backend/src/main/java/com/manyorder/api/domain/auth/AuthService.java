@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.manyorder.api.common.Passwords;
 import com.manyorder.api.config.JwtUtil;
 import com.manyorder.api.domain.emailverification.EmailVerificationService;
 import com.manyorder.api.domain.merchant.Merchant;
@@ -93,9 +94,10 @@ public class AuthService {
                             "Store code not found. Ask the store owner for the store link."));
         }
 
-        // Trim edge whitespace so a fat-fingered leading/trailing space can't get
-        // baked into the stored hash (and so login, which also trims, always matches).
-        String hashed = passwordEncoder.encode(request.getPassword().trim());
+        // Passwords may not contain whitespace at all (login still trims, so a
+        // pasted trailing space there is harmless). Reject rather than silently strip.
+        Passwords.requireNoWhitespace(request.getPassword());
+        String hashed = passwordEncoder.encode(request.getPassword());
         User user = new User(request.getFullName(), request.getEmail(), hashed, role);
         user.setStaffStore(staffStore);
         userRepository.save(user);

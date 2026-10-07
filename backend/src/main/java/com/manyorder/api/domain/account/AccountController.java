@@ -48,12 +48,13 @@ public class AccountController {
     public void changePassword(@Valid @RequestBody ChangePasswordRequest request,
                                Authentication authentication) {
         User user = currentUserService.require(authentication);
+        com.manyorder.api.common.Passwords.requireNoWhitespace(request.getNewPassword());
 
         if (!passwordEncoder.matches(request.getCurrentPassword().trim(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Incorrect password");
         }
 
-        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword().trim()));
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
     }
 }

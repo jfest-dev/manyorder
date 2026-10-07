@@ -108,12 +108,13 @@ public class PasswordResetService {
      */
     @Transactional
     public void resetPassword(String rawToken, String newPassword) {
+        com.manyorder.api.common.Passwords.requireNoWhitespace(newPassword);
         PasswordResetToken token = tokenRepository.findByTokenHash(sha256Hex(rawToken))
                 .filter(t -> !t.isUsed() && !t.isExpired())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_TOKEN_MESSAGE));
 
         User user = token.getUser();
-        user.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
         LocalDateTime now = LocalDateTime.now();
