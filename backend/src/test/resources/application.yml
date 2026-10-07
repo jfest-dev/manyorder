@@ -9,6 +9,10 @@ spring:
       ddl-auto: create-drop
 
 app:
+  # Seed the demo data in tests (many integration tests rely on the seeded admin,
+  # Kiri Brew store, etc.). Production leaves SEED_DEMO unset (false).
+  demo:
+    seed: true
   # Off by default in tests (they share MockMvc's default client IP, so limits
   # would throttle the suite). The rate-limit test re-enables it via @TestPropertySource.
   ratelimit:

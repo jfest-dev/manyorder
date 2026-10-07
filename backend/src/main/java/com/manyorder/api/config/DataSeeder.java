@@ -3,6 +3,7 @@ package com.manyorder.api.config;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -52,6 +53,7 @@ import com.manyorder.api.domain.user.UserRole;
  * Pre-order ready dates are relative to seed time so they always read as upcoming.
  */
 @Component
+@org.springframework.core.annotation.Order(1) // seed before SecurityBootstrap (which may rotate the seeded rows)
 public class DataSeeder implements CommandLineRunner {
 
     private final UserRepository userRepository;
@@ -62,6 +64,8 @@ public class DataSeeder implements CommandLineRunner {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final PasswordEncoder passwordEncoder;
+    private final boolean seedDemo;
+    private final String demoPassword;
 
     public DataSeeder(UserRepository userRepository,
                       MerchantRepository merchantRepository,
@@ -70,7 +74,9 @@ public class DataSeeder implements CommandLineRunner {
                       CustomerRepository customerRepository,
                       OrderRepository orderRepository,
                       OrderItemRepository orderItemRepository,
-                      PasswordEncoder passwordEncoder) {
+                      PasswordEncoder passwordEncoder,
+                      @Value("${app.demo.seed:false}") boolean seedDemo,
+                      @Value("${app.demo.password:}") String demoPassword) {
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
         this.categoryRepository = categoryRepository;
@@ -79,6 +85,8 @@ public class DataSeeder implements CommandLineRunner {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.passwordEncoder = passwordEncoder;
+        this.seedDemo = seedDemo;
+        this.demoPassword = demoPassword == null ? "" : demoPassword;
     }
 
     private static final String CLOUD = "https://res.cloudinary.com/tvdpnfdn/image/upload/";
@@ -86,11 +94,18 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        // Only seed demo DATA where explicitly enabled (local dev / CI). Production
+        // leaves SEED_DEMO unset, so it never creates accounts with a fixed password.
+        if (!seedDemo) {
+            return;
+        }
         if (userRepository.existsByEmail("manyorder.app@gmail.com")) {
             return; // already seeded
         }
 
-        String hash = passwordEncoder.encode("password123");
+        // Prefer an injected DEMO_PASSWORD; the literal fallback only ever runs with
+        // SEED_DEMO=true (local dev/CI), never in production.
+        String hash = passwordEncoder.encode(demoPassword.isEmpty() ? "password123" : demoPassword);
 
         // Demo accounts ship pre-verified so recruiters never see the nag banner.
         User merchantUser = new User("Demo Merchant", "manyorder.app@gmail.com", hash, UserRole.MERCHANT);

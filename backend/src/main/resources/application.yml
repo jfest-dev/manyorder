@@ -53,6 +53,18 @@ app:
     api-key: ${RESEND_API_KEY:}
   mail:
     from: ${MAIL_FROM:onboarding@resend.dev}
+  # Platform-admin bootstrap: when both are set, the admin is created/updated at
+  # startup (password rotated). Never use the repo's demo password in production.
+  admin:
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+  # Demo accounts: seeding of demo DATA runs only when seed=true (local dev/CI).
+  # When demo.password is set, the existing demo merchant + staff password hashes
+  # are rotated at startup (independent of seed), so production never relies on the
+  # fixed code password.
+  demo:
+    seed: ${SEED_DEMO:false}
+    password: ${DEMO_PASSWORD:}
   frontend:
     # Base URL the emailed reset link points back to.
     base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
