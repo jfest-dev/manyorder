@@ -31,12 +31,13 @@ export function CreateAccount() {
       setError('Enter a valid email address.');
       return;
     }
-    const strengthError = validatePassword(password);
+    const trimmedPassword = password.trim();
+    const strengthError = validatePassword(trimmedPassword);
     if (strengthError) {
       setError(strengthError);
       return;
     }
-    if (password !== confirm) {
+    if (trimmedPassword !== confirm.trim()) {
       setError('Passwords do not match');
       return;
     }
@@ -45,7 +46,7 @@ export function CreateAccount() {
       await register({
         fullName: fullName.trim(),
         email: trimmedEmail,
-        password,
+        password: trimmedPassword,
         role: 'MERCHANT',
       });
       navigate('/app');

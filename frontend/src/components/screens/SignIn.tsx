@@ -33,7 +33,7 @@ export function SignIn() {
     }
     setBusy(true);
     try {
-      await login(trimmedEmail, password, remember);
+      await login(trimmedEmail, password.trim(), remember);
       navigate('/app');
     } catch (e: any) {
       setError(e?.message || 'Sign in failed');

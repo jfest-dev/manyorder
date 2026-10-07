@@ -53,7 +53,7 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(this::badCredentials);
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        if (!passwordEncoder.matches(request.getPassword().trim(), user.getPasswordHash())) {
             throw badCredentials();
         }
         requireNotSuspended(user);
@@ -93,7 +93,9 @@ public class AuthService {
                             "Store code not found. Ask the store owner for the store link."));
         }
 
-        String hashed = passwordEncoder.encode(request.getPassword());
+        // Trim edge whitespace so a fat-fingered leading/trailing space can't get
+        // baked into the stored hash (and so login, which also trims, always matches).
+        String hashed = passwordEncoder.encode(request.getPassword().trim());
         User user = new User(request.getFullName(), request.getEmail(), hashed, role);
         user.setStaffStore(staffStore);
         userRepository.save(user);

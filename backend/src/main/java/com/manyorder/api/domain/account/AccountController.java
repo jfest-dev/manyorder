@@ -49,11 +49,11 @@ public class AccountController {
                                Authentication authentication) {
         User user = currentUserService.require(authentication);
 
-        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPasswordHash())) {
+        if (!passwordEncoder.matches(request.getCurrentPassword().trim(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Incorrect password");
         }
 
-        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword().trim()));
         userRepository.save(user);
     }
 }

@@ -113,7 +113,7 @@ public class PasswordResetService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_TOKEN_MESSAGE));
 
         User user = token.getUser();
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setPasswordHash(passwordEncoder.encode(newPassword.trim()));
         userRepository.save(user);
 
         LocalDateTime now = LocalDateTime.now();

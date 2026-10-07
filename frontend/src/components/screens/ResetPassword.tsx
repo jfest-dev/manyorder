@@ -27,18 +27,19 @@ export function ResetPassword() {
 
   const submit = async () => {
     setError(null);
-    const strengthError = validatePassword(password);
+    const trimmedPassword = password.trim();
+    const strengthError = validatePassword(trimmedPassword);
     if (strengthError) {
       setError(strengthError);
       return;
     }
-    if (password !== confirm) {
+    if (trimmedPassword !== confirm.trim()) {
       setError('Passwords do not match.');
       return;
     }
     setBusy(true);
     try {
-      await authApi.resetPassword(token, password);
+      await authApi.resetPassword(token, trimmedPassword);
       setDone(true);
       window.setTimeout(() => navigate('/signin'), 1800);
     } catch (e: any) {

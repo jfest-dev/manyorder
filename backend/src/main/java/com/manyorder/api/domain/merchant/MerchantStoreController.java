@@ -181,7 +181,7 @@ public class MerchantStoreController {
         User user = requireMerchant(authentication);
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        if (!passwordEncoder.matches(request.getPassword().trim(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Incorrect password");
         }
 

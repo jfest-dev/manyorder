@@ -290,18 +290,19 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const changePassword = async () => {
     setPwError('');
     setPwSaved(false);
-    const strengthError = validatePassword(newPassword);
+    const trimmedNew = newPassword.trim();
+    const strengthError = validatePassword(trimmedNew);
     if (strengthError) {
       setPwError(strengthError);
       return;
     }
-    if (newPassword !== confirmPassword) {
+    if (trimmedNew !== confirmPassword.trim()) {
       setPwError('New passwords do not match.');
       return;
     }
     setPwSaving(true);
     try {
-      await accountApi.changePassword(currentPassword, newPassword);
+      await accountApi.changePassword(currentPassword.trim(), trimmedNew);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
