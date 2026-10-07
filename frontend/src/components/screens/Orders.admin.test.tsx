@@ -20,7 +20,8 @@ vi.mock('../../lib/api', async (importOriginal) => {
 });
 
 import { Orders } from './Orders';
-import type { OrderResponse, Store } from '../../lib/api';
+import type { OrderResponse } from '../../lib/api';
+import type { Store } from '../../App';
 
 const ORDER = {
   id: 501, customerId: null, customerName: null, merchantId: 1, merchantName: 'Kiri Brew',
