@@ -773,9 +773,27 @@ function MerchantApp() {
  *  everyone else (MERCHANT/STAFF) gets the merchant dashboard. The server also
  *  enforces this — /admin/** is PLATFORM_ADMIN-only and /merchant/** is not. */
 function AuthedApp() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   if (user?.role === 'PLATFORM_ADMIN') return <AdminApp />;
-  return <MerchantApp />;
+  if (user?.role === 'MERCHANT' || user?.role === 'STAFF') return <MerchantApp />;
+  // Authenticated but the role is missing/unrecognised: never strand the user in
+  // an empty merchant shell — show a clear message with a way out.
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center',
+      justifyContent: 'center', gap: 16, padding: 24, textAlign: 'center', background: 'var(--bg-app)' }}>
+      <div>
+        <h1 style={{ fontSize: 18, marginBottom: 8 }}>We couldn't load your account</h1>
+        <p className="text-small" style={{ color: 'var(--text-secondary)' }}>
+          Your session is missing a role. Please sign out and sign in again.
+        </p>
+      </div>
+      <button type="button" onClick={logout}
+        style={{ height: 40, padding: '0 18px', borderRadius: 8, border: '1px solid var(--border-strong)',
+          background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+        Sign out
+      </button>
+    </div>
+  );
 }
 
 export default function App() {
@@ -804,7 +822,7 @@ export default function App() {
         path="/app"
         element={
           <RequireAuth>
-            <MerchantApp />
+            <AuthedApp />
           </RequireAuth>
         }
       />
