@@ -16,7 +16,7 @@ function Harness() {
   );
 }
 
-const MESSAGE = "Spaces aren't allowed in passwords.";
+const MESSAGE = "Password can't contain spaces.";
 
 beforeEach(() => cleanup());
 

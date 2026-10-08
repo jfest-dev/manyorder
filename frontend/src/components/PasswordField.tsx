@@ -38,7 +38,7 @@ export function PasswordField({
   };
 
   // A caller-supplied error wins; otherwise surface the space message when needed.
-  const shownError = error ?? (spaceBlocked ? "Spaces aren't allowed in passwords." : undefined);
+  const shownError = error ?? (spaceBlocked ? "Password can't contain spaces." : undefined);
 
   return (
     <FieldInput
