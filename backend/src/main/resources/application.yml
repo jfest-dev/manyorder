@@ -17,6 +17,13 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false
+    properties:
+      hibernate:
+        # Collapse one-query-per-row lazy loading into a few batched IN (...)
+        # queries. When a list materializes N entities whose lazy associations
+        # (e.g. each product's category and modifier groups) are then read, the
+        # associations load in batches of up to 100 rather than one query each.
+        default_batch_fetch_size: 100
     # Set the dialect explicitly so Hibernate does not need a live connection to
     # auto-detect it. Without this, a datasource that cannot connect surfaces as
     # the misleading "Unable to determine Dialect without JDBC metadata"; with it,

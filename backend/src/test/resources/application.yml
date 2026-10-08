@@ -7,6 +7,10 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+    # Mirror production so the suite exercises the same Hibernate fetch behaviour.
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
 
 app:
   # Seed the demo data in tests (many integration tests rely on the seeded admin,
