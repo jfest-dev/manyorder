@@ -407,3 +407,75 @@ than catching inconsistencies one at a time as they surface. Not scoped in detai
 yet; needs its own dedicated pass when picked up (walk every screen, list each
 notification surface, and reconcile any that use native alert()/ad-hoc markup to
 the shared components).
+
+## Database backups + demo-data rebuild (before real merchants)
+
+Before onboarding real merchants, set up production database backups. Options:
+Railway Pro volume backups (snapshot the Postgres volume on a schedule), or a
+scheduled `pg_dump` (cron/GitHub Action) writing a dated dump to off-box storage
+(e.g. object storage). Note: Railway Hobby may not include automatic backups, so
+do not assume the data is recoverable until a backup is actually configured and a
+restore has been test-run once.
+
+### Rebuilding demo data if production is ever wiped
+
+The schema rebuilds itself on an empty database (Hibernate `ddl-auto: update`
+creates tables from the entities on startup). To repopulate the demo content:
+
+1. Point the backend at the (empty) database and set `SEED_DEMO=true` for one boot.
+   `DataSeeder` runs only on an empty DB (guarded by the demo merchant's email) and
+   recreates the demo merchant, its stores/products/customers/orders, plus the demo
+   staff and platform-admin accounts.
+2. Set `DEMO_PASSWORD` and `ADMIN_PASSWORD` (>=12 chars, no spaces) so the seeded /
+   bootstrapped accounts do not use the repo's fixed password (SecurityBootstrap
+   rotates them at startup).
+3. Unset `SEED_DEMO` again after the one boot so normal restarts never re-seed.
+
+This rebuilds the *demo* data only. Real merchant data is NOT reproducible from
+code and depends entirely on the backups above, which is why backups come first.
+
+## Refactor response mappers so nothing reads lazy associations outside a transaction, then disable open-in-view
+
+`spring.jpa.open-in-view` currently defaults to ON, which keeps the Hibernate
+session open for the whole HTTP request. That masks a layering issue: several
+read endpoints return JPA *entities* from non-transactional service methods, and
+the controller builds the response DTO after the service call. Those DTO
+constructors then read lazy associations while the session happens to still be
+open. The batch-fetch change reduced the query count but did not fix the
+layering.
+
+Flipping `open-in-view: false` (tested locally in both app ymls) makes 14
+integration tests fail with `LazyInitializationException`, confirming the reads
+would throw in production if the request ever serialized outside the session.
+The lazy associations involved:
+
+- `OrderItem.modifiers` (OneToMany) read while mapping each `OrderResponse`.
+- `Order.customer` proxy and its tags.
+- `Order.merchant` proxy (for `OrderResponse.merchantName`).
+
+Fix: make the read service methods `@Transactional(readOnly = true)` and build
+the DTOs inside them (or `JOIN FETCH` items + modifiers + customer + merchant on
+the repository queries) so every field is materialized before the session
+closes. Then set `open-in-view: false` in both the main and test `application.yml`
+(the test yml shadows main on the classpath, so it must be set in both for the
+suite to exercise it) and confirm the suite is green.
+
+The 14 failing tests and the lazy association each one hit (they map to the
+merchant orders list, admin merchant orders, merchant/admin customer list and
+detail, storefront checkout response, and the per-order delivery-fee edit
+response):
+
+1. AdminMerchantDataMgmtIntegrationTest.admin_managesCustomersDiscountsAndOrdersOfAnotherMerchant (Customer proxy)
+2. AuthAndRbacIntegrationTest.adminEndpoints_areGatedToPlatformAdmin (OrderItem.modifiers)
+3. AuthAndRbacIntegrationTest.staff_canWorkOrders_butCannotManageStoresProductsOrCreateOrders (Customer proxy)
+4. CustomerIntegrationTest.deleteCustomer_removesThem_butOrdersSurviveWithSnapshot (Merchant proxy)
+5. CustomerIntegrationTest.orderResponse_carriesTheLinkedCustomersTags (Customer proxy)
+6. CustomerIntegrationTest.updateCustomer_doesNotChangePastOrderSnapshot (Customer proxy)
+7. DeliveryAndLookupIntegrationTest.perOrderFeeEdit_clearsPending_andRecomputesTotal (OrderItem.modifiers)
+8. ModifierIntegrationTest.orderedLine_snapshotSurvivesModifierDeletion (OrderItem.modifiers)
+9. OrderBadgeIntegrationTest.orderResponse_exposesSource_forTheNewTag (OrderItem.modifiers)
+10. OrderBadgeIntegrationTest.staff_seeOnlyTheirStore_andCannotMarkAnother (Merchant proxy)
+11. ProductDeleteIntegrationTest.delete_withOrderHistory_keepsOrderReadableWithSnapshot (OrderItem.modifiers)
+12. SalePriceIntegrationTest.endingSale_revertsShopPrice_butOrderKeepsSnapshot (OrderItem.modifiers)
+13. SplitOrderIntegrationTest.bothSplitOrders_visibleToMerchant_withSameGroupId (OrderItem.modifiers)
+14. StorefrontCheckoutIntegrationTest.checkout_capturesNotesAndPaymentMethod_andStorePhone (OrderItem.modifiers)
