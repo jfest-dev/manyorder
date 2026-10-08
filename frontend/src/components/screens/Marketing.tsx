@@ -92,7 +92,9 @@ interface FormState {
 }
 const BLANK: FormState = {
   name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', minSpend: '', startDate: '', endDate: '', active: true,
-  firstOrderOnly: false, canStackWithSale: false, isPublic: false, appliesToDelivery: false, appliesTo: 'ALL', productIds: [],
+  // A new discount defaults to shown-on-storefront. Editing keeps the saved value
+  // (openEdit copies d.isPublic), so this only affects freshly created discounts.
+  firstOrderOnly: false, canStackWithSale: false, isPublic: true, appliesToDelivery: false, appliesTo: 'ALL', productIds: [],
 };
 
 export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: MarketingProps) {
@@ -358,7 +360,7 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <StatCard icon={<Tag size={20} style={{ color: '#10B981' }} />} tint="#10B981" label="Active Discounts" value={String(activeCount)} />
           <StatCard icon={<TrendingUp size={20} style={{ color: '#3B82F6' }} />} tint="#3B82F6" label="Total Redemptions" value={String(totalRedemptions)} />
-          <StatCard icon={<Award size={20} style={{ color: '#D97706' }} />} tint="#D97706" label="Most-Used Code" value={mostUsed ? mostUsed.code : '—'} />
+          <StatCard icon={<Award size={20} style={{ color: '#D97706' }} />} tint="#D97706" label="Most-Used Code" value={mostUsed ? mostUsed.code : 'None'} />
         </div>
       )}
 
