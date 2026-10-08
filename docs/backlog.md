@@ -479,3 +479,20 @@ response):
 12. SalePriceIntegrationTest.endingSale_revertsShopPrice_butOrderKeepsSnapshot (OrderItem.modifiers)
 13. SplitOrderIntegrationTest.bothSplitOrders_visibleToMerchant_withSameGroupId (OrderItem.modifiers)
 14. StorefrontCheckoutIntegrationTest.checkout_capturesNotesAndPaymentMethod_andStorePhone (OrderItem.modifiers)
+
+## AdminMerchantService: replace per-merchant COUNT queries with grouped counts
+
+The admin merchants list calls `productRepository.countByMerchant`,
+`orderRepository.countByMerchant` and `customerRepository.countByMerchant` once
+per merchant in `AdminMerchantService.toSummary`, so the list fires 3 count
+queries per row (plus the list query itself). This is a one-query-per-row
+pattern that `default_batch_fetch_size` does not help, because the counts are
+explicit repository calls, not lazy associations.
+
+Fix: add three grouped-count queries (one per entity type) that return
+`merchant_id -> count` for all merchants in a single statement each
+(`SELECT merchant_id, COUNT(*) ... GROUP BY merchant_id`), load them into maps,
+and have `toSummary` read from the maps. That turns 3N + 1 queries into 4 total.
+
+Low priority: do this after private networking has been tested, since the
+per-query latency fix may make this irrelevant at current merchant counts.
