@@ -50,6 +50,20 @@ export function AdminApp() {
   };
   useEffect(load, []);
 
+  // Silent background refresh: update metrics and merchants every 60s and when the
+  // window regains focus. No spinner, no error banner; on failure we keep the last
+  // good data on screen rather than wiping it.
+  useEffect(() => {
+    const refresh = () => {
+      Promise.all([adminApi.metrics(), adminApi.listMerchants()])
+        .then(([m, list]) => { setMetrics(m); setMerchants(list); })
+        .catch(() => { /* keep the last good data */ });
+    };
+    const id = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    return () => { window.clearInterval(id); window.removeEventListener('focus', refresh); };
+  }, []);
+
   const showNotice = (msg: string) => { setNotice(msg); window.setTimeout(() => setNotice(null), 2400); };
 
   const toggleSuspend = async (m: AdminMerchantSummary) => {
