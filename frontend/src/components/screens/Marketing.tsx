@@ -5,10 +5,8 @@ import { ReorderableList } from '../ReorderableList';
 import { Button } from '../Button';
 import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
-import { Select } from '../Select';
 import { DatePicker } from '../DatePicker';
 import { Checkbox } from '../Checkbox';
-import { ToggleSwitch } from '../ToggleSwitch';
 import { useConfirm } from '../ConfirmDialog';
 import { Toast } from '../Toast';
 import { discountsApi, adminApi, DiscountResponse, DiscountType, DiscountPayload, ApiError, productsApi, ProductResponse } from '../../lib/api';
@@ -71,30 +69,39 @@ function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string;
   );
 }
 
+// The form groups the saved fields into four plain-language choices. These map
+// back to the unchanged API fields on submit (see submit()), and are derived
+// from an existing discount on edit (see openEdit()):
+//   scope       -> type (FREE_DELIVERY) + appliesToDelivery + productIds scope
+//   valueType   -> type (PERCENTAGE | FIXED) when the scope carries a value
+//   visibility  -> active + isPublic
+type Scope = 'ORDER' | 'PRODUCTS' | 'DELIVERY' | 'FREE_DELIVERY';
+type ValueType = 'PERCENTAGE' | 'FIXED';
+type Visibility = 'DRAFT' | 'CODE_ONLY' | 'PUBLIC';
+
 interface FormState {
   name: string;
   code: string;
-  type: DiscountType;
+  /** How the amount is expressed. Ignored when scope is FREE_DELIVERY. */
+  valueType: ValueType;
   value: string;
   usageLimit: string;
   minSpend: string;
   startDate: string;
   endDate: string;
-  active: boolean;
   firstOrderOnly: boolean;
   canStackWithSale: boolean;
-  isPublic: boolean;
-  /** When true (PERCENTAGE/FIXED), the value comes off the delivery fee, not products. */
-  appliesToDelivery: boolean;
-  /** ALL = store-wide (empty scope); SPECIFIC = limited to productIds. */
-  appliesTo: 'ALL' | 'SPECIFIC';
+  /** What the discount applies to (the single "What it discounts" picker). */
+  scope: Scope;
+  /** Draft (inactive), active but code-only, or active and shown on storefront. */
+  visibility: Visibility;
   productIds: number[];
 }
 const BLANK: FormState = {
-  name: '', code: '', type: 'PERCENTAGE', value: '', usageLimit: '', minSpend: '', startDate: '', endDate: '', active: true,
-  // A new discount defaults to shown-on-storefront. Editing keeps the saved value
-  // (openEdit copies d.isPublic), so this only affects freshly created discounts.
-  firstOrderOnly: false, canStackWithSale: false, isPublic: true, appliesToDelivery: false, appliesTo: 'ALL', productIds: [],
+  // A new discount defaults to active and shown on storefront. Editing derives the
+  // saved value (see openEdit), so this only affects freshly created discounts.
+  name: '', code: '', valueType: 'PERCENTAGE', value: '', usageLimit: '', minSpend: '', startDate: '', endDate: '',
+  firstOrderOnly: false, canStackWithSale: false, scope: 'ORDER', visibility: 'PUBLIC', productIds: [],
 };
 
 export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: MarketingProps) {
@@ -127,6 +134,7 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState('');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Brief success confirmation after a save (the form otherwise just closes).
   const [notice, setNotice] = useState<string | null>(null);
@@ -232,18 +240,21 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
 
   const openAdd = () => { setForm(BLANK); setEditingId(null); setFormError(null); setProductSearch(''); setFormOpen(true); };
   const openEdit = (d: DiscountResponse) => {
+    const scope: Scope = d.type === 'FREE_DELIVERY' ? 'FREE_DELIVERY'
+      : d.appliesToDelivery ? 'DELIVERY'
+        : d.productIds.length > 0 ? 'PRODUCTS' : 'ORDER';
+    const valueType: ValueType = d.type === 'FIXED' ? 'FIXED' : 'PERCENTAGE';
+    const visibility: Visibility = !d.active ? 'DRAFT' : d.isPublic ? 'PUBLIC' : 'CODE_ONLY';
     setForm({
-      name: d.name ?? '', code: d.code, type: d.type, value: String(d.value),
+      name: d.name ?? '', code: d.code, valueType, value: String(d.value),
       usageLimit: d.usageLimit != null ? String(d.usageLimit) : '',
       minSpend: d.minSpend != null ? String(d.minSpend) : '',
       startDate: d.startsAt ? d.startsAt.slice(0, 10) : '',
       endDate: d.endsAt ? d.endsAt.slice(0, 10) : '',
-      active: d.active,
       firstOrderOnly: d.firstOrderOnly,
       canStackWithSale: d.canStackWithSale,
-      isPublic: d.isPublic,
-      appliesToDelivery: d.appliesToDelivery,
-      appliesTo: d.productIds.length > 0 ? 'SPECIFIC' : 'ALL',
+      scope,
+      visibility,
       productIds: d.productIds,
     });
     setEditingId(d.id);
@@ -254,39 +265,41 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
 
   const submit = async () => {
     setFormError(null);
-    const freeDelivery = form.type === 'FREE_DELIVERY';
-    // Free delivery carries no percent/amount value; every other type needs one.
+    const freeDelivery = form.scope === 'FREE_DELIVERY';
+    // Free delivery carries no percent/amount value; every other scope needs one.
     const value = freeDelivery ? 0 : Number(form.value);
     if (!form.code.trim()) { setFormError('Code is required.'); return; }
     if (!freeDelivery && (form.value.trim() === '' || Number.isNaN(value) || value <= 0)) { setFormError('Enter a value greater than 0.'); return; }
-    if (form.type === 'PERCENTAGE' && value > 100) { setFormError('A percentage discount cannot exceed 100%.'); return; }
+    if (!freeDelivery && form.valueType === 'PERCENTAGE' && value > 100) { setFormError('A percentage discount cannot exceed 100%.'); return; }
     const usageLimit = form.usageLimit.trim() === '' ? null : Number(form.usageLimit);
     if (usageLimit != null && (Number.isNaN(usageLimit) || usageLimit < 0)) { setFormError('Usage limit must be 0 or more.'); return; }
     const minSpend = form.minSpend.trim() === '' ? null : Number(form.minSpend);
     if (minSpend != null && (Number.isNaN(minSpend) || minSpend <= 0)) { setFormError('Minimum spend must be greater than 0, or left blank.'); return; }
     if (form.startDate && form.endDate && form.startDate > form.endDate) { setFormError('The start date must be before the end date.'); return; }
-    if (!freeDelivery && form.appliesTo === 'SPECIFIC' && form.productIds.length === 0) {
-      setFormError('Select at least one product, or set the discount to apply to all products.'); return;
+    if (form.scope === 'PRODUCTS' && form.productIds.length === 0) {
+      setFormError('Select at least one product, or choose a different scope.'); return;
     }
 
+    // Map the four-section choices back to the unchanged API fields.
+    const type: DiscountType = freeDelivery ? 'FREE_DELIVERY' : form.valueType;
     const payload: DiscountPayload = {
       code: form.code.trim(),
       name: form.name.trim() || undefined,
-      type: form.type,
+      type,
       value,
       usageLimit,
       // On edit, a blank field clears the minimum (0); on create it's simply omitted.
       minSpend: minSpend ?? (editingId != null ? 0 : undefined),
       startsAt: form.startDate ? `${form.startDate}T00:00:00` : null,
       endsAt: form.endDate ? `${form.endDate}T23:59:59` : null,
-      active: form.active,
+      active: form.visibility !== 'DRAFT',
       firstOrderOnly: form.firstOrderOnly,
       canStackWithSale: form.canStackWithSale,
-      isPublic: form.isPublic,
-      appliesToDelivery: form.type !== 'FREE_DELIVERY' && form.appliesToDelivery,
-      // Empty array = store-wide (and always empty for free delivery). On edit
-      // this also clears a previous scope.
-      productIds: !freeDelivery && form.appliesTo === 'SPECIFIC' ? form.productIds : [],
+      // "Shown on storefront" requires Active, so a draft is never public.
+      isPublic: form.visibility === 'PUBLIC',
+      appliesToDelivery: form.scope === 'DELIVERY',
+      // Products scope carries the picked ids; every other scope is store-wide ([]).
+      productIds: form.scope === 'PRODUCTS' ? form.productIds : [],
     };
     const wasEdit = editingId != null;
     setSubmitting(true);
@@ -339,6 +352,12 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
     d.type === 'FREE_DELIVERY' ? 'Free delivery'
       : d.type === 'PERCENTAGE' ? `${d.value}% off`
         : `${formatMoney(d.value, currency)} off`;
+
+  // One-line explanation under the "What it discounts" picker.
+  const scopeHelp = form.scope === 'ORDER' ? 'The code discounts the whole order.'
+    : form.scope === 'PRODUCTS' ? `The code only discounts the selected products (${form.productIds.length} selected).`
+      : form.scope === 'DELIVERY' ? `Takes the ${form.valueType === 'PERCENTAGE' ? 'percentage' : 'amount'} off the delivery fee (delivery orders only).`
+        : 'Waives the delivery fee at checkout. No amount needed.';
 
   return (
     <div>
@@ -440,124 +459,41 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
               <button onClick={() => !submitting && setFormOpen(false)} aria-label="Close" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}><X size={18} /></button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <FieldInput label="Name" placeholder="e.g. New customer offer" value={form.name} onChange={(v) => set('name', v)} maxLength={255} helperText="Optional label. The code is what customers type." />
-              <FieldInput label="Code" placeholder="WELCOME10" value={form.code} onChange={(v) => set('code', v)} maxLength={255} required helperText="Saved in uppercase. Must be unique for this store." />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Type</label>
-                  <Select value={form.type} onChange={(v) => set('type', v as DiscountType)} ariaLabel="Discount type" options={[
-                    { value: 'PERCENTAGE', label: 'Percentage (%)' },
-                    { value: 'FIXED', label: 'Fixed amount' },
-                    { value: 'FREE_DELIVERY', label: 'Free delivery' },
-                  ]} />
-                </div>
-                {/* Free delivery carries no amount - it waives the delivery fee. */}
-                {form.type === 'FREE_DELIVERY' ? (
-                  <div style={{ alignSelf: 'end' }}>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '0 0 10px' }}>Waives the delivery fee at checkout. No amount needed.</p>
-                  </div>
-                ) : form.type === 'FIXED' ? (
-                  <MoneyField label="Amount off" currency={currency} value={form.value === '' ? null : Number(form.value)} onChange={(n) => set('value', n == null ? '' : String(n))} />
-                ) : (
-                  <FieldInput label="Percent off" type="number" inputMode="numeric" placeholder="10" value={form.value} onChange={(v) => set('value', v)} />
-                )}
-              </div>
-
-              {/* Whether a %/fixed value comes off products or the delivery fee.
-                  Free delivery is inherently a delivery discount, so it's hidden there. */}
-              {form.type !== 'FREE_DELIVERY' && (
-                <div>
-                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Applies to</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {([['products', false], ['delivery', true]] as const).map(([key, val]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => set('appliesToDelivery', val)}
-                        style={{
-                          flex: 1, height: '38px', borderRadius: 'var(--radius-field)', cursor: 'pointer',
-                          fontSize: '13px', fontWeight: 600,
-                          border: `1px solid ${form.appliesToDelivery === val ? 'var(--primary-solid)' : 'var(--border-subtle)'}`,
-                          background: form.appliesToDelivery === val ? 'var(--primary-solid)' : 'var(--bg-card)',
-                          color: form.appliesToDelivery === val ? 'var(--text-on-dark)' : 'var(--text-secondary)',
-                        }}
-                      >
-                        {key === 'products' ? 'Products' : 'Delivery fee'}
-                      </button>
-                    ))}
-                  </div>
-                  {form.appliesToDelivery && (
-                    <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>
-                      Takes the {form.type === 'PERCENTAGE' ? 'percentage' : 'amount'} off the delivery fee (delivery orders only).
-                    </p>
+              {/* 1. Basics: the code, an optional label, and the amount. */}
+              <section style={sectionStyle}>
+                <SectionTitle>Basics</SectionTitle>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <FieldInput label="Code" placeholder="WELCOME10" value={form.code} onChange={(v) => set('code', v)} maxLength={255} required helperText="Saved in uppercase. Must be unique for this store." />
+                  <FieldInput label="Name" placeholder="e.g. New customer offer" value={form.name} onChange={(v) => set('name', v)} maxLength={255} helperText="Optional label. The code is what customers type." />
+                  {form.scope !== 'FREE_DELIVERY' && (
+                    <div>
+                      <label style={fieldLabelStyle}>Discount value</label>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                        {([['PERCENTAGE', 'Percentage (%)'], ['FIXED', 'Fixed amount']] as const).map(([val, label]) => (
+                          <button key={val} type="button" onClick={() => set('valueType', val)} aria-pressed={form.valueType === val} style={segStyle(form.valueType === val)}>{label}</button>
+                        ))}
+                      </div>
+                      {form.valueType === 'FIXED'
+                        ? <MoneyField label="Amount off" currency={currency} value={form.value === '' ? null : Number(form.value)} onChange={(n) => set('value', n == null ? '' : String(n))} />
+                        : <FieldInput label="Percent off" type="number" inputMode="numeric" placeholder="10" value={form.value} onChange={(v) => set('value', v)} />}
+                    </div>
                   )}
                 </div>
-              )}
+              </section>
 
-              <FieldInput label="Usage limit" type="number" inputMode="numeric" placeholder="Leave blank for unlimited" value={form.usageLimit} onChange={(v) => set('usageLimit', v)} helperText="Total redemptions allowed." />
-
-              <div>
-                <MoneyField label="Minimum spend" currency={currency} value={form.minSpend === '' ? null : Number(form.minSpend)} onChange={(n) => set('minSpend', n == null ? '' : String(n))} />
-                <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>Optional. The code only applies when the cart subtotal reaches this amount.</p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Starts</label>
-                  <DatePicker value={form.startDate} onChange={(v) => set('startDate', v)} placeholder="No start" ariaLabel="Start date" />
-                </div>
-                <div>
-                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Ends</label>
-                  <DatePicker value={form.endDate} onChange={(v) => set('endDate', v)} min={new Date().toLocaleDateString('en-CA')} placeholder="No end" ariaLabel="End date" />
-                </div>
-              </div>
-
-              <ToggleSwitch checked={form.active} onChange={(v) => set('active', v)} label="Active" />
-
-              <div>
-                <ToggleSwitch checked={form.isPublic} onChange={(v) => set('isPublic', v)} label="Show on storefront" />
-                <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                  Customers see it at checkout and apply with one tap. Off keeps it code-only.
-                </p>
-              </div>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                <Checkbox checked={form.firstOrderOnly} onChange={(v) => set('firstOrderOnly', v)} ariaLabel="First order only" />
-                <span className="text-small">First order only</span>
-              </label>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                <Checkbox checked={form.canStackWithSale} onChange={(v) => set('canStackWithSale', v)} ariaLabel="Stack with sale prices" />
-                <span className="text-small">Stack with sale prices</span>
-              </label>
-
-              {/* Product scope: whole order (store-wide) or a chosen set of products.
-                  Hidden for any delivery discount (free delivery or a delivery-fee %/fixed). */}
-              {form.type !== 'FREE_DELIVERY' && !form.appliesToDelivery && (
-              <div>
-                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Which products</label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {(['ALL', 'SPECIFIC'] as const).map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => set('appliesTo', opt)}
-                      style={{
-                        flex: 1, height: '38px', borderRadius: 'var(--radius-field)', cursor: 'pointer',
-                        fontSize: '13px', fontWeight: 600,
-                        border: `1px solid ${form.appliesTo === opt ? 'var(--primary-solid)' : 'var(--border-subtle)'}`,
-                        background: form.appliesTo === opt ? 'var(--primary-solid)' : 'var(--bg-card)',
-                        color: form.appliesTo === opt ? 'var(--text-on-dark)' : 'var(--text-secondary)',
-                      }}
-                    >
-                      {opt === 'ALL' ? 'All products' : 'Specific products'}
-                    </button>
+              {/* 2. What it discounts: one picker instead of three overlapping controls. */}
+              <section style={sectionStyle}>
+                <SectionTitle>What it discounts</SectionTitle>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {([['ORDER', 'Whole order'], ['PRODUCTS', 'Specific products'], ['DELIVERY', 'Delivery fee'], ['FREE_DELIVERY', 'Free delivery']] as const).map(([val, label]) => (
+                    <button key={val} type="button" onClick={() => set('scope', val)} aria-pressed={form.scope === val} style={segStyle(form.scope === val)}>{label}</button>
                   ))}
                 </div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '8px 0 0' }}>{scopeHelp}</p>
 
-                {form.appliesTo === 'SPECIFIC' && (
+                {form.scope === 'PRODUCTS' && (
                   products.length === 0 ? (
                     <div style={{ marginTop: '10px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)' }}>
                       <p className="text-small" style={{ color: 'var(--text-muted)', margin: 0, padding: '12px' }}>No products to choose from yet.</p>
@@ -576,8 +512,7 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
                         />
                       </div>
 
-                      {/* Quick-select whole categories. Toggles the category's products
-                          in/out of the explicit selection; a filled chip = all selected. */}
+                      {/* Quick-select whole categories. */}
                       {categories.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                           <span className="text-xs" style={{ color: 'var(--text-muted)', alignSelf: 'center' }}>Add a category:</span>
@@ -619,13 +554,64 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
                     </div>
                   )
                 )}
-                <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>
-                  {form.appliesTo === 'ALL'
-                    ? 'The code discounts the whole order.'
-                    : `The code only discounts the selected products (${form.productIds.length} selected).`}
-                </p>
-              </div>
-              )}
+              </section>
+
+              {/* 3. Conditions, with the two niche toggles behind an Advanced fold. */}
+              <section style={sectionStyle}>
+                <SectionTitle>Conditions</SectionTitle>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div>
+                    <MoneyField label="Minimum spend" currency={currency} value={form.minSpend === '' ? null : Number(form.minSpend)} onChange={(n) => set('minSpend', n == null ? '' : String(n))} />
+                    <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '6px 0 0' }}>Optional. The code only applies when the cart subtotal reaches this amount.</p>
+                  </div>
+                  <FieldInput label="Usage limit" type="number" inputMode="numeric" placeholder="Leave blank for unlimited" value={form.usageLimit} onChange={(v) => set('usageLimit', v)} helperText="Total redemptions allowed." />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={fieldLabelStyle}>Starts</label>
+                      <DatePicker value={form.startDate} onChange={(v) => set('startDate', v)} placeholder="No start" ariaLabel="Start date" />
+                    </div>
+                    <div>
+                      <label style={fieldLabelStyle}>Ends</label>
+                      <DatePicker value={form.endDate} onChange={(v) => set('endDate', v)} min={new Date().toLocaleDateString('en-CA')} placeholder="No end" ariaLabel="End date" />
+                    </div>
+                  </div>
+                  <div>
+                    <button type="button" onClick={() => setAdvancedOpen((o) => !o)} aria-expanded={advancedOpen}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 600 }}>
+                      {advancedOpen ? '▾ Advanced' : '▸ Advanced'}
+                    </button>
+                    {advancedOpen && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                          <Checkbox checked={form.firstOrderOnly} onChange={(v) => set('firstOrderOnly', v)} ariaLabel="First order only" />
+                          <span className="text-small">First order only</span>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+                          <Checkbox checked={form.canStackWithSale} onChange={(v) => set('canStackWithSale', v)} ariaLabel="Stack with sale prices" />
+                          <span className="text-small">Stack with sale prices</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* 4. Who sees it: one status control (shown requires active). */}
+              <section style={sectionStyle}>
+                <SectionTitle>Who sees it</SectionTitle>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {([
+                    ['PUBLIC', 'Active and shown on storefront', 'Customers see it at checkout and can apply it with one tap.'],
+                    ['CODE_ONLY', 'Active, code only', 'Works at checkout only when a customer types the code.'],
+                    ['DRAFT', 'Draft', 'Saved but not usable yet. Switch on when you are ready.'],
+                  ] as const).map(([val, title, desc]) => (
+                    <button key={val} type="button" onClick={() => set('visibility', val)} aria-pressed={form.visibility === val} style={radioCardStyle(form.visibility === val)}>
+                      <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>{title}</div>
+                      <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '2px' }}>{desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </section>
 
               {formError && <p className="text-small" style={{ color: 'var(--error-color)', margin: 0 }}>{formError}</p>}
             </div>
@@ -659,3 +645,41 @@ const iconBtn: React.CSSProperties = {
   border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)',
   color: 'var(--text-secondary)', cursor: 'pointer',
 };
+
+// ---- Discount form layout (the four sections) ----
+
+const sectionStyle: React.CSSProperties = {
+  border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-field)', padding: '14px',
+};
+const fieldLabelStyle: React.CSSProperties = {
+  color: 'var(--text-secondary)', display: 'block', marginBottom: '6px', fontSize: '12px',
+};
+
+/** Uppercase heading for a form section. */
+function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-xs" style={{ fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+      {children}
+    </p>
+  );
+}
+
+/** Segmented-choice button (value type, scope). */
+function segStyle(active: boolean): React.CSSProperties {
+  return {
+    flex: 1, height: '38px', borderRadius: 'var(--radius-field)', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+    border: `1px solid ${active ? 'var(--primary-solid)' : 'var(--border-subtle)'}`,
+    background: active ? 'var(--primary-solid)' : 'var(--bg-card)',
+    color: active ? 'var(--text-on-dark)' : 'var(--text-secondary)',
+  };
+}
+
+/** Stacked radio-style card (the visibility options). */
+function radioCardStyle(active: boolean): React.CSSProperties {
+  return {
+    display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', cursor: 'pointer',
+    borderRadius: 'var(--radius-field)',
+    border: `1px solid ${active ? 'var(--primary-solid)' : 'var(--border-subtle)'}`,
+    background: active ? 'var(--bg-card-subtle)' : 'var(--bg-card)',
+  };
+}
