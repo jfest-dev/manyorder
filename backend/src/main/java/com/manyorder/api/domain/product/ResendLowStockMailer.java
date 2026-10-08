@@ -28,13 +28,18 @@ public class ResendLowStockMailer implements LowStockMailer {
 
     private final String apiKey;
     private final String fromAddress;
+    private final String frontendBaseUrl;
     private final RestClient restClient = RestClient.create();
 
     public ResendLowStockMailer(
             @Value("${app.resend.api-key:}") String apiKey,
-            @Value("${app.mail.from:onboarding@resend.dev}") String fromAddress) {
+            @Value("${app.mail.from:onboarding@resend.dev}") String fromAddress,
+            @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.fromAddress = fromAddress;
+        this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
+                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
+                : frontendBaseUrl;
     }
 
     @Override
@@ -54,7 +59,7 @@ public class ResendLowStockMailer implements LowStockMailer {
                 "from", fromAddress,
                 "to", to,
                 "subject", subjectFor(product.getName(), stock),
-                "html", buildHtml(merchant.getName(), product.getName(), stock));
+                "html", buildHtml(merchant.getName(), product.getName(), stock, frontendBaseUrl + "/app"));
 
         try {
             restClient.post()
@@ -75,27 +80,32 @@ public class ResendLowStockMailer implements LowStockMailer {
      * wording can be unit-tested without constructing entities.
      */
     static String subjectFor(String productName, int stock) {
-        return (stock == 0 ? "Out of stock: " : "Low stock: ") + productName;
+        return stock == 0
+                ? productName + " is out of stock"
+                : productName + " is almost out (" + stock + " left)";
     }
 
-    /** Email body, with wording that reflects out-of-stock vs running-low. */
-    static String buildHtml(String storeName, String productName, int stock) {
+    /** Email body, with wording that reflects out-of-stock vs running-low, an
+     *  "Open Products" button and the opt-out footer. */
+    static String buildHtml(String storeName, String productName, int stock, String productsUrl) {
         boolean outOfStock = stock == 0;
-        String headingPrefix = outOfStock ? "Out of stock at " : "Low stock at ";
-        String level = outOfStock
-                ? "is now out of stock"
-                : "is running low, with " + stock + " left";
-        String action = outOfStock
-                ? "Restock it from your Products screen to put it back on sale."
-                : "Restock it from your Products screen to keep it available to customers.";
+        String heading = outOfStock
+                ? escape(productName) + " is out of stock"
+                : escape(productName) + " is almost out (" + stock + " left)";
+        String body = outOfStock
+                ? "Customers can't order it until you restock."
+                : escape(productName) + " at " + escape(storeName) + " has " + stock
+                        + " left. Update its stock in Products so customers can keep ordering.";
         return """
                 <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 480px; margin: 0 auto; color: #1f2937;">
-                  <h2 style="margin-bottom: 8px;">%s%s</h2>
-                  <p style="color: #4b5563;"><strong>%s</strong> %s.</p>
+                  <h2 style="margin-bottom: 8px;">%s</h2>
                   <p style="color: #4b5563;">%s</p>
-                  <p style="color: #9ca3af; font-size: 12px;">You are receiving this because low inventory alerts are on for this store. You can turn them off in Settings.</p>
+                  <p style="margin: 24px 0;">
+                    <a href="%s" style="background: #111827; color: #ffffff; padding: 12px 20px; border-radius: 8px; text-decoration: none; display: inline-block;">Open Products</a>
+                  </p>
+                  <p style="color: #9ca3af; font-size: 12px;">Turn off low stock emails in Settings.</p>
                 </div>
-                """.formatted(headingPrefix, escape(storeName), escape(productName), level, action);
+                """.formatted(heading, body, productsUrl);
     }
 
     /** Minimal HTML-escaping for merchant-supplied text. */
