@@ -48,6 +48,36 @@ const STATUS_LABEL: Record<DisplayStatus, string> = {
 /** Active, non-pre-order products at or below this on-hand quantity are "Low Stock"
  *  in the summary. No per-product threshold exists yet, so one value is shared. */
 
+// Storefront "Only N left" chip colors, reused here so the Products list flags low
+// stock the same orange customers see. Out of stock stays red.
+const LOW_STOCK_FG = '#C2410C';
+const LOW_STOCK_BG = '#FFEDD5';
+const OUT_OF_STOCK_FG = '#DC2626';
+
+type StockTone = 'out' | 'low' | 'normal';
+/** Pre-order products hold no real inventory, so they are always "normal". */
+function stockTone(p: ProductResponse): StockTone {
+  if (p.preOrder) return 'normal';
+  if (p.stock === 0) return 'out';
+  if (p.stock <= LOW_STOCK_AT) return 'low';
+  return 'normal';
+}
+
+/** The stock figure with storefront-matched coloring: red when out, orange with a
+ *  small "Low" badge when 1..LOW_STOCK_AT, plain otherwise (pre-order excluded). */
+function StockText({ p }: { p: ProductResponse }) {
+  const tone = stockTone(p);
+  const color = tone === 'out' ? OUT_OF_STOCK_FG : tone === 'low' ? LOW_STOCK_FG : 'var(--text-primary)';
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+      <span style={{ color }}>{p.stock} in stock</span>
+      {tone === 'low' && (
+        <span style={{ fontSize: '9px', fontWeight: 600, color: LOW_STOCK_FG, background: LOW_STOCK_BG, padding: '2px 6px', borderRadius: '4px' }}>Low</span>
+      )}
+    </span>
+  );
+}
+
 function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string; label: string; value: string }) {
   return (
     <Card>
@@ -411,7 +441,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
                         <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.categoryName || '-'}</td>
                         <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: 500 }}>{formatMoney(p.price, currency)}</td>
                         <td style={{ padding: '12px 16px', fontSize: '13px' }}>
-                          <span style={{ color: p.stock === 0 && !p.preOrder ? '#DC2626' : 'var(--text-primary)' }}>{p.stock} in stock</span>
+                          <StockText p={p} />
                         </td>
                         <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-secondary)' }}>{p.unitsSold}</td>
                         <td style={{ padding: '12px 16px' }}><StatusTag p={p} /></td>
@@ -494,7 +524,9 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                       <div>
                         <span className="text-small" style={{ fontWeight: 500 }}>{formatMoney(p.price, currency)}</span>
-                        <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>{p.stock} in stock · {p.unitsSold} sold</span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)', marginLeft: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <StockText p={p} /> <span>· {p.unitsSold} sold</span>
+                        </span>
                       </div>
                       <StatusTag p={p} />
                     </div>
