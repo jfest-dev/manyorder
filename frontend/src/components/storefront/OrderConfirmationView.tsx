@@ -122,7 +122,7 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
           {!split && <OrderStatusBadge status={toOrderStatus(orders[0].orderStatus)} />}
         </div>
         <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '10px', maxWidth: '300px', marginInline: 'auto' }}>
-          Save your order number. You’ll need it (with your phone) to look up this order later.
+          Take a screenshot of this page. You'll need your order number and phone number to track your order.
         </p>
       </div>
 
@@ -204,7 +204,7 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
 
         {waUrl && (
           <p style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center', margin: 0 }}>
-            Send your order to the store on WhatsApp so they can confirm it.
+            Optional: message the store on WhatsApp to confirm your order, or to ask them anything.
           </p>
         )}
       </div>
