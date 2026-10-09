@@ -54,6 +54,12 @@ public class AdminMerchantController {
         return adminMerchantService.getMerchant(currentUserService.require(authentication), merchantId);
     }
 
+    /** Full store-detail payload: owner, profile, counts, revenue, last order, low stock, recent admin actions. */
+    @GetMapping("/{merchantId}/detail")
+    public AdminStoreDetailResponse detail(@PathVariable Long merchantId, Authentication authentication) {
+        return adminMerchantService.getStoreDetail(currentUserService.require(authentication), merchantId);
+    }
+
     /** Suspend a merchant: hides its storefront and blocks owner/staff login. Idempotent. */
     @PostMapping("/{merchantId}/suspend")
     @ResponseStatus(HttpStatus.NO_CONTENT)

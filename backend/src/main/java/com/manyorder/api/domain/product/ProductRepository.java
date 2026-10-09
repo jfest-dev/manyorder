@@ -18,6 +18,9 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     Optional<Product> findByMerchantAndId(Merchant merchant, Long id);
     long countByMerchant(Merchant merchant);
 
+    /** Active, non-pre-order products with stock in [min, max] (the low-stock band). */
+    long countByMerchantAndIsActiveTrueAndPreOrderFalseAndStockBetween(Merchant merchant, int min, int max);
+
     /** The subset of the given ids that are products owned by this store (used to
      *  validate a discount's product scope). */
     List<Product> findByMerchantAndIdIn(Merchant merchant, Collection<Long> ids);

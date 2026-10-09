@@ -1,6 +1,8 @@
 package com.manyorder.api.domain.order;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,6 +19,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByMerchantOrderByCreatedAtDesc(Merchant merchant);
     Optional<Order> findByMerchantAndId(Merchant merchant, Long id);
     long countByMerchant(Merchant merchant);
+
+    /** Total revenue for a store, counting only the given statuses (completed + delivered). */
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.merchant = :merchant AND o.status IN :statuses")
+    BigDecimal sumRevenue(@Param("merchant") Merchant merchant, @Param("statuses") Collection<OrderStatus> statuses);
+
+    /** When the store's most recent order was placed, or null if it has none. */
+    @Query("SELECT MAX(o.createdAt) FROM Order o WHERE o.merchant = :merchant")
+    LocalDateTime findLastOrderAt(@Param("merchant") Merchant merchant);
     List<Order> findByMerchantAndOrderGroupIdOrderByIdAsc(Merchant merchant, String orderGroupId);
     List<Order> findByMerchantAndStatusOrderByCreatedAtDesc(Merchant merchant, OrderStatus status);
     List<Order> findByMerchantAndCreatedAtBetween(Merchant merchant, LocalDateTime start, LocalDateTime end);

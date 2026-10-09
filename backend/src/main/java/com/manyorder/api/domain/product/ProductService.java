@@ -41,7 +41,7 @@ public class ProductService {
      * stock". Mirrors the frontend LOW_STOCK_AT (ProductsList.tsx) that drives
      * the Products low-stock stat card — keep the two in step.
      */
-    static final int LOW_STOCK_AT = 5;
+    public static final int LOW_STOCK_AT = 5;
 
     private final ProductRepository productRepository;
     private final MerchantRepository merchantRepository;

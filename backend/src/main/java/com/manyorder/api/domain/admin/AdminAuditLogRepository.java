@@ -8,4 +8,10 @@ public interface AdminAuditLogRepository extends JpaRepository<AdminAuditLog, Lo
 
     /** Most-recent-first, for an admin activity feed. */
     List<AdminAuditLog> findAllByOrderByCreatedAtDesc();
+
+    /** Most-recent-first, limited to one store's actions. */
+    List<AdminAuditLog> findByMerchantIdOrderByCreatedAtDesc(Long merchantId);
+
+    /** The latest actions for one store, for the store-detail "recent activity". */
+    List<AdminAuditLog> findTop20ByMerchantIdOrderByCreatedAtDesc(Long merchantId);
 }
