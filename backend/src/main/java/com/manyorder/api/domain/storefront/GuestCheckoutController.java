@@ -29,6 +29,7 @@ import com.manyorder.api.domain.order.OrderRepository;
 import com.manyorder.api.domain.order.OrderService;
 import com.manyorder.api.domain.order.OrderSource;
 import com.manyorder.api.domain.order.OrderType;
+import com.manyorder.api.domain.order.TrackingTokens;
 import com.manyorder.api.domain.product.Product;
 import com.manyorder.api.domain.product.ProductRepository;
 import com.manyorder.api.util.PhoneNumbers;
@@ -179,6 +180,8 @@ public class GuestCheckoutController {
         //    by a shared mapper, so lookup and checkout render identically.
         boolean split = !ready.isEmpty() && !preorder.isEmpty();
         List<Order> orders = new ArrayList<>();
+        // One tracking token for the whole checkout, shared by any split orders.
+        String trackingToken = TrackingTokens.generate();
 
         if (split) {
             String groupId = UUID.randomUUID().toString();
@@ -202,13 +205,13 @@ public class GuestCheckoutController {
 
             // The delivery fee (and any delivery discount) lives on the ready order;
             // the pre-order bucket has none, so it is never "free delivery".
-            orders.add(persistOrder(merchant, customer, orderType, request, groupId,
+            orders.add(persistOrder(merchant, customer, orderType, request, groupId, trackingToken,
                     ready, readySubtotal, deliveryFee, deliveryFeePending, readyDiscount, deliveryDiscount, freeDeliveryApplied, discountCode));
-            orders.add(persistOrder(merchant, customer, orderType, request, groupId,
+            orders.add(persistOrder(merchant, customer, orderType, request, groupId, trackingToken,
                     preorder, sumLines(preorder), BigDecimal.ZERO, false, preDiscount, BigDecimal.ZERO, false, discountCode));
         } else {
             List<Line> all = ready.isEmpty() ? preorder : ready; // exactly one bucket is non-empty
-            orders.add(persistOrder(merchant, customer, orderType, request, null,
+            orders.add(persistOrder(merchant, customer, orderType, request, null, trackingToken,
                     all, combinedSubtotal, deliveryFee, deliveryFeePending, combinedDiscount, deliveryDiscount, freeDeliveryApplied, discountCode));
         }
 
@@ -228,7 +231,7 @@ public class GuestCheckoutController {
 
     /** Persist one order + its items with the given money breakdown. */
     private Order persistOrder(Merchant merchant, Customer customer, OrderType orderType,
-                               GuestCheckoutRequest request, String groupId, List<Line> lines,
+                               GuestCheckoutRequest request, String groupId, String trackingToken, List<Line> lines,
                                BigDecimal subtotal, BigDecimal deliveryFee, boolean deliveryFeePending,
                                BigDecimal discount, BigDecimal deliveryDiscount, boolean freeDelivery, String discountCode) {
         Order order = new Order(customer, merchant, orderType,
@@ -236,6 +239,7 @@ public class GuestCheckoutController {
         order.setSource(OrderSource.STOREFRONT);
         order.setContactEmail(request.getCustomerEmail());
         order.setOrderGroupId(groupId);
+        order.setTrackingToken(trackingToken);
         if (request.getNotes() != null && !request.getNotes().isBlank()) {
             order.setNotes(request.getNotes().trim());
         }
@@ -343,7 +347,7 @@ public class GuestCheckoutController {
                 primary.getDeliveryAddress(), primary.getNotes(),
                 primary.getStatus().name(), primary.getPaymentStatus().name(),
                 subtotal, deliveryFee, pending, discount, deliveryDiscount, freeDelivery, discountCode, total,
-                primary.getCreatedAt(), allItems, summaries);
+                primary.getCreatedAt(), allItems, summaries, primary.getTrackingToken());
     }
 
     /** An order is a pre-order order when all its items are pre-order products. */

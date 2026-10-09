@@ -37,6 +37,8 @@ public class GuestCheckoutResponse {
     private List<ItemSummary> items;
     /** Per-order breakdown: one entry normally, two when split (ready + pre-order). */
     private List<OrderSummary> orders;
+    /** Private tracking token for this checkout, for the "Copy tracking link" button. */
+    private String trackingToken;
 
     public GuestCheckoutResponse(String orderGroupId, Long orderId, String storeName, String storePhone,
                                   String paymentInstruction, String paymentMethod,
@@ -45,7 +47,7 @@ public class GuestCheckoutResponse {
                                   String paymentStatus, BigDecimal subtotal, BigDecimal deliveryFee,
                                   boolean deliveryFeePending, BigDecimal discountAmount, BigDecimal deliveryDiscount,
                                   boolean freeDelivery, String discountCode, BigDecimal totalAmount, LocalDateTime createdAt,
-                                  List<ItemSummary> items, List<OrderSummary> orders) {
+                                  List<ItemSummary> items, List<OrderSummary> orders, String trackingToken) {
         this.orderGroupId = orderGroupId;
         this.orderId = orderId;
         this.storeName = storeName;
@@ -69,6 +71,7 @@ public class GuestCheckoutResponse {
         this.createdAt = createdAt;
         this.items = items;
         this.orders = orders;
+        this.trackingToken = trackingToken;
     }
 
     public String getOrderGroupId() { return orderGroupId; }
@@ -94,6 +97,7 @@ public class GuestCheckoutResponse {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public List<ItemSummary> getItems() { return items; }
     public List<OrderSummary> getOrders() { return orders; }
+    public String getTrackingToken() { return trackingToken; }
 
     /** One split order's own breakdown. kind: READY | PREORDER | STANDARD. */
     public static class OrderSummary {

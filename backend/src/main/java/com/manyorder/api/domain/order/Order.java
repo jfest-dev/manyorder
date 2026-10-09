@@ -16,12 +16,13 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", indexes = @Index(name = "idx_orders_tracking_token", columnList = "tracking_token"))
 public class Order {
 
     @Id
@@ -111,6 +112,17 @@ public class Order {
      */
     private String orderGroupId;
 
+    /**
+     * Private, unguessable tracking reference for a storefront checkout, shared by
+     * the (split) orders of that checkout. Null for older orders and manual orders,
+     * which are still found via Find my order (order number + phone). The value is
+     * a 128-bit+ URL-safe random string, so it is effectively unique across
+     * checkouts without a DB unique constraint (which could not coexist with the
+     * same token living on two split-order rows).
+     */
+    @Column(name = "tracking_token")
+    private String trackingToken;
+
     @Column(nullable = false)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
@@ -188,6 +200,8 @@ public class Order {
     public void setDeliveryAddress(String deliveryAddress) { this.deliveryAddress = deliveryAddress; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public String getTrackingToken() { return trackingToken; }
+    public void setTrackingToken(String trackingToken) { this.trackingToken = trackingToken; }
     public LocalDate getScheduledDate() { return scheduledDate; }
     public void setScheduledDate(LocalDate scheduledDate) { this.scheduledDate = scheduledDate; }
     public LocalTime getScheduledTime() { return scheduledTime; }

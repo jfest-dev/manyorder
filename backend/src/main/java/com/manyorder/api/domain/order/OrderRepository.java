@@ -27,6 +27,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     /** When the store's most recent order was placed, or null if it has none. */
     @Query("SELECT MAX(o.createdAt) FROM Order o WHERE o.merchant = :merchant")
     LocalDateTime findLastOrderAt(@Param("merchant") Merchant merchant);
+
+    /** All orders of a checkout, by its shared tracking token (empty if unknown). */
+    List<Order> findByTrackingToken(String trackingToken);
     List<Order> findByMerchantAndOrderGroupIdOrderByIdAsc(Merchant merchant, String orderGroupId);
     List<Order> findByMerchantAndStatusOrderByCreatedAtDesc(Merchant merchant, OrderStatus status);
     List<Order> findByMerchantAndCreatedAtBetween(Merchant merchant, LocalDateTime start, LocalDateTime end);
