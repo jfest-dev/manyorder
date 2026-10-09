@@ -173,20 +173,24 @@ export function AdminApp() {
         {selected && (
           <div>
             {/* "Acting as Platform Admin on {store}" context bar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
               <div>
                 <button type="button" onClick={() => setSelected(null)}
-                  style={{ background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, padding: 0, marginBottom: 4 }}>
+                  style={{ background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, padding: 0, marginBottom: 10 }}>
                   ← All merchants
                 </button>
-                <h2 style={{ margin: 0, fontSize: 16 }}>{selected.name}</h2>
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Acting as Platform Admin · /{selected.slug} · owner {selected.ownerEmail}
+                <h2 style={{ margin: '0 0 8px', fontSize: 16, lineHeight: 1.3 }}>{selected.name}</h2>
+                <div className="text-xs" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  <span>Acting as Platform Admin</span>
+                  <span aria-hidden="true">·</span>
+                  <span>/{selected.slug}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>owner {selected.ownerEmail}</span>
                 </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 20, flexWrap: 'wrap' }}>
               {(['overview', 'customers', 'products', 'orders', 'marketing'] as const).map((t) => (
                 <button key={t} type="button" onClick={() => setTab(t)}
                   style={{ padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,

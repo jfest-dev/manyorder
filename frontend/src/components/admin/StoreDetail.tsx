@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
-import { adminApi, AdminStoreDetail, AdminAuditLogEntry, ApiError } from '../../lib/api';
+import { adminApi, AdminStoreDetail, AdminAuditLogEntry, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { formatDate, formatDateTime } from '../../lib/adminDatetime';
 
 const EMPTY = '-';
-function dt(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString() : EMPTY;
-}
 function text(v: string | null | undefined): string {
   return v && v.trim() !== '' ? v : EMPTY;
 }
@@ -37,10 +35,11 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Read-only Platform Admin store overview: owner, stored profile, activity, recent admin actions. */
+/** Read-only Platform Admin store overview: activity first, then owner, profile and admin activity. */
 export function StoreDetail({ merchantId }: { merchantId: number }) {
   const [detail, setDetail] = useState<AdminStoreDetail | null>(null);
   const [actions, setActions] = useState<AdminAuditLogEntry[]>([]);
+  const [products, setProducts] = useState<ProductResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,8 +47,12 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([adminApi.storeDetail(merchantId), adminApi.auditLog(merchantId)])
-      .then(([d, log]) => { if (!cancelled) { setDetail(d); setActions(log); } })
+    Promise.all([
+      adminApi.storeDetail(merchantId),
+      adminApi.auditLog(merchantId),
+      adminApi.productsFor(merchantId).list(),
+    ])
+      .then(([d, log, prods]) => { if (!cancelled) { setDetail(d); setActions(log); setProducts(prods); } })
       .catch((e) => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load store detail'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -60,17 +63,53 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
   if (!detail) return null;
 
   const { owner, profile, activity } = detail;
-  const money = (n: number) => formatMoney(n, activity.revenueCurrency || detail.currency);
+  const currency = activity.revenueCurrency || detail.currency;
+  const money = (n: number) => formatMoney(n, currency);
+
+  const bestSellers = [...products]
+    .filter((p) => p.unitsSold > 0)
+    .sort((a, b) => b.unitsSold - a.unitsSold)
+    .slice(0, 5);
 
   return (
     <div>
+      {/* Activity (first) */}
+      <div style={cardStyle}>
+        <p style={titleStyle}>Activity</p>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.1 }}>{money(activity.revenue)}</div>
+          <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>Revenue (completed and delivered)</div>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+          <Stat label="Orders" value={String(activity.orderCount)} />
+          <Stat label="Customers" value={String(activity.customerCount)} />
+          <Stat label="Products" value={String(activity.productCount)} />
+          <Stat label="Low stock" value={String(activity.lowStockCount)} />
+        </div>
+        <Row label="Last order" value={formatDateTime(activity.lastOrderAt)} />
+
+        <div style={{ marginTop: 14 }}>
+          <div className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: 6 }}>Best sellers (by units sold)</div>
+          {bestSellers.length === 0 ? (
+            <p className="text-small" style={{ color: 'var(--text-muted)', margin: 0 }}>No sales yet.</p>
+          ) : (
+            bestSellers.map((p, i) => (
+              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '6px 0', borderTop: i === 0 ? 'none' : '1px solid var(--border-subtle)' }}>
+                <span className="text-small" style={{ color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                <span className="text-small" style={{ color: 'var(--text-secondary)', flexShrink: 0 }}>{p.unitsSold} sold</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Owner */}
       <div style={cardStyle}>
         <p style={titleStyle}>Owner</p>
         <Row label="Name" value={text(owner.name)} />
         <Row label="Email" value={text(owner.email)} />
         <Row label="Email verified" value={owner.verified ? 'Yes' : 'No'} />
-        <Row label="Owner since" value={dt(owner.createdAt)} />
+        <Row label="Owner since" value={formatDate(owner.createdAt)} />
       </div>
 
       {/* Store profile */}
@@ -86,30 +125,19 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
         <Row label="Fulfilment" value={text(profile.fulfilmentMode)} />
         <Row label="Delivery fee" value={profile.deliveryFee != null ? money(profile.deliveryFee) : EMPTY} />
         <Row label="Free delivery over" value={profile.freeDeliveryThreshold != null ? money(profile.freeDeliveryThreshold) : EMPTY} />
-        <Row label="WhatsApp verified" value={profile.whatsappVerified ? 'Yes' : 'No'} />
         <Row label="New-order email" value={profile.notifyNewOrderEmail ? 'On' : 'Off'} />
         <Row label="Low-stock email" value={profile.notifyLowStockEmail ? 'On' : 'Off'} />
         <Row label="Item notes" value={profile.itemNotesEnabled ? 'On' : 'Off'} />
-        <Row label="Created" value={dt(profile.createdAt)} />
-        <Row label="Last viewed orders" value={dt(profile.lastOrdersViewedAt)} />
+        <Row label="Created" value={formatDateTime(profile.createdAt)} />
+        <Row label="Last viewed orders" value={formatDateTime(profile.lastOrdersViewedAt)} />
+        <Row label="Suspended" value={formatDateTime(profile.suspendedAt)} />
+        <Row label="Archived" value={formatDateTime(profile.archivedAt)} />
       </div>
 
-      {/* Activity */}
+      {/* Admin activity on this store */}
       <div style={cardStyle}>
-        <p style={titleStyle}>Activity</p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
-          <Stat label="Products" value={String(activity.productCount)} />
-          <Stat label="Orders" value={String(activity.orderCount)} />
-          <Stat label="Customers" value={String(activity.customerCount)} />
-          <Stat label="Low stock" value={String(activity.lowStockCount)} />
-        </div>
-        <Row label="Revenue (completed + delivered)" value={money(activity.revenue)} />
-        <Row label="Last order" value={dt(activity.lastOrderAt)} />
-      </div>
-
-      {/* Recent admin actions */}
-      <div style={cardStyle}>
-        <p style={titleStyle}>Recent admin actions</p>
+        <p style={{ ...titleStyle, marginBottom: 4 }}>Admin activity on this store</p>
+        <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '0 0 12px' }}>Changes platform admins made to this store.</p>
         {actions.length === 0 ? (
           <p className="text-small" style={{ color: 'var(--text-muted)', margin: 0 }}>No admin actions on this store yet.</p>
         ) : (
@@ -124,7 +152,7 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{a.actorEmail}</div>
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{dt(a.createdAt)}</div>
+                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDateTime(a.createdAt)}</div>
               </div>
             </div>
           ))

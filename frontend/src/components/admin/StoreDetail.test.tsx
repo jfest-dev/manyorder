@@ -4,14 +4,26 @@ import { render, screen, cleanup } from '@testing-library/react';
 
 const storeDetail = vi.fn();
 const auditLog = vi.fn();
+const productsList = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api')>();
   return {
     ...actual,
-    adminApi: { ...actual.adminApi, storeDetail: () => storeDetail(), auditLog: () => auditLog() },
+    adminApi: {
+      ...actual.adminApi,
+      storeDetail: () => storeDetail(),
+      auditLog: () => auditLog(),
+      productsFor: () => ({ list: () => productsList() }),
+    },
   };
 });
+
+const PRODUCTS = [
+  { id: 1, name: 'Latte', price: 6, stock: 10, isActive: true, preOrder: false, unitsSold: 40, categoryName: null, categoryDisplayOrder: null, sku: null, photoUrl: null },
+  { id: 2, name: 'Mocha', price: 6, stock: 10, isActive: true, preOrder: false, unitsSold: 10, categoryName: null, categoryDisplayOrder: null, sku: null, photoUrl: null },
+  { id: 3, name: 'Still Tea', price: 4, stock: 10, isActive: true, preOrder: false, unitsSold: 0, categoryName: null, categoryDisplayOrder: null, sku: null, photoUrl: null },
+];
 
 import { StoreDetail } from './StoreDetail';
 
@@ -43,28 +55,41 @@ beforeEach(() => {
   cleanup();
   storeDetail.mockReset().mockResolvedValue(DETAIL);
   auditLog.mockReset().mockResolvedValue(ACTIONS);
+  productsList.mockReset().mockResolvedValue(PRODUCTS);
 });
 
 describe('StoreDetail', () => {
-  it('shows owner, profile, activity numbers and recent admin actions', async () => {
+  it('shows activity (with best sellers), owner, profile and admin activity', async () => {
     render(<StoreDetail merchantId={5} />);
 
     expect(await screen.findByText('owner@kiri.test')).toBeTruthy();
     // Profile
     expect(screen.getByText('hello@kiri.test')).toBeTruthy();
     expect(screen.getByText('+6581234567')).toBeTruthy();
-    // Activity numbers
+    // Activity numbers + best sellers (Still Tea has 0 sales, excluded)
     expect(screen.getByText('12')).toBeTruthy(); // products
-    expect(screen.getByText('2')).toBeTruthy();  // low stock
-    // Recent admin action from the audit-log endpoint
+    expect(screen.getByText('Latte')).toBeTruthy();
+    expect(screen.getByText('40 sold')).toBeTruthy();
+    expect(screen.queryByText('Still Tea')).toBeNull();
+    // Renamed admin-activity section
+    expect(screen.getByText('Admin activity on this store')).toBeTruthy();
+    expect(screen.getByText('Changes platform admins made to this store.')).toBeTruthy();
     expect(screen.getByText('DEACTIVATE_PRODUCT')).toBeTruthy();
-    expect(screen.getByText('admin@manyorder.app')).toBeTruthy();
+    // Shared date helper: "2 January 2026", never numeric with seconds
+    expect(screen.getByText('2 January 2026')).toBeTruthy();
   });
 
-  it('uses the store-filtered audit log for recent actions', async () => {
+  it('hides the non-functional WhatsApp-verified field', async () => {
+    render(<StoreDetail merchantId={5} />);
+    await screen.findByText('owner@kiri.test');
+    expect(screen.queryByText(/WhatsApp verified/i)).toBeNull();
+  });
+
+  it('uses the store-filtered audit log and products for this store', async () => {
     render(<StoreDetail merchantId={5} />);
     await screen.findByText('owner@kiri.test');
     expect(auditLog).toHaveBeenCalledTimes(1);
     expect(storeDetail).toHaveBeenCalledTimes(1);
+    expect(productsList).toHaveBeenCalledTimes(1);
   });
 });
