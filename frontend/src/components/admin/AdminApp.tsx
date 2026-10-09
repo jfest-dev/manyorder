@@ -9,6 +9,7 @@ import { ProductsList } from '../screens/ProductsList';
 import { Marketing } from '../screens/Marketing';
 import { Orders } from '../screens/Orders';
 import { StoreDetail } from './StoreDetail';
+import { StoreHeader } from './StoreHeader';
 
 const STATUS_STYLE: Record<AdminMerchantSummary['status'], { bg: string; color: string; label: string }> = {
   ACTIVE: { bg: '#ECFDF5', color: '#047857', label: 'Active' },
@@ -179,16 +180,11 @@ export function AdminApp() {
                   style={{ background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, padding: 0, marginBottom: 10 }}>
                   ← All merchants
                 </button>
-                <h2 style={{ margin: '0 0 8px', fontSize: 16, lineHeight: 1.3 }}>{selected.name}</h2>
-                <div className="text-xs" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                  <span>Acting as Platform Admin</span>
-                  <span aria-hidden="true">·</span>
-                  <span>/{selected.slug}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>owner {selected.ownerEmail}</span>
-                </div>
+                <h2 style={{ margin: '0 0 12px', fontSize: 16, lineHeight: 1.3 }}>{selected.name}</h2>
               </div>
             </div>
+
+            <StoreHeader summary={selected} />
 
             <div style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 20, flexWrap: 'wrap' }}>
               {(['overview', 'customers', 'products', 'orders', 'marketing'] as const).map((t) => (
