@@ -976,10 +976,69 @@ export interface AdminMerchantSummary {
   customerCount: number;
 }
 
+export interface AdminAuditLogEntry {
+  id: number;
+  actorEmail: string;
+  action: string;
+  targetType: string | null;
+  targetId: number | null;
+  merchantId: number | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+export interface AdminStoreDetail {
+  id: number;
+  name: string;
+  slug: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+  currency: string;
+  owner: { name: string; email: string; verified: boolean; createdAt: string };
+  profile: {
+    email: string | null;
+    phoneNumber: string | null;
+    businessType: string | null;
+    streetAddress: string | null;
+    city: string | null;
+    postalCode: string | null;
+    storeDescription: string | null;
+    operatingHours: string | null;
+    paymentInstruction: string | null;
+    fulfilmentMode: string | null;
+    deliveryFee: number | null;
+    freeDeliveryThreshold: number | null;
+    themeColor: string | null;
+    logoUrl: string | null;
+    whatsappVerified: boolean;
+    notifyNewOrderEmail: boolean;
+    notifyLowStockEmail: boolean;
+    notifyNewOrderWhatsapp: boolean;
+    notifyUrgentWhatsapp: boolean;
+    itemNotesEnabled: boolean;
+    createdAt: string;
+    suspendedAt: string | null;
+    archivedAt: string | null;
+    lastOrdersViewedAt: string | null;
+  };
+  activity: {
+    productCount: number;
+    orderCount: number;
+    customerCount: number;
+    revenue: number;
+    revenueCurrency: string;
+    lastOrderAt: string | null;
+    lowStockCount: number;
+  };
+  recentActions: AdminAuditLogEntry[];
+}
+
 export const adminApi = {
   metrics: () => request<AdminMetrics>('/admin/metrics'),
   listMerchants: () => request<AdminMerchantSummary[]>('/admin/merchants'),
   getMerchant: (merchantId: number) => request<AdminMerchantSummary>(`/admin/merchants/${merchantId}`),
+  storeDetail: (merchantId: number) => request<AdminStoreDetail>(`/admin/merchants/${merchantId}/detail`),
+  auditLog: (storeId?: number) =>
+    request<AdminAuditLogEntry[]>(`/admin/audit-log${storeId != null ? `?storeId=${storeId}` : ''}`),
   suspend: (merchantId: number) => request<void>(`/admin/merchants/${merchantId}/suspend`, { method: 'POST' }),
   unsuspend: (merchantId: number) => request<void>(`/admin/merchants/${merchantId}/unsuspend`, { method: 'POST' }),
 

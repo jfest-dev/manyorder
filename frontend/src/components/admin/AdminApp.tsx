@@ -8,6 +8,7 @@ import { Customers } from '../screens/Customers';
 import { ProductsList } from '../screens/ProductsList';
 import { Marketing } from '../screens/Marketing';
 import { Orders } from '../screens/Orders';
+import { StoreDetail } from './StoreDetail';
 
 const STATUS_STYLE: Record<AdminMerchantSummary['status'], { bg: string; color: string; label: string }> = {
   ACTIVE: { bg: '#ECFDF5', color: '#047857', label: 'Active' },
@@ -36,7 +37,7 @@ export function AdminApp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AdminMerchantSummary | null>(null);
-  const [tab, setTab] = useState<'customers' | 'products' | 'orders' | 'marketing'>('customers');
+  const [tab, setTab] = useState<'overview' | 'customers' | 'products' | 'orders' | 'marketing'>('overview');
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
@@ -146,7 +147,7 @@ export function AdminApp() {
                         <td style={{ padding: '10px 14px' }}>{m.orderCount}</td>
                         <td style={{ padding: '10px 14px' }}>{m.customerCount}</td>
                         <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                          <button type="button" onClick={() => setSelected(m)} aria-label={`View ${m.name}`}
+                          <button type="button" onClick={() => { setSelected(m); setTab('overview'); }} aria-label={`View ${m.name}`}
                             style={{ marginRight: 12, background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600 }}>
                             View
                           </button>
@@ -186,7 +187,7 @@ export function AdminApp() {
             </div>
 
             <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border-subtle)', marginBottom: 16 }}>
-              {(['customers', 'products', 'orders', 'marketing'] as const).map((t) => (
+              {(['overview', 'customers', 'products', 'orders', 'marketing'] as const).map((t) => (
                 <button key={t} type="button" onClick={() => setTab(t)}
                   style={{ padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
                     textTransform: 'capitalize', color: tab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
@@ -196,6 +197,7 @@ export function AdminApp() {
               ))}
             </div>
 
+            {tab === 'overview' && <StoreDetail merchantId={selected.id} />}
             {tab === 'customers' && (
               <Customers storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} />
             )}
