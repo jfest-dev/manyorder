@@ -20,7 +20,6 @@ import com.manyorder.api.domain.discount.DiscountService;
 import com.manyorder.api.domain.discount.ReorderDiscountsRequest;
 import com.manyorder.api.domain.discount.UpdateDiscountRequest;
 import com.manyorder.api.domain.merchant.Merchant;
-import com.manyorder.api.domain.user.User;
 import com.manyorder.api.security.CurrentUserService;
 import com.manyorder.api.security.StoreAccessService;
 
@@ -34,16 +33,13 @@ public class AdminDiscountController {
     private final DiscountService discountService;
     private final CurrentUserService currentUserService;
     private final StoreAccessService storeAccessService;
-    private final AdminAuditService adminAuditService;
 
     public AdminDiscountController(DiscountService discountService,
                                    CurrentUserService currentUserService,
-                                   StoreAccessService storeAccessService,
-                                   AdminAuditService adminAuditService) {
+                                   StoreAccessService storeAccessService) {
         this.discountService = discountService;
         this.currentUserService = currentUserService;
         this.storeAccessService = storeAccessService;
-        this.adminAuditService = adminAuditService;
     }
 
     private Merchant store(Authentication auth, Long merchantId) {
@@ -77,9 +73,6 @@ public class AdminDiscountController {
     @DeleteMapping("/{discountId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long merchantId, @PathVariable Long discountId, Authentication auth) {
-        User admin = currentUserService.require(auth);
-        Merchant merchant = storeAccessService.requireStoreForAdmin(admin, merchantId);
-        discountService.deleteDiscount(merchant, discountId);
-        adminAuditService.record(admin, "DELETE_DISCOUNT", "DISCOUNT", discountId, "@ " + merchant.getName());
+        discountService.deleteDiscount(store(auth, merchantId), discountId);
     }
 }

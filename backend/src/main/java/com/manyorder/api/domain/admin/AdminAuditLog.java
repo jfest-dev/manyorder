@@ -41,6 +41,10 @@ public class AdminAuditLog {
     /** Id of the acted-on row (null for actions without a single target). */
     private Long targetId;
 
+    /** The store (merchant) the action is scoped to, so the log can be filtered
+     *  per store. Set for every admin action (they are all store-scoped). */
+    private Long merchantId;
+
     /** Human-readable context, e.g. the store name or product name at the time. */
     @Column(columnDefinition = "TEXT")
     private String detail;
@@ -53,12 +57,13 @@ public class AdminAuditLog {
     }
 
     public AdminAuditLog(Long actorUserId, String actorEmail, String action,
-                         String targetType, Long targetId, String detail) {
+                         String targetType, Long targetId, Long merchantId, String detail) {
         this.actorUserId = actorUserId;
         this.actorEmail = actorEmail;
         this.action = action;
         this.targetType = targetType;
         this.targetId = targetId;
+        this.merchantId = merchantId;
         this.detail = detail;
         this.createdAt = LocalDateTime.now();
     }
@@ -69,6 +74,7 @@ public class AdminAuditLog {
     public String getAction() { return action; }
     public String getTargetType() { return targetType; }
     public Long getTargetId() { return targetId; }
+    public Long getMerchantId() { return merchantId; }
     public String getDetail() { return detail; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

@@ -20,8 +20,9 @@ public class AdminAuditService {
     }
 
     @Transactional
-    public AdminAuditLog record(User actor, String action, String targetType, Long targetId, String detail) {
+    public AdminAuditLog record(User actor, String action, String targetType,
+                                Long targetId, Long merchantId, String detail) {
         return repository.save(new AdminAuditLog(
-                actor.getId(), actor.getEmail(), action, targetType, targetId, detail));
+                actor.getId(), actor.getEmail(), action, targetType, targetId, merchantId, detail));
     }
 }

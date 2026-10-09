@@ -20,7 +20,6 @@ import com.manyorder.api.domain.product.ProductResponse;
 import com.manyorder.api.domain.product.ProductService;
 import com.manyorder.api.domain.product.ReorderProductsRequest;
 import com.manyorder.api.domain.product.UpdateProductRequest;
-import com.manyorder.api.domain.user.User;
 import com.manyorder.api.security.CurrentUserService;
 import com.manyorder.api.security.StoreAccessService;
 
@@ -40,16 +39,13 @@ public class AdminProductController {
     private final ProductService productService;
     private final CurrentUserService currentUserService;
     private final StoreAccessService storeAccessService;
-    private final AdminAuditService adminAuditService;
 
     public AdminProductController(ProductService productService,
                                   CurrentUserService currentUserService,
-                                  StoreAccessService storeAccessService,
-                                  AdminAuditService adminAuditService) {
+                                  StoreAccessService storeAccessService) {
         this.productService = productService;
         this.currentUserService = currentUserService;
         this.storeAccessService = storeAccessService;
-        this.adminAuditService = adminAuditService;
     }
 
     private Merchant store(Authentication auth, Long merchantId) {
@@ -98,11 +94,8 @@ public class AdminProductController {
     @DeleteMapping("/{productId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long merchantId, @PathVariable Long productId, Authentication auth) {
-        User admin = currentUserService.require(auth);
-        Merchant merchant = storeAccessService.requireStoreForAdmin(admin, merchantId);
-        ProductResponse product = productService.getProduct(merchant, productId); // 404 if not this store's
+        Merchant merchant = store(auth, merchantId);
+        productService.getProduct(merchant, productId); // 404 if not this store's
         productService.deleteProduct(merchant, productId);
-        adminAuditService.record(admin, "DELETE_PRODUCT", "PRODUCT", productId,
-                product.getName() + " @ " + merchant.getName());
     }
 }

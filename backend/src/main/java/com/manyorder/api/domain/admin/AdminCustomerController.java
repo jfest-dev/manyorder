@@ -19,7 +19,6 @@ import com.manyorder.api.domain.customer.CustomerResponse;
 import com.manyorder.api.domain.customer.CustomerService;
 import com.manyorder.api.domain.customer.UpdateCustomerRequest;
 import com.manyorder.api.domain.merchant.Merchant;
-import com.manyorder.api.domain.user.User;
 import com.manyorder.api.security.CurrentUserService;
 import com.manyorder.api.security.StoreAccessService;
 
@@ -33,16 +32,13 @@ public class AdminCustomerController {
     private final CustomerService customerService;
     private final CurrentUserService currentUserService;
     private final StoreAccessService storeAccessService;
-    private final AdminAuditService adminAuditService;
 
     public AdminCustomerController(CustomerService customerService,
                                    CurrentUserService currentUserService,
-                                   StoreAccessService storeAccessService,
-                                   AdminAuditService adminAuditService) {
+                                   StoreAccessService storeAccessService) {
         this.customerService = customerService;
         this.currentUserService = currentUserService;
         this.storeAccessService = storeAccessService;
-        this.adminAuditService = adminAuditService;
     }
 
     private Merchant store(Authentication auth, Long merchantId) {
@@ -70,9 +66,6 @@ public class AdminCustomerController {
     @DeleteMapping("/{customerId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable Long merchantId, @PathVariable Long customerId, Authentication auth) {
-        User admin = currentUserService.require(auth);
-        Merchant merchant = storeAccessService.requireStoreForAdmin(admin, merchantId);
-        customerService.deleteCustomer(merchant, customerId);
-        adminAuditService.record(admin, "DELETE_CUSTOMER", "CUSTOMER", customerId, "@ " + merchant.getName());
+        customerService.deleteCustomer(store(auth, merchantId), customerId);
     }
 }

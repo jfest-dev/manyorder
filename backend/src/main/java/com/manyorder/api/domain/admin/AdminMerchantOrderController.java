@@ -17,7 +17,6 @@ import com.manyorder.api.domain.order.OrderService;
 import com.manyorder.api.domain.order.OrderStatus;
 import com.manyorder.api.domain.order.UpdateOrderStatusRequest;
 import com.manyorder.api.domain.order.UpdatePaymentStatusRequest;
-import com.manyorder.api.domain.user.User;
 import com.manyorder.api.security.CurrentUserService;
 import com.manyorder.api.security.StoreAccessService;
 
@@ -36,16 +35,13 @@ public class AdminMerchantOrderController {
     private final OrderService orderService;
     private final CurrentUserService currentUserService;
     private final StoreAccessService storeAccessService;
-    private final AdminAuditService adminAuditService;
 
     public AdminMerchantOrderController(OrderService orderService,
                                         CurrentUserService currentUserService,
-                                        StoreAccessService storeAccessService,
-                                        AdminAuditService adminAuditService) {
+                                        StoreAccessService storeAccessService) {
         this.orderService = orderService;
         this.currentUserService = currentUserService;
         this.storeAccessService = storeAccessService;
-        this.adminAuditService = adminAuditService;
     }
 
     private Merchant store(Authentication auth, Long merchantId) {
@@ -67,22 +63,12 @@ public class AdminMerchantOrderController {
     @PatchMapping("/{orderId}/status")
     public OrderResponse updateStatus(@PathVariable Long merchantId, @PathVariable Long orderId,
                                       @Valid @RequestBody UpdateOrderStatusRequest request, Authentication auth) {
-        User admin = currentUserService.require(auth);
-        Merchant merchant = storeAccessService.requireStoreForAdmin(admin, merchantId);
-        OrderResponse updated = orderService.updateOrderStatus(merchant, orderId, request.getStatus());
-        adminAuditService.record(admin, "UPDATE_ORDER_STATUS", "ORDER", orderId,
-                "status=" + request.getStatus() + " @ " + merchant.getName());
-        return updated;
+        return orderService.updateOrderStatus(store(auth, merchantId), orderId, request.getStatus());
     }
 
     @PatchMapping("/{orderId}/payment-status")
     public OrderResponse updatePaymentStatus(@PathVariable Long merchantId, @PathVariable Long orderId,
                                              @Valid @RequestBody UpdatePaymentStatusRequest request, Authentication auth) {
-        User admin = currentUserService.require(auth);
-        Merchant merchant = storeAccessService.requireStoreForAdmin(admin, merchantId);
-        OrderResponse updated = orderService.updatePaymentStatus(merchant, orderId, request.getPaymentStatus());
-        adminAuditService.record(admin, "UPDATE_ORDER_PAYMENT_STATUS", "ORDER", orderId,
-                "paymentStatus=" + request.getPaymentStatus() + " @ " + merchant.getName());
-        return updated;
+        return orderService.updatePaymentStatus(store(auth, merchantId), orderId, request.getPaymentStatus());
     }
 }

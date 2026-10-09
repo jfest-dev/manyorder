@@ -27,7 +27,7 @@ class AdminAuditServiceTest extends IntegrationTestBase {
                 new User("Platform Admin", "audit-actor@test.com", "x", UserRole.PLATFORM_ADMIN));
 
         AdminAuditLog saved = adminAuditService.record(
-                admin, "SUSPEND_MERCHANT", "MERCHANT", 4242L, "Kiri Brew");
+                admin, "SUSPEND_MERCHANT", "MERCHANT", 4242L, 4242L, "Kiri Brew");
 
         assertNotNull(saved.getId(), "row is persisted");
         assertNotNull(saved.getCreatedAt(), "timestamp is stamped");
@@ -36,6 +36,7 @@ class AdminAuditServiceTest extends IntegrationTestBase {
         assertEquals("SUSPEND_MERCHANT", saved.getAction());
         assertEquals("MERCHANT", saved.getTargetType());
         assertEquals(4242L, saved.getTargetId());
+        assertEquals(4242L, saved.getMerchantId(), "store scope recorded");
         assertEquals("Kiri Brew", saved.getDetail());
 
         // Reloadable by id, and appears in the most-recent-first feed.

@@ -64,7 +64,7 @@ public class AdminMerchantController {
         if (!merchant.isSuspended()) {
             merchant.setSuspendedAt(LocalDateTime.now());
             merchantRepository.save(merchant);
-            adminAuditService.record(admin, "SUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getName());
+            adminAuditService.record(admin, "SUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), merchant.getName());
         }
     }
 
@@ -78,7 +78,7 @@ public class AdminMerchantController {
         if (merchant.isSuspended()) {
             merchant.setSuspendedAt(null);
             merchantRepository.save(merchant);
-            adminAuditService.record(admin, "UNSUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getName());
+            adminAuditService.record(admin, "UNSUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), merchant.getName());
         }
     }
 
