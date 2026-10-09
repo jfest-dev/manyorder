@@ -496,3 +496,36 @@ and have `toSummary` read from the maps. That turns 3N + 1 queries into 4 total.
 
 Low priority: do this after private networking has been tested, since the
 per-query latency fix may make this irrelevant at current merchant counts.
+
+## Admin audit: capture target id and a short note for creates
+
+The admin audit interceptor records create actions (CREATE_PRODUCT, CREATE_CUSTOMER,
+CREATE_DISCOUNT) with a null target id, because the new row's id is in the response
+body, not the request path, and the interceptor reads only the path. It also stores
+no free-text detail for any interceptor-recorded row (suspend/unsuspend still carry
+a note from their inline audit).
+
+Later: capture the created row's id from the response (e.g. read the Location header
+or the JSON body's id in the interceptor, or move creates to a small explicit audit
+call) and add a short human-readable detail (such as the product or discount name)
+so the audit log and the store Overview read clearly for creates too.
+
+## Private database address: diagnose before switching again
+
+Switching SPRING_DATASOURCE_URL to jdbc:postgresql://postgres.railway.internal:5432/railway
+crashed the backend on Railway. Before trying the private address again, capture the
+exact first error line from the deploy log and keep it (it tells apart an
+UnknownHostException from a connection refused/timeout), then revert to the known-good
+public proxy URL so the service stays up. Then check, without changing anything live:
+
+- JAVA_TOOL_OPTIONS (and any Dockerfile/launch JVM args) for
+  `-Djava.net.preferIPv4Stack=true`, which breaks the IPv6-only *.railway.internal
+  resolution.
+- That the Postgres service's RAILWAY_PRIVATE_DOMAIN exactly matches the host in the
+  URL (the service may have been renamed).
+- The backend's base image (Alpine/musl resolves IPv6-only private DNS less reliably
+  than a glibc image), and that both services share one project/environment with
+  private networking on.
+
+See the Part D notes for the full reasoning. The public proxy works (just slower), so
+this is a networking/resolution issue, not credentials.
