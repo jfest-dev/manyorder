@@ -10,6 +10,7 @@ import java.util.List;
  */
 public record TrackingResponse(
         String storeName,
+        String currency,
         String contactLink,
         String orderType,          // fulfilment type: PICKUP | DELIVERY
         String notes,              // the order's own notes to the store

@@ -26,6 +26,7 @@ import { ForgotPassword } from './components/screens/ForgotPassword';
 import { ResetPassword } from './components/screens/ResetPassword';
 import { VerifyEmail } from './components/screens/VerifyEmail';
 import { StorefrontApp } from './components/storefront/StorefrontApp';
+import { TrackOrderView } from './components/storefront/TrackOrderView';
 
 import { useAuth } from './context/AuthContext';
 import { ApiError, storesApi, uploadsApi, ordersApi, StoreResponse } from './lib/api';
@@ -829,6 +830,9 @@ export default function App() {
       {/* Public storefront - customer-facing, no auth, no dashboard chrome.
           Matched after the static routes above; a reserved-slug guard keeps
           store links from shadowing them. */}
+      {/* Private order tracking by token. Before the storefront catch-all so a
+          store slug can't shadow it; noindex + no-referrer are set on the page. */}
+      <Route path="/track/:token" element={<TrackOrderView />} />
       <Route path="/:slug/*" element={<StorefrontApp />} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>

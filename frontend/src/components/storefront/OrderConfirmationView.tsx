@@ -100,6 +100,18 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
     } catch { /* clipboard blocked - the number is on screen to copy manually */ }
   };
 
+  // Private tracking link, built from the current site address (works on localhost and live).
+  const trackingUrl = result.trackingToken ? `${window.location.origin}/track/${result.trackingToken}` : null;
+  const [linkCopied, setLinkCopied] = useState(false);
+  const copyTrackingLink = async () => {
+    if (!trackingUrl) return;
+    try {
+      await navigator.clipboard.writeText(trackingUrl);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1500);
+    } catch { /* clipboard blocked - the link is on screen to copy manually */ }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: '#F3F4F6' }}>
       <div style={{ padding: '32px 16px 20px', textAlign: 'center', background: 'white', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -124,6 +136,21 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
         <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '10px', maxWidth: '300px', marginInline: 'auto' }}>
           Take a screenshot of this page. You'll need your order number and phone number to track your order.
         </p>
+
+        {trackingUrl && (
+          <div style={{ marginTop: '16px', maxWidth: '340px', marginInline: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: '#F9FAFB', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '8px 10px' }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{trackingUrl}</span>
+              <button onClick={copyTrackingLink} aria-label="Copy tracking link"
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '30px', padding: '0 10px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'white', color: linkCopied ? '#047857' : 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                {linkCopied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy tracking link</>}
+              </button>
+            </div>
+            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0 }}>
+              Save or screenshot this page. Use this link to check your order status anytime.
+            </p>
+          </div>
+        )}
       </div>
 
       <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>

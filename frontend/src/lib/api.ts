@@ -888,6 +888,35 @@ export interface GuestCheckoutResult {
   items: GuestCheckoutItemSummary[];
   /** Per-order breakdown: one entry normally, two when split. */
   orders: GuestCheckoutOrderSummary[];
+  /** Private tracking token for this checkout; null for older/manual orders. */
+  trackingToken: string | null;
+}
+
+/** Privacy-safe public tracking view (no customer phone, email, name or address). */
+export interface TrackingResult {
+  storeName: string;
+  currency: string;
+  contactLink: string;
+  orderType: string;
+  notes: string | null;
+  orderNumbers: number[];
+  subtotal: number;
+  deliveryFee: number;
+  discount: number;
+  total: number;
+  orders: {
+    orderNumber: number;
+    kind: string;
+    status: string;
+    items: {
+      name: string;
+      quantity: number;
+      unitPrice: number;
+      lineSubtotal: number;
+      modifiers: { groupName: string; optionName: string; priceDelta: number }[];
+      notes: string | null;
+    }[];
+  }[];
 }
 
 export interface DiscountValidationResult {
@@ -948,6 +977,10 @@ export const storefrontApi = {
   /** Re-open a saved order (and its split siblings) by number + phone. */
   lookupOrder: (slug: string, payload: { orderId: number; phone: string }) =>
     request<GuestCheckoutResult>(`/public/stores/${encodeURIComponent(slug)}/orders/lookup`, { method: 'POST', body: payload, auth: false }),
+
+  /** Read an order's public status by its private tracking token (token travels in the body). */
+  trackOrder: (token: string) =>
+    request<TrackingResult>(`/public/orders/track`, { method: 'POST', body: { token }, auth: false }),
 };
 
 // --- Platform Admin ---------------------------------------------------------

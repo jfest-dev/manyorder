@@ -88,7 +88,7 @@ public class PublicOrderTrackingController {
 
         String contactLink = frontendBaseUrl + "/" + store.getSlug();
         return new TrackingResponse(
-                store.getName(), contactLink, primary.getOrderType().name(), primary.getNotes(),
+                store.getName(), store.getCurrency(), contactLink, primary.getOrderType().name(), primary.getNotes(),
                 numbers, subtotal, deliveryFee, discount, total, tracked);
     }
 }
