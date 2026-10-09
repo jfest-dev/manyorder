@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, cleanup } from '@testing-library/react';
 
-const deleteMock = vi.fn().mockResolvedValue(undefined);
 const listMock = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
@@ -16,7 +14,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
         list: () => listMock(),
         create: vi.fn(),
         update: vi.fn(),
-        delete: (id: number) => deleteMock(id),
+        delete: vi.fn(),
       }),
     },
   };
@@ -34,25 +32,24 @@ const CUSTOMER: CustomerResponse = {
 beforeEach(() => {
   cleanup();
   listMock.mockReset().mockResolvedValue([CUSTOMER]);
-  deleteMock.mockClear();
 });
 
-describe('Customers (admin scope)', () => {
-  it('requires a typed-name confirm before deleting, then calls the admin delete', async () => {
-    const user = userEvent.setup();
+describe('Customers admin read-only vs editable', () => {
+  it('read-only: no Add, Edit or Delete', async () => {
+    render(<Customers storeId={9} currency="SGD" adminMerchantId={9} readOnly />);
+    await screen.findAllByText('Ada Lovelace');
+
+    expect(screen.queryByRole('button', { name: /Add Customer/i })).toBeNull();
+    expect(screen.queryByLabelText('Edit Ada Lovelace')).toBeNull();
+    expect(screen.queryByLabelText('Delete Ada Lovelace')).toBeNull();
+  });
+
+  it('editable: Add, Edit and Delete are present', async () => {
     render(<Customers storeId={9} currency="SGD" adminMerchantId={9} />);
     await screen.findAllByText('Ada Lovelace');
 
-    // Row delete opens the typed-name confirm (not the lightweight merchant confirm).
-    await user.click(screen.getAllByLabelText('Delete Ada Lovelace')[0]);
-
-    const del = await screen.findByRole('button', { name: 'Delete' });
-    expect((del as HTMLButtonElement).disabled).toBe(true);
-    expect(deleteMock).not.toHaveBeenCalled();
-
-    await user.type(screen.getByLabelText('Confirmation text'), 'Ada Lovelace');
-    await user.click(del);
-
-    await waitFor(() => expect(deleteMock).toHaveBeenCalledWith(42));
+    expect(screen.getByRole('button', { name: /Add Customer/i })).toBeTruthy();
+    expect(screen.getAllByLabelText('Edit Ada Lovelace').length).toBeGreaterThan(0);
+    expect(screen.getAllByLabelText('Delete Ada Lovelace').length).toBeGreaterThan(0);
   });
 });

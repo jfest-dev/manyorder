@@ -1,4 +1,4 @@
-import { Search, Plus, Download, Edit, Trash2, Package, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Search, Plus, Download, Edit, Package, AlertTriangle, TrendingUp } from 'lucide-react';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { ToggleSwitch } from '../ToggleSwitch';
@@ -7,17 +7,18 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { productsApi, adminApi, storesApi, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { LOW_STOCK_AT } from '../storefront/storefrontTypes';
-import { TypedDeleteConfirm } from '../TypedDeleteConfirm';
 
 interface ProductsListProps {
   storeId: number;
   currency: string;
   onNavigate?: (screen: string) => void;
   onEditProduct?: (productId: number) => void;
-  /** When set, manage THIS merchant's products via the /admin API (Platform Admin
-   *  drill-down): list, activate/deactivate, and delete (typed-name confirm).
-   *  Add/full-edit are hidden here — they stay in the merchant flow. */
+  /** When set, read THIS merchant's products via the /admin API (Platform Admin
+   *  drill-down): list plus activate/deactivate (hide/unhide). */
   adminMerchantId?: number;
+  /** View-only except hide/unhide: no Add, Edit, Delete or reorder. The admin
+   *  console switches this on; the merchant screen never does. */
+  readOnly?: boolean;
 }
 
 type DisplayStatus = 'active' | 'draft' | 'outofstock' | 'preorder';
@@ -99,7 +100,7 @@ function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string;
 
 const ALL_CATEGORIES = '__all__';
 
-export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adminMerchantId }: ProductsListProps) {
+export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adminMerchantId, readOnly = false }: ProductsListProps) {
   const isAdmin = adminMerchantId != null;
   const api = useMemo(() => (isAdmin
     ? adminApi.productsFor(adminMerchantId!)
@@ -117,8 +118,6 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
   const [products, setProducts] = useState<ProductResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ProductResponse | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   // Store-level item-customization setting, managed here alongside modifiers
   // (which live on each product's Add/Edit form). null until loaded.
@@ -229,22 +228,6 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
     }
   };
 
-  // Admin-only: permanently delete a product (typed-name confirm). Full field
-  // editing stays in the merchant flow, so admins get view + enable/disable + delete.
-  const confirmTypedDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      await api.delete(deleteTarget.id);
-      setProducts((prev) => prev.filter((p) => p.id !== deleteTarget.id));
-      setDeleteTarget(null);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not delete the product.');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   const handleExportProducts = () => {
     const headers = ['Product ID', 'Name', 'SKU', 'Category', 'Price', 'Stock', 'Units Sold', 'Status'];
     const csv = [
@@ -350,7 +333,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
           />
         </div>
 
-        {!isAdmin && (
+        {!readOnly && (
           <Button onClick={() => onNavigate?.('products-add')}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Plus size={16} />
@@ -399,11 +382,13 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
           <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--error-color)' }}>{error}</div>
         ) : (
           <>
-            <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '0 0 12px', padding: '0 8px' }}>
-              {filtering
-                ? 'Clear the search and category filter to reorder products.'
-                : 'Drag the grip to reorder. This is the order products appear on your storefront.'}
-            </p>
+            {!readOnly && (
+              <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '0 0 12px', padding: '0 8px' }}>
+                {filtering
+                  ? 'Clear the search and category filter to reorder products.'
+                  : 'Drag the grip to reorder. This is the order products appear on your storefront.'}
+              </p>
+            )}
 
             {/* Desktop Table */}
             <div className="desktop-table" style={{ overflowX: 'auto' }}>
@@ -421,14 +406,14 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
                   <ReorderableList
                     items={filtered}
                     getKey={(p) => p.id}
-                    disabled={filtering}
+                    disabled={filtering || readOnly}
                     onReorder={handleReorder}
                     renderRow={(p, { handle, setNodeRef, dragging }) => (
                       <tr
                         ref={setNodeRef as (el: HTMLTableRowElement | null) => void}
                         style={{ borderBottom: '1px solid var(--border-subtle)', opacity: dragging ? 0.6 : 1 }}
                       >
-                        <td style={{ padding: '12px 0 12px 8px', verticalAlign: 'middle' }}>{handle}</td>
+                        <td style={{ padding: '12px 0 12px 8px', verticalAlign: 'middle' }}>{!readOnly && handle}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <Thumb p={p} size={40} />
@@ -455,20 +440,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
                                 label={p.isActive ? 'Active' : 'Draft'}
                               />
                             </span>
-                            {isAdmin ? (
-                              <button
-                                onClick={() => setDeleteTarget(p)}
-                                aria-label={`Delete ${p.name}`}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
-                                  background: 'var(--bg-card-subtle)', border: '1px solid #FCA5A5',
-                                  borderRadius: 'var(--radius-field)', color: '#B91C1C', fontSize: '13px', cursor: 'pointer',
-                                }}
-                              >
-                                <Trash2 size={16} />
-                                Delete
-                              </button>
-                            ) : (
+                            {!readOnly && (
                               <button
                                 onClick={() => onEditProduct?.(p.id)}
                                 style={{
@@ -504,7 +476,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
               <ReorderableList
                 items={filtered}
                 getKey={(p) => p.id}
-                disabled={filtering}
+                disabled={filtering || readOnly}
                 onReorder={handleReorder}
                 renderRow={(p, { handle, setNodeRef, dragging }) => (
                   <div
@@ -512,7 +484,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
                     style={{ padding: '16px', borderRadius: '8px', background: 'var(--bg-card-subtle)', marginBottom: '12px', opacity: dragging ? 0.6 : 1 }}
                   >
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                      <span style={{ marginTop: '2px' }}>{handle}</span>
+                      {!readOnly && <span style={{ marginTop: '2px' }}>{handle}</span>}
                       <Thumb p={p} size={48} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div className="text-small" style={{ fontWeight: 500, marginBottom: '4px' }}>{p.name}</div>
@@ -539,20 +511,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
                         description={p.isActive ? 'Shown on your storefront.' : 'Hidden from customers.'}
                       />
                     </div>
-                    {isAdmin ? (
-                      <button
-                        onClick={() => setDeleteTarget(p)}
-                        aria-label={`Delete ${p.name}`}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px',
-                          background: 'var(--bg-card)', border: '1px solid #FCA5A5', borderRadius: 'var(--radius-field)',
-                          color: '#B91C1C', fontSize: '13px', cursor: 'pointer',
-                        }}
-                      >
-                        <Trash2 size={16} />
-                        Delete Product
-                      </button>
-                    ) : (
+                    {!readOnly && (
                       <button
                         onClick={() => onEditProduct?.(p.id)}
                         style={{
@@ -586,16 +545,6 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
         </div>
       )}
 
-      {deleteTarget && (
-        <TypedDeleteConfirm
-          title="Delete product"
-          message={`Permanently delete ${deleteTarget.name}? This cannot be undone. Past orders keep a name/price snapshot of this item.`}
-          confirmText={deleteTarget.name}
-          busy={deleting}
-          onConfirm={confirmTypedDelete}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
     </div>
   );
 }

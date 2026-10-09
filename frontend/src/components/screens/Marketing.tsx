@@ -17,9 +17,11 @@ interface MarketingProps {
   storeId: number;
   /** Store currency, so a fixed-amount discount formats correctly. */
   currency?: string;
-  /** When set, manage THIS merchant's discounts via the /admin API (Platform Admin
-   *  drill-down); deletes require a typed-name confirm. */
+  /** When set, read THIS merchant's discounts via the /admin API (Platform Admin drill-down). */
   adminMerchantId?: number;
+  /** View-only: hide New Discount, Edit, Delete and reordering. The admin console
+   *  switches this on; the merchant screen never does, so it stays fully editable. */
+  readOnly?: boolean;
 }
 
 type Status = 'active' | 'scheduled' | 'expired' | 'inactive';
@@ -104,7 +106,7 @@ const BLANK: FormState = {
   firstOrderOnly: false, canStackWithSale: false, scope: 'ORDER', visibility: 'PUBLIC', productIds: [],
 };
 
-export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: MarketingProps) {
+export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly = false }: MarketingProps) {
   const confirm = useConfirm();
   const isAdmin = adminMerchantId != null;
   const api = useMemo(() => (isAdmin
@@ -369,9 +371,11 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
             Discount codes customers enter at checkout
           </p>
         </div>
-        <Button variant="primary" onClick={openAdd}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Plus size={16} /> New Discount</span>
-        </Button>
+        {!readOnly && (
+          <Button variant="primary" onClick={openAdd}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Plus size={16} /> New Discount</span>
+          </Button>
+        )}
       </div>
 
       {/* Summary stats (same pattern as the Products screen). */}
@@ -395,9 +399,11 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
         </Card>
       ) : (
         <>
-          <p className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>
-            Drag the grip to reorder. This is the order customers see your offers on the storefront.
-          </p>
+          {!readOnly && (
+            <p className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '12px' }}>
+              Drag the grip to reorder. This is the order customers see your offers on the storefront.
+            </p>
+          )}
           <ReorderableList
             items={discounts}
             getKey={(d) => d.id}
@@ -409,7 +415,7 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
                   <Card>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
                       <div style={{ minWidth: 0, display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', height: '40px', color: 'var(--text-muted)' }}>{handle}</div>
+                        {!readOnly && <div style={{ display: 'flex', alignItems: 'center', height: '40px', color: 'var(--text-muted)' }}>{handle}</div>}
                         <div style={{ width: '40px', height: '40px', borderRadius: '8px', background: `${meta.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {d.type === 'PERCENTAGE' ? <Percent size={18} style={{ color: meta.color }} />
                             : d.type === 'FREE_DELIVERY' ? <Truck size={18} style={{ color: meta.color }} />
@@ -433,8 +439,8 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId }: Market
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                        <button onClick={() => openEdit(d)} aria-label={`Edit ${d.code}`} style={iconBtn}><Edit2 size={16} /></button>
-                        <button onClick={() => handleDelete(d)} aria-label={`Delete ${d.code}`} style={{ ...iconBtn, color: '#DC2626' }}><Trash2 size={16} /></button>
+                        {!readOnly && <button onClick={() => openEdit(d)} aria-label={`Edit ${d.code}`} style={iconBtn}><Edit2 size={16} /></button>}
+                        {!readOnly && <button onClick={() => handleDelete(d)} aria-label={`Delete ${d.code}`} style={{ ...iconBtn, color: '#DC2626' }}><Trash2 size={16} /></button>}
                       </div>
                     </div>
                   </Card>

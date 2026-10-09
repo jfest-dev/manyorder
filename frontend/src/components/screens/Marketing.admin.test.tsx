@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, cleanup } from '@testing-library/react';
 
-const deleteMock = vi.fn().mockResolvedValue(undefined);
 const listMock = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
@@ -16,7 +14,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
         list: () => listMock(),
         create: vi.fn(),
         update: vi.fn(),
-        delete: (id: number) => deleteMock(id),
+        delete: vi.fn(),
         reorder: vi.fn(),
       }),
       productsFor: () => ({
@@ -40,21 +38,24 @@ const DISCOUNT = {
 beforeEach(() => {
   cleanup();
   listMock.mockReset().mockResolvedValue([DISCOUNT]);
-  deleteMock.mockClear();
 });
 
-describe('Marketing (admin scope)', () => {
-  it('deletes a discount via a typed-name confirm', async () => {
-    const user = userEvent.setup();
+describe('Marketing admin read-only vs editable', () => {
+  it('read-only: no New Discount, Edit or Delete', async () => {
+    render(<Marketing storeId={3} currency="SGD" adminMerchantId={3} readOnly />);
+    await screen.findAllByText('SAVE10');
+
+    expect(screen.queryByRole('button', { name: /New Discount/i })).toBeNull();
+    expect(screen.queryByLabelText('Edit SAVE10')).toBeNull();
+    expect(screen.queryByLabelText('Delete SAVE10')).toBeNull();
+  });
+
+  it('editable: New Discount, Edit and Delete are present', async () => {
     render(<Marketing storeId={3} currency="SGD" adminMerchantId={3} />);
     await screen.findAllByText('SAVE10');
 
-    await user.click(screen.getAllByLabelText('Delete SAVE10')[0]);
-    const del = await screen.findByRole('button', { name: 'Delete' });
-    expect((del as HTMLButtonElement).disabled).toBe(true);
-
-    await user.type(screen.getByLabelText('Confirmation text'), 'SAVE10');
-    await user.click(del);
-    await waitFor(() => expect(deleteMock).toHaveBeenCalledWith(21));
+    expect(screen.getByRole('button', { name: /New Discount/i })).toBeTruthy();
+    expect(screen.getByLabelText('Edit SAVE10')).toBeTruthy();
+    expect(screen.getByLabelText('Delete SAVE10')).toBeTruthy();
   });
 });

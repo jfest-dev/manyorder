@@ -199,19 +199,20 @@ export function AdminApp() {
 
             {tab === 'overview' && <StoreDetail merchantId={selected.id} />}
             {tab === 'customers' && (
-              <Customers storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} />
+              <Customers storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} readOnly />
             )}
             {tab === 'products' && (
-              <ProductsList storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} />
+              <ProductsList storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} readOnly />
             )}
             {tab === 'marketing' && (
-              <Marketing storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} />
+              <Marketing storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} readOnly />
             )}
             {tab === 'orders' && (
               <Orders
                 store={{ id: String(selected.id), name: selected.name, slug: selected.slug, color: '#000000', currency: selected.currency }}
                 onNavigate={() => {}}
                 adminMerchantId={selected.id}
+                readOnly
               />
             )}
           </div>

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const listMock = vi.fn();
 
@@ -37,7 +38,6 @@ const STORE = { id: '1', name: 'Kiri Brew', slug: 'kiri', color: '#000', currenc
 beforeEach(() => {
   cleanup();
   listMock.mockReset().mockResolvedValue([ORDER]);
-  // jsdom has no matchMedia; Orders uses useMediaQuery.
   window.matchMedia = window.matchMedia || ((q: string) => ({
     matches: false, media: q, onchange: null,
     addEventListener: () => {}, removeEventListener: () => {},
@@ -45,13 +45,25 @@ beforeEach(() => {
   } as unknown as MediaQueryList));
 });
 
-describe('Orders (admin scope)', () => {
-  it('loads orders via the admin scope and hides Add Order', async () => {
-    render(<Orders store={STORE} onNavigate={() => {}} adminMerchantId={1} />);
-    // Row loads from the admin scope (contact name shown).
-    expect(await screen.findByText('Buyer')).toBeTruthy();
-    expect(listMock).toHaveBeenCalled();
-    // Create is a merchant-flow action — not available to admin.
+describe('Orders admin read-only vs editable', () => {
+  it('read-only: no Add Order, and the expanded order has no status or payment change buttons', async () => {
+    const user = userEvent.setup();
+    render(<Orders store={STORE} onNavigate={() => {}} adminMerchantId={1} readOnly />);
+    await screen.findByText('Buyer');
     expect(screen.queryByRole('button', { name: /Add Order/i })).toBeNull();
+
+    await user.click(screen.getByText('Buyer')); // expand the row
+    expect(screen.queryByRole('button', { name: /Cancel Order|^Mark /i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'PAID' })).toBeNull();
+  });
+
+  it('editable: Add Order and the status/payment change buttons are present', async () => {
+    const user = userEvent.setup();
+    render(<Orders store={STORE} onNavigate={() => {}} adminMerchantId={1} />);
+    await screen.findByText('Buyer');
+    expect(screen.getByRole('button', { name: /Add Order/i })).toBeTruthy();
+
+    await user.click(screen.getByText('Buyer'));
+    expect(screen.getByRole('button', { name: 'PAID' })).toBeTruthy();
   });
 });

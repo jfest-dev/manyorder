@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, cleanup } from '@testing-library/react';
 
-const deleteMock = vi.fn().mockResolvedValue(undefined);
 const listMock = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
@@ -16,7 +14,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
         list: () => listMock(),
         activate: vi.fn(),
         deactivate: vi.fn(),
-        delete: (id: number) => deleteMock(id),
+        delete: vi.fn(),
         reorder: vi.fn(),
       }),
     },
@@ -34,25 +32,25 @@ const PRODUCT = {
 beforeEach(() => {
   cleanup();
   listMock.mockReset().mockResolvedValue([PRODUCT]);
-  deleteMock.mockClear();
 });
 
-describe('ProductsList (admin scope)', () => {
-  it('hides Add Product and deletes via a typed-name confirm', async () => {
-    const user = userEvent.setup();
+describe('ProductsList admin read-only vs editable', () => {
+  it('read-only: no Add, Edit or Delete, but the hide/unhide toggle stays', async () => {
+    render(<ProductsList storeId={5} currency="SGD" adminMerchantId={5} readOnly />);
+    await screen.findAllByText('Widget');
+
+    expect(screen.queryByRole('button', { name: 'Add Product' })).toBeNull();
+    expect(screen.queryByLabelText('Delete Widget')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    // Hide/unhide (the ToggleSwitch labelled Active/Draft) remains.
+    expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
+  });
+
+  it('editable: Add and Edit are present', async () => {
     render(<ProductsList storeId={5} currency="SGD" adminMerchantId={5} />);
     await screen.findAllByText('Widget');
 
-    // Add/create is a merchant-flow action — hidden in admin mode.
-    expect(screen.queryByRole('button', { name: 'Add Product' })).toBeNull();
-
-    // Delete → typed-name confirm gate.
-    await user.click(screen.getAllByLabelText('Delete Widget')[0]);
-    const del = await screen.findByRole('button', { name: 'Delete' });
-    expect((del as HTMLButtonElement).disabled).toBe(true);
-
-    await user.type(screen.getByLabelText('Confirmation text'), 'Widget');
-    await user.click(del);
-    await waitFor(() => expect(deleteMock).toHaveBeenCalledWith(11));
+    expect(screen.getByRole('button', { name: 'Add Product' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy();
   });
 });

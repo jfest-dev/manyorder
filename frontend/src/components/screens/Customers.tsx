@@ -15,9 +15,12 @@ import { TypedDeleteConfirm } from '../TypedDeleteConfirm';
 interface CustomersProps {
   storeId: number;
   currency: string;
-  /** When set, the screen manages THIS merchant's customers via the /admin API
-   *  (Platform Admin drill-down) and requires a typed-name confirm to delete. */
+  /** When set, the screen reads THIS merchant's customers via the /admin API
+   *  (Platform Admin drill-down). */
   adminMerchantId?: number;
+  /** View-only: hide Add, Edit and Delete. The admin console switches this on;
+   *  the merchant screen never passes it, so it stays fully editable. */
+  readOnly?: boolean;
 }
 
 // A customer counts as "active" if they've ordered within this window.
@@ -58,7 +61,7 @@ function TagChips({ tags }: { tags: CustomerTag[] }) {
   );
 }
 
-export function Customers({ storeId, currency, adminMerchantId }: CustomersProps) {
+export function Customers({ storeId, currency, adminMerchantId, readOnly = false }: CustomersProps) {
   const confirm = useConfirm();
   const isAdmin = adminMerchantId != null;
   // Same method shapes whether scoped to the owner's store or an admin's target
@@ -312,9 +315,11 @@ export function Customers({ storeId, currency, adminMerchantId }: CustomersProps
         <Button variant="secondary" onClick={handleExport}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Download size={16} /> Export</span>
         </Button>
-        <Button variant="primary" onClick={() => { setAddError(null); setShowAddForm(true); }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Plus size={16} /> Add Customer</span>
-        </Button>
+        {!readOnly && (
+          <Button variant="primary" onClick={() => { setAddError(null); setShowAddForm(true); }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Plus size={16} /> Add Customer</span>
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -406,14 +411,18 @@ export function Customers({ storeId, currency, adminMerchantId }: CustomersProps
                               <WhatsAppIcon size={16} color="#6B7280" /> Message
                             </a>
                           )}
-                          <button onClick={() => openEdit(c)} aria-label={`Edit ${c.fullName}`} title="Edit customer"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
-                            <Pencil size={16} />
-                          </button>
-                          <button onClick={() => handleDelete(c)} aria-label={`Delete ${c.fullName}`} title="Delete customer"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
-                            <Trash2 size={16} />
-                          </button>
+                          {!readOnly && (
+                            <>
+                              <button onClick={() => openEdit(c)} aria-label={`Edit ${c.fullName}`} title="Edit customer"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
+                                <Pencil size={16} />
+                              </button>
+                              <button onClick={() => handleDelete(c)} aria-label={`Delete ${c.fullName}`} title="Delete customer"
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -444,14 +453,18 @@ export function Customers({ storeId, currency, adminMerchantId }: CustomersProps
                           <WhatsAppIcon size={16} color="#6B7280" /> Message
                         </a>
                       )}
-                      <button onClick={() => openEdit(c)} aria-label={`Edit ${c.fullName}`} title="Edit customer"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
-                        <Pencil size={16} />
-                      </button>
-                      <button onClick={() => handleDelete(c)} aria-label={`Delete ${c.fullName}`} title="Delete customer"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
-                        <Trash2 size={16} />
-                      </button>
+                      {!readOnly && (
+                        <>
+                          <button onClick={() => openEdit(c)} aria-label={`Edit ${c.fullName}`} title="Edit customer"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
+                            <Pencil size={16} />
+                          </button>
+                          <button onClick={() => handleDelete(c)} aria-label={`Delete ${c.fullName}`} title="Delete customer"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'inline-flex' }}>
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>

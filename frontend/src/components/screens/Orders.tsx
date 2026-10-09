@@ -18,9 +18,11 @@ interface OrdersProps {
   initialStatus?: OrderStatus | 'ALL';
   canEdit?: boolean;
   onEditOrder?: (orderId: number) => void;
-  /** When set, view THIS merchant's orders via the /admin API (Platform Admin
-   *  drill-down): list + status/payment changes only (no create/edit/delete). */
+  /** When set, view THIS merchant's orders via the /admin API (Platform Admin drill-down). */
   adminMerchantId?: number;
+  /** View-only: no Add Order, no status change (plain badge), no payment change.
+   *  The admin console switches this on; the merchant screen never does. */
+  readOnly?: boolean;
 }
 
 // 'NEW' is a synthetic tab (not a status): a customer order not yet acted on.
@@ -169,7 +171,7 @@ function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string;
   );
 }
 
-export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = false, onEditOrder, adminMerchantId }: OrdersProps) {
+export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = false, onEditOrder, adminMerchantId, readOnly = false }: OrdersProps) {
   const confirm = useConfirm();
   const storeId = Number(store.id);
   const isAdmin = adminMerchantId != null;
@@ -375,7 +377,7 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
             Manage and track all customer orders
           </p>
         </div>
-        {!isAdmin && (isDesktop ? (
+        {!readOnly && (isDesktop ? (
           <Button variant="primary" onClick={() => onNavigate('orders-add')}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Plus size={16} />
@@ -705,41 +707,51 @@ export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = fal
                           </Button>
                         </div>
                       )}
-                      <p className="text-xs" style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>UPDATE STATUS</p>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                        {NEXT_STATUS[o.status].length === 0 && (
-                          <p className="text-small" style={{ color: 'var(--text-muted)' }}>Order is {STATUS_LABEL[o.status].toLowerCase()}. No further steps.</p>
-                        )}
-                        {NEXT_STATUS[o.status].map((s) => (
-                          <Button
-                            key={s}
-                            variant={s === 'CANCELLED' ? 'secondary' : 'primary'}
-                            disabled={busy}
-                            onClick={() => changeStatus(o, s)}
-                          >
-                            {s === 'CANCELLED' ? 'Cancel Order' : `Mark ${STATUS_LABEL[s]}`}
-                          </Button>
-                        ))}
-                      </div>
+                      <p className="text-xs" style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>STATUS</p>
+                      {readOnly ? (
+                        <div style={{ marginBottom: '16px' }}>
+                          <Badge text={STATUS_LABEL[o.status]} {...STATUS_STYLE[o.status]} />
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                          {NEXT_STATUS[o.status].length === 0 && (
+                            <p className="text-small" style={{ color: 'var(--text-muted)' }}>Order is {STATUS_LABEL[o.status].toLowerCase()}. No further steps.</p>
+                          )}
+                          {NEXT_STATUS[o.status].map((s) => (
+                            <Button
+                              key={s}
+                              variant={s === 'CANCELLED' ? 'secondary' : 'primary'}
+                              disabled={busy}
+                              onClick={() => changeStatus(o, s)}
+                            >
+                              {s === 'CANCELLED' ? 'Cancel Order' : `Mark ${STATUS_LABEL[s]}`}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
 
                       <p className="text-xs" style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>PAYMENT</p>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {(['UNPAID', 'PAID', 'REFUNDED'] as PaymentStatus[]).map((p) => (
-                          <button
-                            key={p}
-                            disabled={busy}
-                            onClick={() => changePayment(o, p)}
-                            className="text-xs"
-                            style={{
-                              padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontWeight: 600,
-                              border: o.paymentStatus === p ? '2px solid var(--primary-solid)' : '1px solid var(--border-strong)',
-                              background: PAYMENT_STYLE[p].bg, color: PAYMENT_STYLE[p].fg,
-                            }}
-                          >
-                            {p}
-                          </button>
-                        ))}
-                      </div>
+                      {readOnly ? (
+                        <Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} />
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {(['UNPAID', 'PAID', 'REFUNDED'] as PaymentStatus[]).map((p) => (
+                            <button
+                              key={p}
+                              disabled={busy}
+                              onClick={() => changePayment(o, p)}
+                              className="text-xs"
+                              style={{
+                                padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontWeight: 600,
+                                border: o.paymentStatus === p ? '2px solid var(--primary-solid)' : '1px solid var(--border-strong)',
+                                background: PAYMENT_STYLE[p].bg, color: PAYMENT_STYLE[p].fg,
+                              }}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
