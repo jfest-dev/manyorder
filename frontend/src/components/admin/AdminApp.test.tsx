@@ -4,7 +4,7 @@ import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const suspendMock = vi.fn().mockResolvedValue(undefined);
-const listMock = vi.fn();
+const searchMock = vi.fn();
 const metricsMock = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
@@ -13,7 +13,8 @@ vi.mock('../../lib/api', async (importOriginal) => {
     ...actual,
     adminApi: {
       metrics: () => metricsMock(),
-      listMerchants: () => listMock(),
+      listMerchants: () => Promise.resolve([]),
+      searchMerchants: () => searchMock(),
       suspend: (id: number) => suspendMock(id),
       unsuspend: vi.fn().mockResolvedValue(undefined),
       getMerchant: vi.fn(),
@@ -46,7 +47,7 @@ function renderAdmin() {
 beforeEach(() => {
   cleanup();
   metricsMock.mockReset().mockResolvedValue(METRICS);
-  listMock.mockReset().mockResolvedValue([MERCHANT]);
+  searchMock.mockReset().mockResolvedValue({ content: [MERCHANT], totalElements: 1, totalPages: 1, page: 1 });
   suspendMock.mockClear();
 });
 

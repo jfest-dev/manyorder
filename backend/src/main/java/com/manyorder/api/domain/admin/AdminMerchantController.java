@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -46,6 +47,18 @@ public class AdminMerchantController {
     @GetMapping
     public List<AdminMerchantSummary> list() {
         return adminMerchantService.listMerchants();
+    }
+
+    /** Filtered, sorted, paged merchants for the Merchants screen. {@code page} is 1-based. */
+    @GetMapping("/search")
+    public AdminMerchantPage search(@RequestParam(required = false) String q,
+                                    @RequestParam(required = false) String status,
+                                    @RequestParam(required = false) String currency,
+                                    @RequestParam(required = false) String businessType,
+                                    @RequestParam(required = false, defaultValue = "newest") String sort,
+                                    @RequestParam(defaultValue = "1") int page,
+                                    @RequestParam(defaultValue = "20") int size) {
+        return adminMerchantService.searchMerchants(q, status, currency, businessType, sort, page, size);
     }
 
     /** Drill-down on one merchant. */

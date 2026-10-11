@@ -11,13 +11,12 @@ vi.mock('../../context/AuthContext', () => ({
 }));
 
 const metrics = vi.fn();
-const listMerchants = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api')>();
   return {
     ...actual,
-    adminApi: { ...actual.adminApi, metrics: () => metrics(), listMerchants: () => listMerchants() },
+    adminApi: { ...actual.adminApi, metrics: () => metrics() },
   };
 });
 
@@ -32,7 +31,6 @@ const EMPTY_METRICS = {
 beforeEach(() => {
   cleanup();
   metrics.mockReset().mockResolvedValue(EMPTY_METRICS);
-  listMerchants.mockReset().mockResolvedValue([]);
   window.matchMedia = window.matchMedia || ((q: string) => ({
     matches: false, media: q, onchange: null,
     addEventListener: () => {}, removeEventListener: () => {},
@@ -41,17 +39,15 @@ beforeEach(() => {
 });
 
 describe('AdminApp background refresh', () => {
-  it('refetches metrics and merchants when the window regains focus', async () => {
+  it('refetches metrics when the window regains focus', async () => {
     render(<ConfirmProvider><AdminApp /></ConfirmProvider>);
 
     // Initial load finished.
     await waitFor(() => expect(metrics).toHaveBeenCalledTimes(1));
-    expect(listMerchants).toHaveBeenCalledTimes(1);
 
-    // Regaining focus triggers a silent refetch of both.
+    // Regaining focus triggers a silent refetch.
     window.dispatchEvent(new Event('focus'));
     await waitFor(() => expect(metrics).toHaveBeenCalledTimes(2));
-    expect(listMerchants).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the last good data when a focus refresh fails', async () => {
@@ -60,7 +56,6 @@ describe('AdminApp background refresh', () => {
 
     // Next refresh rejects; the screen must not show an error or go blank.
     metrics.mockRejectedValueOnce(new Error('network'));
-    listMerchants.mockRejectedValueOnce(new Error('network'));
     window.dispatchEvent(new Event('focus'));
 
     await waitFor(() => expect(metrics).toHaveBeenCalledTimes(2));

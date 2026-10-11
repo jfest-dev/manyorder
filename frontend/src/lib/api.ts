@@ -1012,6 +1012,23 @@ export interface AdminMerchantSummary {
   customerCount: number;
 }
 
+export interface AdminMerchantPage {
+  content: AdminMerchantSummary[];
+  totalElements: number;
+  totalPages: number;
+  page: number;
+}
+
+export interface AdminMerchantSearchParams {
+  q?: string;
+  status?: string;
+  currency?: string;
+  businessType?: string;
+  sort?: string;
+  page?: number;
+  size?: number;
+}
+
 export interface AdminAuditLogEntry {
   id: number;
   actorEmail: string;
@@ -1071,6 +1088,18 @@ export interface AdminStoreDetail {
 export const adminApi = {
   metrics: () => request<AdminMetrics>('/admin/metrics'),
   listMerchants: () => request<AdminMerchantSummary[]>('/admin/merchants'),
+  searchMerchants: (params: AdminMerchantSearchParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set('q', params.q);
+    if (params.status) qs.set('status', params.status);
+    if (params.currency) qs.set('currency', params.currency);
+    if (params.businessType) qs.set('businessType', params.businessType);
+    if (params.sort) qs.set('sort', params.sort);
+    if (params.page != null) qs.set('page', String(params.page));
+    if (params.size != null) qs.set('size', String(params.size));
+    const q = qs.toString();
+    return request<AdminMerchantPage>(`/admin/merchants/search${q ? `?${q}` : ''}`);
+  },
   getMerchant: (merchantId: number) => request<AdminMerchantSummary>(`/admin/merchants/${merchantId}`),
   storeDetail: (merchantId: number) => request<AdminStoreDetail>(`/admin/merchants/${merchantId}/detail`),
   auditLog: (storeId?: number) =>

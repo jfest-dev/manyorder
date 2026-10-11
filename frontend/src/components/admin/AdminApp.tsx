@@ -11,6 +11,7 @@ import { Orders } from '../screens/Orders';
 import { StoreDetail } from './StoreDetail';
 import { StoreHeader } from './StoreHeader';
 import { AdminActivity } from './AdminActivity';
+import { MerchantsList } from './MerchantsList';
 
 type Section = 'overview' | 'merchants' | 'activity';
 const NAV: { key: Section; label: string }[] = [
@@ -18,12 +19,6 @@ const NAV: { key: Section; label: string }[] = [
   { key: 'merchants', label: 'Merchants' },
   { key: 'activity', label: 'Activity' },
 ];
-
-const STATUS_STYLE: Record<AdminMerchantSummary['status'], { bg: string; color: string; label: string }> = {
-  ACTIVE: { bg: '#ECFDF5', color: '#047857', label: 'Active' },
-  SUSPENDED: { bg: '#FEE2E2', color: '#B91C1C', label: 'Suspended' },
-  ARCHIVED: { bg: '#F3F4F6', color: '#4B5563', label: 'Archived' },
-};
 
 function Tile({ label, value }: { label: string; value: number }) {
   return (
@@ -42,7 +37,6 @@ export function AdminApp() {
   const confirm = useConfirm();
 
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
-  const [merchants, setMerchants] = useState<AdminMerchantSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [section, setSection] = useState<Section>('overview');
@@ -50,24 +44,24 @@ export function AdminApp() {
   const [tab, setTab] = useState<'overview' | 'customers' | 'products' | 'orders' | 'marketing'>('overview');
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [merchantsReload, setMerchantsReload] = useState(0);
 
-  const load = () => {
+  const loadMetrics = () =>
+    adminApi.metrics()
+      .then((m) => setMetrics(m))
+      .catch((e) => setError((prev) => prev ?? (e instanceof ApiError ? e.message : 'Could not load admin data')));
+
+  useEffect(() => {
     setLoading(true);
-    setError(null);
-    Promise.all([adminApi.metrics(), adminApi.listMerchants()])
-      .then(([m, list]) => { setMetrics(m); setMerchants(list); })
+    adminApi.metrics()
+      .then((m) => setMetrics(m))
       .catch((e) => setError(e instanceof ApiError ? e.message : 'Could not load admin data'))
       .finally(() => setLoading(false));
-  };
-  useEffect(load, []);
+  }, []);
 
   // Silent background refresh (60s + on focus); keep last good data on failure.
   useEffect(() => {
-    const refresh = () => {
-      Promise.all([adminApi.metrics(), adminApi.listMerchants()])
-        .then(([m, list]) => { setMetrics(m); setMerchants(list); })
-        .catch(() => { /* keep the last good data */ });
-    };
+    const refresh = () => { adminApi.metrics().then((m) => setMetrics(m)).catch(() => { /* keep last good */ }); };
     const id = window.setInterval(refresh, 60_000);
     window.addEventListener('focus', refresh);
     return () => { window.clearInterval(id); window.removeEventListener('focus', refresh); };
@@ -91,7 +85,8 @@ export function AdminApp() {
     try {
       await (suspend ? adminApi.suspend(m.id) : adminApi.unsuspend(m.id));
       showNotice(suspend ? `${m.name} suspended.` : `${m.name} unsuspended.`);
-      load();
+      loadMetrics();
+      setMerchantsReload((n) => n + 1);
     } catch (e) {
       showNotice(e instanceof ApiError ? e.message : 'Action failed');
     } finally {
@@ -182,55 +177,12 @@ export function AdminApp() {
           )}
 
           {!loading && !error && !selected && section === 'merchants' && (
-            <>
-              <h2 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 10px' }}>Merchants</h2>
-              <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: 'var(--bg-card-subtle)' }}>
-                      {['Store', 'Owner', 'Status', 'Products', 'Orders', 'Customers', ''].map((h, i) => (
-                        <th key={i} style={{ textAlign: 'left', padding: '10px 14px', fontWeight: 500, color: 'var(--text-secondary)' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {merchants.map((m) => {
-                      const s = STATUS_STYLE[m.status];
-                      return (
-                        <tr key={m.id} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                          <td style={{ padding: '10px 14px' }}>
-                            <div style={{ fontWeight: 600 }}>{m.name}</div>
-                            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>/{m.slug}</div>
-                          </td>
-                          <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{m.ownerEmail}</td>
-                          <td style={{ padding: '10px 14px' }}>
-                            <span style={{ padding: '2px 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: 11, fontWeight: 600 }}>{s.label}</span>
-                          </td>
-                          <td style={{ padding: '10px 14px' }}>{m.productCount}</td>
-                          <td style={{ padding: '10px 14px' }}>{m.orderCount}</td>
-                          <td style={{ padding: '10px 14px' }}>{m.customerCount}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                            <button type="button" onClick={() => { setSelected(m); setTab('overview'); }} aria-label={`View ${m.name}`}
-                              style={{ marginRight: 12, background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600 }}>
-                              View
-                            </button>
-                            <button type="button" onClick={() => toggleSuspend(m)} disabled={busyId === m.id || m.status === 'ARCHIVED'}
-                              aria-label={`${m.status === 'SUSPENDED' ? 'Unsuspend' : 'Suspend'} ${m.name}`}
-                              style={{ background: 'none', border: 'none', cursor: m.status === 'ARCHIVED' ? 'not-allowed' : 'pointer',
-                                color: m.status === 'SUSPENDED' ? '#047857' : '#B91C1C', fontWeight: 600, opacity: busyId === m.id ? 0.5 : 1 }}>
-                              {m.status === 'SUSPENDED' ? 'Unsuspend' : 'Suspend'}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {merchants.length === 0 && (
-                      <tr><td colSpan={7} style={{ padding: '16px', color: 'var(--text-secondary)' }}>No merchants yet.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </>
+            <MerchantsList
+              onView={(m) => { setSelected(m); setTab('overview'); }}
+              onToggleSuspend={toggleSuspend}
+              busyId={busyId}
+              reloadToken={merchantsReload}
+            />
           )}
 
           {!loading && !error && !selected && section === 'activity' && <AdminActivity />}

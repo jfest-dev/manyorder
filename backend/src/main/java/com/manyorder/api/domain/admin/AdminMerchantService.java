@@ -1,6 +1,7 @@
 package com.manyorder.api.domain.admin;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -47,6 +48,61 @@ public class AdminMerchantService {
     @Transactional(readOnly = true)
     public List<AdminMerchantSummary> listMerchants() {
         return merchantRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toSummary).toList();
+    }
+
+    /**
+     * Filtered, sorted, paged merchants for the admin Merchants screen.
+     * Search matches store name, slug, owner name and owner email (case-insensitive).
+     * {@code sort} is one of newest (default), name, orders, latest; {@code page} is 1-based.
+     */
+    @Transactional(readOnly = true)
+    public AdminMerchantPage searchMerchants(String q, String status, String currency,
+                                             String businessType, String sort, int page, int size) {
+        int pageSize = size < 1 ? 20 : size;
+        String needle = q == null ? "" : q.trim().toLowerCase();
+
+        List<Merchant> matched = merchantRepository.findAllByOrderByCreatedAtDesc().stream()
+                .filter(m -> matches(m, needle, status, currency, businessType))
+                .toList();
+
+        Comparator<Merchant> order = switch (sort == null ? "" : sort) {
+            case "name" -> Comparator.comparing(m -> m.getName() == null ? "" : m.getName().toLowerCase());
+            case "orders" -> Comparator.comparingLong((Merchant m) -> orderRepository.countByMerchant(m)).reversed();
+            case "latest" -> Comparator.comparing((Merchant m) -> orderRepository.findLastOrderAt(m),
+                    Comparator.nullsLast(Comparator.reverseOrder()));
+            default -> Comparator.comparing(Merchant::getCreatedAt,
+                    Comparator.nullsLast(Comparator.reverseOrder())); // newest
+        };
+        List<Merchant> sorted = matched.stream().sorted(order).toList();
+
+        long total = sorted.size();
+        int totalPages = (int) Math.max(1, Math.ceil((double) total / pageSize));
+        int current = Math.min(Math.max(page, 1), totalPages);
+        int from = (current - 1) * pageSize;
+        int to = (int) Math.min(from + (long) pageSize, total);
+        List<AdminMerchantSummary> content = (from >= total ? List.<Merchant>of() : sorted.subList(from, to))
+                .stream().map(this::toSummary).toList();
+
+        return new AdminMerchantPage(content, total, totalPages, current);
+    }
+
+    private boolean matches(Merchant m, String needle, String status, String currency, String businessType) {
+        if (!needle.isEmpty()
+                && !contains(m.getName(), needle)
+                && !contains(m.getSlug(), needle)
+                && !contains(m.getOwner().getFullName(), needle)
+                && !contains(m.getOwner().getEmail(), needle)) {
+            return false;
+        }
+        if (status != null && !status.isBlank() && !statusOf(m).equalsIgnoreCase(status)) return false;
+        if (currency != null && !currency.isBlank() && !currency.equalsIgnoreCase(m.getCurrency())) return false;
+        if (businessType != null && !businessType.isBlank()
+                && !businessType.equalsIgnoreCase(m.getBusinessType())) return false;
+        return true;
+    }
+
+    private static boolean contains(String haystack, String lowerNeedle) {
+        return haystack != null && haystack.toLowerCase().contains(lowerNeedle);
     }
 
     @Transactional(readOnly = true)
