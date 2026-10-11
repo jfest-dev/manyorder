@@ -53,6 +53,7 @@ public class CustomerService {
      * manual orders (phone, then email) so the three creation paths never
      * produce two records for one person; a match is rejected as a conflict.
      */
+    @Transactional
     public CustomerResponse createCustomer(Merchant merchant, CreateCustomerRequest req) {
         String phone = req.getPhoneNumber();
         String email = req.getEmail();
@@ -63,8 +64,14 @@ public class CustomerService {
         if (exists) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "A customer with this phone or email already exists.");
         }
-        Customer saved = customerRepository.save(
-                new Customer(merchant, req.getFullName(), email != null ? email : "", phone));
+        Customer customer = new Customer(merchant, req.getFullName(), email != null ? email : "", phone);
+        // Optional tags, normalized/limited by Customer.setTags exactly as on update.
+        if (req.getTags() != null) {
+            customer.setTags(req.getTags().stream()
+                    .map(t -> new CustomerTag(t.getName(), t.getColor()))
+                    .toList());
+        }
+        Customer saved = customerRepository.save(customer);
         return new CustomerResponse(saved, 0, BigDecimal.ZERO, null, null);
     }
 

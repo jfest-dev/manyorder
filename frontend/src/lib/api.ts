@@ -643,8 +643,8 @@ export const customersApi = {
   list: (storeId: number) =>
     request<CustomerResponse[]>(`/merchant/stores/${storeId}/customers`),
 
-  /** Add a customer manually. 409 if the phone/email already exists. */
-  create: (storeId: number, payload: { fullName: string; phoneNumber: string; email?: string }) =>
+  /** Add a customer manually. 409 if the phone/email already exists. Optional tags. */
+  create: (storeId: number, payload: { fullName: string; phoneNumber: string; email?: string; tags?: CustomerTag[] }) =>
     request<CustomerResponse>(`/merchant/stores/${storeId}/customers`, { method: 'POST', body: payload }),
 
   /** Edit a customer (full-record replace). 409 if the phone/email now matches another customer. */
@@ -1082,7 +1082,7 @@ export const adminApi = {
    *  so an admin can drive the shared Customers screen against /admin endpoints. */
   customersFor: (merchantId: number) => ({
     list: () => request<CustomerResponse[]>(`/admin/merchants/${merchantId}/customers`),
-    create: (payload: { fullName: string; phoneNumber: string; email?: string }) =>
+    create: (payload: { fullName: string; phoneNumber: string; email?: string; tags?: CustomerTag[] }) =>
       request<CustomerResponse>(`/admin/merchants/${merchantId}/customers`, { method: 'POST', body: payload }),
     update: (customerId: number, payload: { fullName: string; phoneNumber: string; email?: string; tags?: CustomerTag[] }) =>
       request<CustomerResponse>(`/admin/merchants/${merchantId}/customers/${customerId}`, { method: 'PUT', body: payload }),
