@@ -7,8 +7,6 @@ interface OrderLookupViewProps {
   store: PublicStoreResponse;
   onBack: () => void;
   onBackToShop: () => void;
-  /** Device-local last order, used to pre-fill the form so recall is one tap. */
-  initial?: { orderId: number; phone: string } | null;
 }
 
 const BRAND = 'var(--primary-solid)';
@@ -19,9 +17,9 @@ const BRAND = 'var(--primary-solid)';
  * renders the shared OrderConfirmationView, so a split order looks identical to
  * the post-checkout screen.
  */
-export function OrderLookupView({ store, onBack, onBackToShop, initial }: OrderLookupViewProps) {
-  const [orderNumber, setOrderNumber] = useState(initial ? String(initial.orderId) : '');
-  const [phone, setPhone] = useState(initial?.phone ?? '');
+export function OrderLookupView({ store, onBack, onBackToShop }: OrderLookupViewProps) {
+  const [orderNumber, setOrderNumber] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GuestCheckoutResult | null>(null);

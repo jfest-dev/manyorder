@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Tag, Clock, ChevronDown } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
-import { saveRecentOrder } from '../../lib/orderRecall';
 import { DEFAULT_DELIVERY_TBC_MESSAGE } from '../../lib/delivery';
 import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from '../../lib/offers';
 import { NoteBlock } from '../NoteBlock';
@@ -159,7 +158,6 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
         items: items.map(cartLineToCheckoutItem),
       });
       sessionStorage.removeItem(formKey); // order placed - don't restore the stale form
-      saveRecentOrder(store.id, { orderId: result.orderId, phone: phone.trim() }); // device-local recall
       onPlaced(result);
     } catch (e) {
       // A code can go stale between apply and submit; surface it and let them retry.

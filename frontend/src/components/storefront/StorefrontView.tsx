@@ -28,9 +28,6 @@ interface StorefrontViewProps {
   onViewCart?: () => void;
   /** "Find my order" - re-open a past order's confirmation. Omitted in preview. */
   onTrackOrder?: () => void;
-  /** A device-local last order, if any - drives the "view your recent order" banner. */
-  recentOrder?: { orderId: number } | null;
-  onViewRecentOrder?: () => void;
   /** Preview mode (onboarding/edit): render read-only, no cart bar. */
   preview?: boolean;
 }
@@ -78,8 +75,6 @@ export function StorefrontView({
   cartTotal,
   onViewCart,
   onTrackOrder,
-  recentOrder,
-  onViewRecentOrder,
   preview = false,
 }: StorefrontViewProps) {
   const headerColor = store.themeColor || '#000000';
@@ -260,14 +255,6 @@ export function StorefrontView({
           </div>
         )}
       </div>
-
-      {/* Recent-order recall - one tap back to the order placed on this device. */}
-      {!preview && recentOrder && onViewRecentOrder && (
-        <button onClick={onViewRecentOrder}
-          style={{ width: '100%', padding: '10px 12px', background: 'white', borderBottom: '1px solid var(--border-subtle)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}>
-          <ShoppingBag size={14} /> View your recent order #{recentOrder.orderId} →
-        </button>
-      )}
 
       {/* Sticky filter row: category chips + a search icon that expands, in place,
           into a full-width search field (chips hidden while it's open). One compact

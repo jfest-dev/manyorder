@@ -12,7 +12,6 @@ import { CheckoutView } from './CheckoutView';
 import { OrderConfirmationView } from './OrderConfirmationView';
 import { OrderLookupView } from './OrderLookupView';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
-import { getRecentOrder, clearRecentOrder, anyOrderStatusActive, type RecentOrder } from '../../lib/orderRecall';
 import {
   parseCart, addLine, setLineQty, removeLine, updateLine, hydrateCart, healCart, reconcileStock,
   cartLineCount, plainQuantities, productTotals, plainSignature, lineSignature,
@@ -36,7 +35,6 @@ export function StorefrontApp() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [offers, setOffers] = useState<PublicOffer[]>([]);
   const [orderResult, setOrderResult] = useState<GuestCheckoutResult | null>(null);
-  const [recentOrder, setRecentOrder] = useState<RecentOrder | null>(null);
   // Product whose "already in cart?" decision sheet is open (shop grid). null = closed.
   const [decisionProductId, setDecisionProductId] = useState<number | null>(null);
   // Pre-flight stock reconcile: set when a checkout attempt clamped the cart, so
@@ -82,36 +80,6 @@ export function StorefrontApp() {
     setCart((prev) => healCart(prev, products));
   }, [products]);
 
-  // Surface the "recent order" recall banner once the store is known and
-  // whenever a new order is placed. The banner shows only while the order is
-  // still active - a terminal order (delivered/completed/cancelled) is cleared
-  // so it stops showing. A newer order overwrites the slot at checkout, so this
-  // always reflects the latest order.
-  useEffect(() => {
-    if (!store) return;
-    const rec = getRecentOrder(store.id);
-    if (!rec) { setRecentOrder(null); return; }
-    let cancelled = false;
-    storefrontApi.lookupOrder(store.slug, { orderId: rec.orderId, phone: rec.phone })
-      .then((result) => {
-        if (cancelled) return;
-        const statuses = result.orders?.length
-          ? result.orders.map((o) => o.orderStatus)
-          : [result.orderStatus];
-        if (anyOrderStatusActive(statuses)) {
-          setRecentOrder(rec);
-        } else {
-          clearRecentOrder(store.id); // terminal → forget it
-          setRecentOrder(null);
-        }
-      })
-      .catch(() => {
-        if (cancelled) return;
-        clearRecentOrder(store.id); // order no longer retrievable → drop the banner
-        setRecentOrder(null);
-      });
-    return () => { cancelled = true; };
-  }, [store, orderResult]);
 
   // Resolve cart lines against the freshly-fetched products every render, so
   // cart and checkout always show current price / name / modifiers / pre-order
@@ -250,8 +218,6 @@ export function StorefrontApp() {
               cartTotal={cartSubtotal}
               onViewCart={goCart}
               onTrackOrder={goTrack}
-              recentOrder={recentOrder}
-              onViewRecentOrder={() => navigate(`/${slug}/confirmation`)}
             />
           } />
           <Route path="p/:productId" element={
@@ -294,7 +260,7 @@ export function StorefrontApp() {
             <ConfirmationRoute store={store} result={orderResult} onBackToShop={goShop} />
           } />
           <Route path="track" element={
-            <OrderLookupView store={store} onBack={goBack} onBackToShop={goShop} initial={recentOrder} />
+            <OrderLookupView store={store} onBack={goBack} onBackToShop={goShop} />
           } />
           <Route path="*" element={<Navigate to={`/${slug}`} replace />} />
         </Routes>
@@ -315,38 +281,18 @@ export function StorefrontApp() {
 }
 
 /**
- * The confirmation page. Uses the just-placed order held in memory; failing that
- * (a reload or a reopened tab dropped it), it recalls the device-local last order
- * and re-fetches it fresh via the normal lookup endpoint - so status is current
- * and no order data is cached client-side. With neither, it falls back to shop.
+ * The confirmation page, shown from the just-placed order held in memory. On a
+ * reload or reopened tab (no in-memory result) it falls back to the shop; the
+ * customer returns to an order via the tracking link or Find my order, which
+ * re-fetch fresh and cache nothing on the device.
  */
 function ConfirmationRoute({ store, result, onBackToShop }: {
   store: PublicStoreResponse;
   result: GuestCheckoutResult | null;
   onBackToShop: () => void;
 }) {
-  const [recalled, setRecalled] = useState<GuestCheckoutResult | null>(null);
-  // Start in 'loading' (not 'idle') so the first render - before the recall
-  // fetch has run - shows a loader instead of instantly redirecting to the shop.
-  // Only a genuine "no recent order / lookup failed" sets 'notfound'.
-  const [status, setStatus] = useState<'loading' | 'notfound'>('loading');
-
-  useEffect(() => {
-    if (result) return; // in-memory result wins - no recall needed
-    const recent = getRecentOrder(store.id);
-    if (!recent) { setStatus('notfound'); return; }
-    let cancelled = false;
-    setStatus('loading');
-    storefrontApi.lookupOrder(store.slug, { orderId: recent.orderId, phone: recent.phone })
-      .then((r) => { if (!cancelled) setRecalled(r); })
-      .catch(() => { if (!cancelled) { clearRecentOrder(store.id); setStatus('notfound'); } });
-    return () => { cancelled = true; };
-  }, [result, store.id, store.slug]);
-
   if (result) return <OrderConfirmationView result={result} store={store} onBackToShop={onBackToShop} />;
-  if (recalled) return <OrderConfirmationView result={recalled} store={store} onBackToShop={onBackToShop} heading="Your order" />;
-  if (status === 'notfound') return <Navigate to={`/${store.slug}`} replace />;
-  return <Centered>Loading your order…</Centered>;
+  return <Navigate to={`/${store.slug}`} replace />;
 }
 
 /**
