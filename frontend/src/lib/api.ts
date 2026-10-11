@@ -1115,6 +1115,10 @@ export const adminApi = {
       request<void>(`/admin/merchants/${merchantId}/discounts/${discountId}`, { method: 'DELETE' }),
     reorder: (discountIds: number[]) =>
       request<DiscountResponse[]>(`/admin/merchants/${merchantId}/discounts/reorder`, { method: 'PATCH', body: { discountIds } }),
+    activate: (discountId: number) =>
+      request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts/${discountId}/activate`, { method: 'PATCH' }),
+    deactivate: (discountId: number) =>
+      request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts/${discountId}/deactivate`, { method: 'PATCH' }),
   }),
 
   /** Order management scoped to one merchant (admin scope: list + status/payment only,

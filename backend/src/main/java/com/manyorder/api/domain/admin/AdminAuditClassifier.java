@@ -39,7 +39,7 @@ public class AdminAuditClassifier {
         return switch (entity) {
             case "products" -> product(method, rest1, rest2, merchantId);
             case "customers" -> customer(method, rest1, merchantId);
-            case "discounts" -> discount(method, rest1, merchantId);
+            case "discounts" -> discount(method, rest1, rest2, merchantId);
             case "orders" -> order(method, rest1, rest2, merchantId);
             default -> Optional.empty(); // suspend / unsuspend / anything else
         };
@@ -66,13 +66,15 @@ public class AdminAuditClassifier {
         return Optional.empty();
     }
 
-    private Optional<Entry> discount(String method, String rest1, Long mid) {
+    private Optional<Entry> discount(String method, String rest1, String rest2, Long mid) {
         if ("POST".equals(method) && rest1 == null) return entry("CREATE_DISCOUNT", "DISCOUNT", null, mid);
         if ("PATCH".equals(method) && "reorder".equals(rest1)) return entry("REORDER_DISCOUNTS", "DISCOUNT", null, mid);
         Long id = parseLong(rest1);
         if (id == null) return Optional.empty();
-        if ("PATCH".equals(method)) return entry("UPDATE_DISCOUNT", "DISCOUNT", id, mid);
-        if ("DELETE".equals(method)) return entry("DELETE_DISCOUNT", "DISCOUNT", id, mid);
+        if ("PATCH".equals(method) && "activate".equals(rest2)) return entry("ACTIVATE_DISCOUNT", "DISCOUNT", id, mid);
+        if ("PATCH".equals(method) && "deactivate".equals(rest2)) return entry("DEACTIVATE_DISCOUNT", "DISCOUNT", id, mid);
+        if ("PATCH".equals(method) && rest2 == null) return entry("UPDATE_DISCOUNT", "DISCOUNT", id, mid);
+        if ("DELETE".equals(method) && rest2 == null) return entry("DELETE_DISCOUNT", "DISCOUNT", id, mid);
         return Optional.empty();
     }
 

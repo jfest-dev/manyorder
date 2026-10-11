@@ -93,6 +93,14 @@ class AdminLockdownIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(patch(p + "/" + productId + "/activate").header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk());
 
+        // Switch a discount off / on (the only discount mutations admins keep).
+        long discountId = createMerchantDiscount(merchant, storeId, "LOCK10");
+        String d = "/admin/merchants/" + storeId + "/discounts";
+        mockMvc.perform(patch(d + "/" + discountId + "/deactivate").header("Authorization", "Bearer " + admin))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch(d + "/" + discountId + "/activate").header("Authorization", "Bearer " + admin))
+                .andExpect(status().isOk());
+
         // Store-level suspend / unsuspend stay.
         mockMvc.perform(post("/admin/merchants/" + storeId + "/suspend").header("Authorization", "Bearer " + admin))
                 .andExpect(status().isNoContent());
@@ -115,6 +123,8 @@ class AdminLockdownIntegrationTest extends IntegrationTestBase {
         // And kept mutations are gated too.
         mockMvc.perform(patch(base + "/products/1/deactivate").header("Authorization", "Bearer " + merchant))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(patch(base + "/discounts/1/deactivate").header("Authorization", "Bearer " + merchant))
+                .andExpect(status().isForbidden());
         mockMvc.perform(post(base + "/suspend").header("Authorization", "Bearer " + merchant))
                 .andExpect(status().isForbidden());
     }
@@ -124,6 +134,15 @@ class AdminLockdownIntegrationTest extends IntegrationTestBase {
                         .header("Authorization", "Bearer " + merchantToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("name", name, "price", price, "stock", 100))))
+                .andExpect(status().isCreated()).andReturn();
+        return json(r).get("id").asLong();
+    }
+
+    private long createMerchantDiscount(String merchantToken, long storeId, String code) throws Exception {
+        MvcResult r = mockMvc.perform(post("/merchant/stores/" + storeId + "/discounts")
+                        .header("Authorization", "Bearer " + merchantToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("code", code, "type", "PERCENTAGE", "value", 10))))
                 .andExpect(status().isCreated()).andReturn();
         return json(r).get("id").asLong();
     }

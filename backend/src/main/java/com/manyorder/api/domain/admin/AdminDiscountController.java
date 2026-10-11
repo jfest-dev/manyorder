@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,5 +39,16 @@ public class AdminDiscountController {
     @GetMapping
     public List<DiscountResponse> list(@PathVariable Long merchantId, Authentication auth) {
         return discountService.getDiscounts(store(auth, merchantId));
+    }
+
+    // Switch a discount off/on only (the Active flag). No other field may be edited by admin.
+    @PatchMapping("/{discountId}/deactivate")
+    public DiscountResponse deactivate(@PathVariable Long merchantId, @PathVariable Long discountId, Authentication auth) {
+        return discountService.deactivateDiscount(store(auth, merchantId), discountId);
+    }
+
+    @PatchMapping("/{discountId}/activate")
+    public DiscountResponse activate(@PathVariable Long merchantId, @PathVariable Long discountId, Authentication auth) {
+        return discountService.activateDiscount(store(auth, merchantId), discountId);
     }
 }

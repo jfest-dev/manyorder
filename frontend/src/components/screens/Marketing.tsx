@@ -7,6 +7,7 @@ import { FieldInput } from '../Field';
 import { MoneyField } from '../MoneyField';
 import { DatePicker } from '../DatePicker';
 import { Checkbox } from '../Checkbox';
+import { ToggleSwitch } from '../ToggleSwitch';
 import { useConfirm } from '../ConfirmDialog';
 import { Toast } from '../Toast';
 import { discountsApi, adminApi, DiscountResponse, DiscountType, DiscountPayload, ApiError, productsApi, ProductResponse } from '../../lib/api';
@@ -117,6 +118,8 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly
         update: (id: number, p: Partial<DiscountPayload>) => discountsApi.update(storeId, id, p),
         delete: (id: number) => discountsApi.delete(storeId, id),
         reorder: (ids: number[]) => discountsApi.reorder(storeId, ids),
+        activate: (id: number) => discountsApi.update(storeId, id, { active: true }),
+        deactivate: (id: number) => discountsApi.update(storeId, id, { active: false }),
       }
   ), [isAdmin, adminMerchantId, storeId]);
   const loadProducts = useMemo(() => (isAdmin
@@ -350,6 +353,32 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly
     if (ok) setDeleteTarget(null);
   };
 
+  // Admin read-only exception: switch a discount off/on (only the Active flag).
+  const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
+  const toggleActive = async (d: DiscountResponse, next: boolean) => {
+    if (!next) {
+      const ok = await confirm({
+        title: 'Switch off this discount?',
+        message: 'Customers will no longer be able to use it.',
+        confirmLabel: 'Switch off',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
+    const previous = discounts;
+    setDiscounts((ds) => ds.map((x) => (x.id === d.id ? { ...x, active: next } : x)));
+    setTogglingIds((s) => new Set(s).add(d.id));
+    try {
+      const updated = next ? await api.activate(d.id) : await api.deactivate(d.id);
+      setDiscounts((ds) => ds.map((x) => (x.id === updated.id ? updated : x)));
+    } catch (e) {
+      setDiscounts(previous); // revert so the switch never lies
+      setError(e instanceof ApiError ? e.message : 'Could not change the discount.');
+    } finally {
+      setTogglingIds((s) => { const n = new Set(s); n.delete(d.id); return n; });
+    }
+  };
+
   const valueLabel = (d: DiscountResponse) =>
     d.type === 'FREE_DELIVERY' ? 'Free delivery'
       : d.type === 'PERCENTAGE' ? `${d.value}% off`
@@ -438,7 +467,15 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly
                           </div>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', gap: '8px', flexShrink: 0, alignItems: 'center' }}>
+                        {readOnly && (
+                          <ToggleSwitch
+                            checked={d.active}
+                            disabled={togglingIds.has(d.id)}
+                            onChange={(next) => toggleActive(d, next)}
+                            label={d.active ? 'Active' : 'Off'}
+                          />
+                        )}
                         {!readOnly && <button onClick={() => openEdit(d)} aria-label={`Edit ${d.code}`} style={iconBtn}><Edit2 size={16} /></button>}
                         {!readOnly && <button onClick={() => handleDelete(d)} aria-label={`Delete ${d.code}`} style={{ ...iconBtn, color: '#DC2626' }}><Trash2 size={16} /></button>}
                       </div>

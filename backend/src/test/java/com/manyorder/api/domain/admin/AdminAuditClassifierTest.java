@@ -27,6 +27,10 @@ class AdminAuditClassifierTest {
                 .contains(new Entry("UPDATE_CUSTOMER", "CUSTOMER", 8L, 3L));
         assertThat(classifier.classify("DELETE", "/admin/merchants/3/discounts/2"))
                 .contains(new Entry("DELETE_DISCOUNT", "DISCOUNT", 2L, 3L));
+        assertThat(classifier.classify("PATCH", "/admin/merchants/3/discounts/2/deactivate"))
+                .contains(new Entry("DEACTIVATE_DISCOUNT", "DISCOUNT", 2L, 3L));
+        assertThat(classifier.classify("PATCH", "/admin/merchants/3/discounts/2/activate"))
+                .contains(new Entry("ACTIVATE_DISCOUNT", "DISCOUNT", 2L, 3L));
         assertThat(classifier.classify("PATCH", "/admin/merchants/3/orders/7/status"))
                 .contains(new Entry("UPDATE_ORDER_STATUS", "ORDER", 7L, 3L));
         assertThat(classifier.classify("PATCH", "/admin/merchants/3/orders/7/payment-status"))

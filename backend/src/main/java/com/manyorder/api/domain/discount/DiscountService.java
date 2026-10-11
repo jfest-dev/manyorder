@@ -139,6 +139,21 @@ public class DiscountService {
         discountRepository.delete(requireOwned(merchant, discountId));
     }
 
+    /** Flip only the Active flag (no other field changes). Mirrors product hide/unhide. */
+    @Transactional
+    public DiscountResponse deactivateDiscount(Merchant merchant, Long discountId) {
+        Discount discount = requireOwned(merchant, discountId);
+        discount.setActive(false);
+        return new DiscountResponse(discountRepository.save(discount));
+    }
+
+    @Transactional
+    public DiscountResponse activateDiscount(Merchant merchant, Long discountId) {
+        Discount discount = requireOwned(merchant, discountId);
+        discount.setActive(true);
+        return new DiscountResponse(discountRepository.save(discount));
+    }
+
     // ---------- redemption (checkout + public validation) ----------
 
     /**
