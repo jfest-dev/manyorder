@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { TrendingUp, ShoppingCart, DollarSign, RotateCcw, XCircle, Star, ChevronRight } from 'lucide-react';
 import { Card } from '../Card';
-import { ordersApi, OrderResponse, OrderStatus } from '../../lib/api';
+import { ordersApi, adminApi, OrderResponse, OrderStatus } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersToday, ordersInMonth, monthsWithSales, topProductsByUnits, type RangeKey } from '../../lib/orderStats';
 import { Select } from '../Select';
@@ -11,6 +11,8 @@ import type { Store } from '../../App';
 interface DashboardProps {
   store: Store;
   onNavigate: (screen: string) => void;
+  /** When set, read this store's orders through the admin endpoint (Platform Admin view). */
+  adminMerchantId?: number;
 }
 
 // The tiles' toggle: 'today', the rolling presets, and a 'custom' start/end range.
@@ -76,8 +78,13 @@ function fmtDate(iso: string): string {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-export function Dashboard({ store, onNavigate }: DashboardProps) {
+export function Dashboard({ store, onNavigate, adminMerchantId }: DashboardProps) {
   const storeId = Number(store.id);
+  // Admins read a store's orders through /admin; owners through their own endpoint.
+  const ordersSource = useMemo(
+    () => (adminMerchantId != null ? adminApi.ordersFor(adminMerchantId) : { list: () => ordersApi.list(storeId) }),
+    [adminMerchantId, storeId],
+  );
   const [orders, setOrders] = useState<OrderResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,13 +99,13 @@ export function Dashboard({ store, onNavigate }: DashboardProps) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    ordersApi
-      .list(storeId)
+    ordersSource
+      .list()
       .then((res) => { if (!cancelled) setOrders(res); })
       .catch(() => { if (!cancelled) setError('Could not load your dashboard'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [storeId]);
+  }, [ordersSource]);
 
   // The tiles use the main 7/30/90/all toggle. Top products has its own separate
   // month/all control. Recent orders is a latest-activity glance, independent of

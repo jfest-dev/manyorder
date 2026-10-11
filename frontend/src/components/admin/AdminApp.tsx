@@ -8,6 +8,7 @@ import { Customers } from '../screens/Customers';
 import { ProductsList } from '../screens/ProductsList';
 import { Marketing } from '../screens/Marketing';
 import { Orders } from '../screens/Orders';
+import { Dashboard } from '../screens/Dashboard';
 import { StoreDetail } from './StoreDetail';
 import { StoreHeader } from './StoreHeader';
 import { AdminActivity } from './AdminActivity';
@@ -41,7 +42,7 @@ export function AdminApp() {
   const [error, setError] = useState<string | null>(null);
   const [section, setSection] = useState<Section>('overview');
   const [selected, setSelected] = useState<AdminMerchantSummary | null>(null);
-  const [tab, setTab] = useState<'overview' | 'customers' | 'products' | 'orders' | 'marketing'>('overview');
+  const [tab, setTab] = useState<'overview' | 'dashboard' | 'customers' | 'products' | 'orders' | 'marketing'>('overview');
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [merchantsReload, setMerchantsReload] = useState(0);
@@ -139,7 +140,7 @@ export function AdminApp() {
               <StoreHeader summary={selected} />
 
               <div style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 20, flexWrap: 'wrap' }}>
-                {(['overview', 'customers', 'products', 'orders', 'marketing'] as const).map((t) => (
+                {(['overview', 'dashboard', 'customers', 'products', 'orders', 'marketing'] as const).map((t) => (
                   <button key={t} type="button" onClick={() => setTab(t)}
                     style={{ padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
                       textTransform: 'capitalize', color: tab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
@@ -150,6 +151,13 @@ export function AdminApp() {
               </div>
 
               {tab === 'overview' && <StoreDetail merchantId={selected.id} />}
+              {tab === 'dashboard' && (
+                <Dashboard
+                  store={{ id: String(selected.id), name: selected.name, slug: selected.slug, color: '#000000', currency: selected.currency }}
+                  onNavigate={() => setTab('orders')}
+                  adminMerchantId={selected.id}
+                />
+              )}
               {tab === 'customers' && <Customers storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} readOnly />}
               {tab === 'products' && <ProductsList storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} readOnly />}
               {tab === 'marketing' && <Marketing storeId={selected.id} currency={selected.currency} adminMerchantId={selected.id} readOnly />}
