@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowLeft, Search } from 'lucide-react';
-import { storefrontApi, ApiError, type PublicStoreResponse, type GuestCheckoutResult } from '../../lib/api';
+import { storefrontApi, type PublicStoreResponse, type GuestCheckoutResult } from '../../lib/api';
 import { OrderConfirmationView } from './OrderConfirmationView';
 
 interface OrderLookupViewProps {
@@ -22,10 +22,12 @@ export function OrderLookupView({ store, onBack, onBackToShop }: OrderLookupView
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [result, setResult] = useState<GuestCheckoutResult | null>(null);
 
   const submit = async () => {
     setError(null);
+    setNotFound(false);
     const id = Number(orderNumber.replace(/\D/g, ''));
     if (!id) { setError('Enter your order number.'); return; }
     if (phone.replace(/\D/g, '').length < 7) { setError('Enter the phone number you used at checkout.'); return; }
@@ -33,10 +35,10 @@ export function OrderLookupView({ store, onBack, onBackToShop }: OrderLookupView
     setLoading(true);
     try {
       setResult(await storefrontApi.lookupOrder(store.slug, { orderId: id, phone: phone.trim() }));
-    } catch (e) {
-      setError(e instanceof ApiError
-        ? "We couldn't find an order with that number and phone. Please double-check both."
-        : 'Something went wrong. Please try again.');
+    } catch {
+      // One identical message for every failure (wrong number, wrong phone, no
+      // match, or a server error). Never reveal which detail was wrong.
+      setNotFound(true);
     } finally {
       setLoading(false);
     }
@@ -58,6 +60,19 @@ export function OrderLookupView({ store, onBack, onBackToShop }: OrderLookupView
         <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
           Enter your order number and the phone number you used to pull your order back up.
         </p>
+
+        {notFound && (
+          <div style={{ background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '16px' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 6px' }}>We couldn't find that order</h2>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 12px' }}>
+              Check your order number and phone number, or use the tracking link from your confirmation page.
+            </p>
+            <button onClick={onBackToShop}
+              style={{ height: '40px', padding: '0 16px', borderRadius: '10px', border: '1px solid var(--border-subtle)', background: 'white', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              Shop now
+            </button>
+          </div>
+        )}
         <div>
           <label style={labelStyle}>Order number</label>
           <input style={inputStyle} inputMode="numeric" value={orderNumber}
