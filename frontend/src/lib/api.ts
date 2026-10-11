@@ -896,12 +896,15 @@ export interface GuestCheckoutResult {
 export interface TrackingResult {
   storeName: string;
   currency: string;
-  contactLink: string;
+  /** Store's public contact number for a WhatsApp handoff; null if none set. */
+  storePhone: string | null;
   orderType: string;
   notes: string | null;
   orderNumbers: number[];
   subtotal: number;
   deliveryFee: number;
+  /** True when a delivery fee is still unresolved, so the total is an estimate. */
+  deliveryFeePending: boolean;
   discount: number;
   total: number;
   orders: {

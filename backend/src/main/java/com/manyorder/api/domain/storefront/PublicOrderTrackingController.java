@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,16 +31,11 @@ public class PublicOrderTrackingController {
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
-    private final String frontendBaseUrl;
 
     public PublicOrderTrackingController(OrderRepository orderRepository,
-                                         OrderItemRepository orderItemRepository,
-                                         @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
+                                         OrderItemRepository orderItemRepository) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
-        this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
-                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
-                : frontendBaseUrl;
     }
 
     @PostMapping("/track")
@@ -63,6 +57,7 @@ public class PublicOrderTrackingController {
         List<TrackingResponse.TrackedOrder> tracked = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO, deliveryFee = BigDecimal.ZERO,
                 discount = BigDecimal.ZERO, total = BigDecimal.ZERO;
+        boolean deliveryFeePending = false;
 
         for (int i = 0; i < orders.size(); i++) {
             Order o = orders.get(i);
@@ -84,11 +79,11 @@ public class PublicOrderTrackingController {
             deliveryFee = deliveryFee.add(o.getDeliveryFee());
             discount = discount.add(o.getDiscountAmount());
             total = total.add(o.getTotalAmount());
+            deliveryFeePending = deliveryFeePending || o.isDeliveryFeePending();
         }
 
-        String contactLink = frontendBaseUrl + "/" + store.getSlug();
         return new TrackingResponse(
-                store.getName(), store.getCurrency(), contactLink, primary.getOrderType().name(), primary.getNotes(),
-                numbers, subtotal, deliveryFee, discount, total, tracked);
+                store.getName(), store.getCurrency(), store.getPhoneNumber(), primary.getOrderType().name(),
+                primary.getNotes(), numbers, subtotal, deliveryFee, deliveryFeePending, discount, total, tracked);
     }
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { storefrontApi, ApiError, type TrackingResult, type OrderStatus } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { waLink } from '../../lib/whatsapp';
 import { OrderStatusBadge } from '../StatusBadge';
 
 const ORDER_STATUSES: readonly string[] = [
@@ -125,18 +126,26 @@ export function TrackOrderView() {
       <section style={{ background: 'white', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: 14, marginBottom: 12 }}>
         <Row label="Fulfilment" value={data.orderType === 'DELIVERY' ? 'Delivery' : 'Pickup'} />
         <Row label="Subtotal" value={money(data.subtotal)} />
-        {data.deliveryFee > 0 && <Row label="Delivery fee" value={money(data.deliveryFee)} />}
+        {data.deliveryFeePending
+          ? <Row label="Delivery fee" value="To be confirmed" />
+          : data.deliveryFee > 0 && <Row label="Delivery fee" value={money(data.deliveryFee)} />}
         {data.discount > 0 && <Row label="Discount" value={`- ${money(data.discount)}`} />}
         <Row label="Total" value={money(data.total)} strong />
         {data.notes && <Row label="Notes" value={data.notes} />}
       </section>
 
-      <div style={{ textAlign: 'center' }}>
-        <a href={data.contactLink} target="_blank" rel="noopener noreferrer"
-          style={{ color: 'var(--primary-solid)', fontWeight: 600, textDecoration: 'none' }}>
-          Contact {data.storeName}
-        </a>
-      </div>
+      {data.storePhone && data.orderNumbers.length > 0 && (
+        <div style={{ textAlign: 'center' }}>
+          <a
+            href={waLink(data.storePhone, `Hi ${data.storeName}, I'm checking on order #${data.orderNumbers[0]}.`)}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--primary-solid)', fontWeight: 600, textDecoration: 'none' }}
+          >
+            Contact {data.storeName} on WhatsApp
+          </a>
+        </div>
+      )}
     </>,
   );
 }

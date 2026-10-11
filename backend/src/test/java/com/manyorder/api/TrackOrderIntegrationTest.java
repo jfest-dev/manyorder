@@ -14,6 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -61,7 +62,6 @@ class TrackOrderIntegrationTest extends IntegrationTestBase {
         MvcResult res = track(tok, 200);
         JsonNode body = json(res);
         assertEquals("Track Store", body.get("storeName").asText());
-        assertTrue(body.get("contactLink").asText().contains("trk-store"));
         assertEquals("DELIVERY", body.get("orderType").asText());
         assertTrue(body.get("orderNumbers").toString().contains(String.valueOf(orderId)));
         assertTrue(body.get("orders").get(0).get("items").size() > 0, "items with options present");
@@ -112,6 +112,38 @@ class TrackOrderIntegrationTest extends IntegrationTestBase {
         String a = json(checkout(new java.util.HashMap<>(body))).get("trackingToken").asText();
         String b = json(checkout(new java.util.HashMap<>(body))).get("trackingToken").asText();
         assertNotEquals(a, b, "each checkout gets its own token");
+    }
+
+    @Test
+    void editingAnOrdersFee_updatesWhatTrackingReturns() throws Exception {
+        String t = registerAndGetToken("trk-fee@test.com", "MERCHANT", null);
+        long storeId = createStore(t, "Fee Store", "trk-fee-store"); // no delivery fee configured
+        long productId = createProduct(t, storeId, Map.of("name", "Latte", "price", 6.0, "stock", 100));
+
+        // A delivery order with no fee set yet: pending, total excludes the fee.
+        MvcResult co = checkout(new java.util.HashMap<>(Map.of(
+                "merchantId", storeId, "customerName", "Guest", "customerPhone", "+6590005555",
+                "fulfilmentMethod", "DELIVERY", "deliveryAddress", "9 Road",
+                "items", List.of(Map.of("productId", productId, "quantity", 2)))));
+        String tok = json(co).get("trackingToken").asText();
+        long orderId = json(co).get("orderId").asLong();
+
+        JsonNode before = json(track(tok, 200));
+        assertTrue(before.get("deliveryFeePending").asBoolean(), "fee pending before the edit");
+        double totalBefore = before.get("total").asDouble();
+
+        // Merchant sets the delivery fee on the order.
+        mockMvc.perform(patch("/merchant/stores/" + storeId + "/orders/" + orderId)
+                        .header("Authorization", "Bearer " + t)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("customerName", "Guest", "deliveryFee", 3.00))))
+                .andExpect(status().isOk());
+
+        // The next tracking read reflects the new fee and total.
+        JsonNode after = json(track(tok, 200));
+        assertFalse(after.get("deliveryFeePending").asBoolean(), "fee resolved after the edit");
+        assertEquals(3.0, after.get("deliveryFee").asDouble(), 0.001);
+        assertEquals(totalBefore + 3.0, after.get("total").asDouble(), 0.001);
     }
 
     @Test

@@ -11,12 +11,15 @@ import java.util.List;
 public record TrackingResponse(
         String storeName,
         String currency,
-        String contactLink,
+        /** The store's public contact number for a WhatsApp handoff; null if none set. */
+        String storePhone,
         String orderType,          // fulfilment type: PICKUP | DELIVERY
         String notes,              // the order's own notes to the store
         List<Long> orderNumbers,
         BigDecimal subtotal,
         BigDecimal deliveryFee,
+        /** True when a delivery fee is still unresolved, so the total is an estimate. */
+        boolean deliveryFeePending,
         BigDecimal discount,
         BigDecimal total,
         List<TrackedOrder> orders) {
