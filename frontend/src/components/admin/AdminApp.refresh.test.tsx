@@ -45,7 +45,6 @@ describe('AdminApp background refresh', () => {
     render(<ConfirmProvider><AdminApp /></ConfirmProvider>);
 
     // Initial load finished.
-    await screen.findByRole('heading', { name: 'Merchants' });
     await waitFor(() => expect(metrics).toHaveBeenCalledTimes(1));
     expect(listMerchants).toHaveBeenCalledTimes(1);
 
@@ -57,7 +56,6 @@ describe('AdminApp background refresh', () => {
 
   it('keeps the last good data when a focus refresh fails', async () => {
     render(<ConfirmProvider><AdminApp /></ConfirmProvider>);
-    await screen.findByRole('heading', { name: 'Merchants' });
     await waitFor(() => expect(metrics).toHaveBeenCalledTimes(1));
 
     // Next refresh rejects; the screen must not show an error or go blank.
@@ -66,8 +64,8 @@ describe('AdminApp background refresh', () => {
     window.dispatchEvent(new Event('focus'));
 
     await waitFor(() => expect(metrics).toHaveBeenCalledTimes(2));
-    // Still showing the merchants view, no error banner.
-    expect(screen.getByRole('heading', { name: 'Merchants' })).toBeTruthy();
+    // Still showing the console (nav present), no error banner.
+    expect(screen.getByRole('button', { name: 'Merchants' })).toBeTruthy();
     expect(screen.queryByText(/Could not load admin data/i)).toBeNull();
   });
 });

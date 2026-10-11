@@ -17,6 +17,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
       suspend: (id: number) => suspendMock(id),
       unsuspend: vi.fn().mockResolvedValue(undefined),
       getMerchant: vi.fn(),
+      auditLog: () => Promise.resolve([]),
     },
   };
 });
@@ -50,11 +51,15 @@ beforeEach(() => {
 });
 
 describe('AdminApp', () => {
-  it('shows metrics and the merchant list', async () => {
+  it('shows the Overview, then the merchant list under the Merchants nav', async () => {
+    const user = userEvent.setup();
     renderAdmin();
-    expect(await screen.findByText('Kiri Brew')).toBeTruthy();
+    // Overview is the landing section.
     expect(screen.getByText('Platform Admin')).toBeTruthy();
-    expect(screen.getAllByText('Active').length).toBeGreaterThan(0); // tile + status badge
+    expect(await screen.findByText('New (30d)')).toBeTruthy(); // a metrics tile
+
+    await user.click(screen.getByRole('button', { name: 'Merchants' }));
+    expect(await screen.findByText('Kiri Brew')).toBeTruthy();
     expect(screen.getByText('demo@x.com')).toBeTruthy();      // owner
     expect(screen.getByText('/kiri')).toBeTruthy();           // slug in the row
   });
@@ -62,6 +67,7 @@ describe('AdminApp', () => {
   it('suspends a merchant after confirmation', async () => {
     const user = userEvent.setup();
     renderAdmin();
+    await user.click(screen.getByRole('button', { name: 'Merchants' }));
     await screen.findByText('Kiri Brew');
 
     // Row action (accessible name includes the store); opens the confirm dialog.
@@ -70,5 +76,20 @@ describe('AdminApp', () => {
     await user.click(await screen.findByRole('button', { name: 'Suspend' }));
 
     await waitFor(() => expect(suspendMock).toHaveBeenCalledWith(7));
+  });
+
+  it('left nav switches between Overview, Merchants and Activity', async () => {
+    const user = userEvent.setup();
+    renderAdmin();
+    await screen.findByText('New (30d)'); // Overview (default)
+
+    await user.click(screen.getByRole('button', { name: 'Merchants' }));
+    expect(await screen.findByText('Kiri Brew')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Activity' }));
+    expect(await screen.findByText('Changes platform admins made across all stores.')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(await screen.findByText('New (30d)')).toBeTruthy();
   });
 });
