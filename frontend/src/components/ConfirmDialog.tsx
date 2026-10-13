@@ -89,44 +89,124 @@ export interface ConfirmOptions {
   tone?: 'default' | 'danger';
 }
 
-type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
+/** Options for a confirm that also collects a required written reason. */
+export interface ConfirmReasonOptions extends ConfirmOptions {
+  reasonLabel?: string;
+  reasonPlaceholder?: string;
+  reasonMaxLength?: number;
+}
 
-const ConfirmContext = createContext<ConfirmFn>(() => Promise.resolve(false));
+type ConfirmFn = (opts: ConfirmOptions) => Promise<boolean>;
+/** Resolves with the trimmed reason, or null if cancelled. */
+type ConfirmReasonFn = (opts: ConfirmReasonOptions) => Promise<string | null>;
+
+interface ConfirmApi { confirm: ConfirmFn; confirmReason: ConfirmReasonFn; }
+
+const ConfirmContext = createContext<ConfirmApi>({
+  confirm: () => Promise.resolve(false),
+  confirmReason: () => Promise.resolve(null),
+});
+
+const DEFAULT_REASON_MAX = 300;
+
+type PendingBool = { kind: 'bool'; opts: ConfirmOptions; resolve: (v: boolean) => void };
+type PendingReason = { kind: 'reason'; opts: ConfirmReasonOptions; resolve: (v: string | null) => void };
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<{ opts: ConfirmOptions; resolve: (v: boolean) => void } | null>(null);
+  const [state, setState] = useState<PendingBool | PendingReason | null>(null);
+  const [reason, setReason] = useState('');
+  const [touched, setTouched] = useState(false);
+
   const confirm = useCallback<ConfirmFn>(
-    (opts) => new Promise<boolean>((resolve) => setState({ opts, resolve })),
+    (opts) => new Promise<boolean>((resolve) => { setState({ kind: 'bool', opts, resolve }); }),
     [],
   );
-  const close = (value: boolean) => {
-    setState((s) => { s?.resolve(value); return null; });
+  const confirmReason = useCallback<ConfirmReasonFn>(
+    (opts) => new Promise<string | null>((resolve) => {
+      setReason(''); setTouched(false); setState({ kind: 'reason', opts, resolve });
+    }),
+    [],
+  );
+
+  const closeBool = (value: boolean) => {
+    setState((s) => { if (s?.kind === 'bool') s.resolve(value); return null; });
   };
+  const cancelReason = () => {
+    setState((s) => { if (s?.kind === 'reason') s.resolve(null); return null; });
+  };
+  const submitReason = () => {
+    const trimmed = reason.trim();
+    if (!trimmed) { setTouched(true); return; }
+    setState((s) => { if (s?.kind === 'reason') s.resolve(trimmed); return null; });
+  };
+
   return (
-    <ConfirmContext.Provider value={confirm}>
+    <ConfirmContext.Provider value={{ confirm, confirmReason }}>
       {children}
-      {state && (
-        <DialogShell title={state.opts.title} onDismiss={() => close(false)}>
+      {state?.kind === 'bool' && (
+        <DialogShell title={state.opts.title} onDismiss={() => closeBool(false)}>
           <p className="text-small" style={bodyStyle}>{state.opts.message}</p>
           <div style={actionsStyle}>
-            <button type="button" onClick={() => close(false)} style={dialogGhostBtn}>
+            <button type="button" onClick={() => closeBool(false)} style={dialogGhostBtn}>
               {state.opts.cancelLabel ?? 'Cancel'}
             </button>
-            <button
-              type="button"
-              onClick={() => close(true)}
-              style={state.opts.tone === 'danger' ? dialogDangerBtn : dialogPrimaryBtn}
-            >
+            <button type="button" onClick={() => closeBool(true)}
+              style={state.opts.tone === 'danger' ? dialogDangerBtn : dialogPrimaryBtn}>
               {state.opts.confirmLabel ?? 'Confirm'}
             </button>
           </div>
         </DialogShell>
       )}
+      {state?.kind === 'reason' && (() => {
+        const max = state.opts.reasonMaxLength ?? DEFAULT_REASON_MAX;
+        const invalid = touched && reason.trim().length === 0;
+        return (
+          <DialogShell title={state.opts.title} onDismiss={cancelReason}>
+            <p className="text-small" style={{ ...bodyStyle, marginBottom: 12 }}>{state.opts.message}</p>
+            <label className="text-xs" style={{ fontWeight: 600, display: 'block', marginBottom: 6 }}>
+              {state.opts.reasonLabel ?? 'Reason'}
+            </label>
+            <textarea
+              value={reason}
+              maxLength={max}
+              autoFocus
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={state.opts.reasonPlaceholder ?? 'The owner will see this.'}
+              aria-label={state.opts.reasonLabel ?? 'Reason'}
+              style={{
+                width: '100%', minHeight: 72, resize: 'vertical', padding: '8px 10px', fontSize: 13,
+                fontFamily: 'inherit', border: `1px solid ${invalid ? '#DC2626' : 'var(--border-strong)'}`,
+                borderRadius: 'var(--radius-field)', background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none',
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0 16px' }}>
+              <span className="text-xs" style={{ color: '#DC2626' }}>{invalid ? 'A reason is required.' : ''}</span>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{reason.length}/{max}</span>
+            </div>
+            <div style={actionsStyle}>
+              <button type="button" onClick={cancelReason} style={dialogGhostBtn}>
+                {state.opts.cancelLabel ?? 'Cancel'}
+              </button>
+              <button type="button" onClick={submitReason} disabled={reason.trim().length === 0}
+                style={{ ...(state.opts.tone === 'danger' ? dialogDangerBtn : dialogPrimaryBtn),
+                  opacity: reason.trim().length === 0 ? 0.5 : 1,
+                  cursor: reason.trim().length === 0 ? 'not-allowed' : 'pointer' }}>
+                {state.opts.confirmLabel ?? 'Confirm'}
+              </button>
+            </div>
+          </DialogShell>
+        );
+      })()}
     </ConfirmContext.Provider>
   );
 }
 
 /** Returns `confirm(opts) => Promise<boolean>`. Use in place of window.confirm. */
 export function useConfirm(): ConfirmFn {
-  return useContext(ConfirmContext);
+  return useContext(ConfirmContext).confirm;
+}
+
+/** Returns `confirmReason(opts) => Promise<string | null>` (null = cancelled). */
+export function useConfirmReason(): ConfirmReasonFn {
+  return useContext(ConfirmContext).confirmReason;
 }

@@ -19,7 +19,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
         delete: vi.fn(),
         reorder: vi.fn(),
         activate: vi.fn().mockResolvedValue({}),
-        deactivate: (id: number) => deactivateMock(id),
+        deactivate: (id: number, reason?: string) => deactivateMock(id, reason),
       }),
       productsFor: () => ({
         list: () => Promise.resolve([]),
@@ -60,18 +60,18 @@ describe('Marketing admin read-only vs editable', () => {
     expect(screen.getByRole('switch', { name: 'Active' })).toBeTruthy();
   });
 
-  it('read-only: switching a discount off confirms, then calls deactivate', async () => {
+  it('read-only: switching a discount off needs a reason, then calls deactivate with it', async () => {
     const user = userEvent.setup();
     renderAdmin();
     await screen.findAllByText('SAVE10');
 
     await user.click(screen.getByRole('switch', { name: 'Active' }));
-    // Confirmation copy appears.
+    // Confirmation copy appears, with a required reason.
     expect(await screen.findByText('Switch off this discount?')).toBeTruthy();
-    expect(screen.getByText('Customers will no longer be able to use it.')).toBeTruthy();
 
+    await user.type(screen.getByLabelText('Reason (shown to the owner)'), 'Expired promo');
     await user.click(screen.getByRole('button', { name: 'Switch off' }));
-    await waitFor(() => expect(deactivateMock).toHaveBeenCalledWith(21));
+    await waitFor(() => expect(deactivateMock).toHaveBeenCalledWith(21, 'Expired promo'));
   });
 
   it('editable: New Discount, Edit and Delete are present (no toggle)', async () => {

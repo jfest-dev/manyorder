@@ -32,10 +32,12 @@ class AdminAuditLogAndDetailIntegrationTest extends IntegrationTestBase {
         JsonNode products = json(getWithToken("/admin/merchants/" + storeId + "/products", admin, 200));
         long productId = products.get(0).get("id").asLong();
         mockMvc.perform(patch("/admin/merchants/" + storeId + "/products/" + productId + "/deactivate")
-                        .header("Authorization", "Bearer " + admin))
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Out of policy\"}"))
                 .andExpect(status().isOk());
 
-        // Audit log filtered by this store contains the action, scoped to it.
+        // Audit log filtered by this store contains the action, scoped to it, with the reason saved.
         JsonNode scoped = json(getWithToken("/admin/audit-log?storeId=" + storeId, admin, 200));
         boolean found = false;
         for (JsonNode row : scoped) {
@@ -43,6 +45,7 @@ class AdminAuditLogAndDetailIntegrationTest extends IntegrationTestBase {
             if ("DEACTIVATE_PRODUCT".equals(row.get("action").asText())
                     && row.get("targetId").asLong() == productId) {
                 found = true;
+                assertEquals("Out of policy", row.get("detail").asText(), "reason saved on the audit row");
             }
         }
         assertTrue(found, "deactivate shows in the store-filtered audit log");

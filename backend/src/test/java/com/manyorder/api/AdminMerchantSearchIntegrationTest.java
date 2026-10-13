@@ -34,7 +34,9 @@ class AdminMerchantSearchIntegrationTest extends IntegrationTestBase {
 
         // Suspend store A, then the SUSPENDED filter returns it and the ACTIVE filter does not.
         mockMvc.perform(post("/admin/merchants/" + storeA + "/suspend")
-                .header("Authorization", "Bearer " + admin)).andExpect(status().isNoContent());
+                .header("Authorization", "Bearer " + admin)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Test suspension\"}")).andExpect(status().isNoContent());
 
         JsonNode suspended = json(getWithToken("/admin/merchants/search?q=search&status=SUSPENDED", admin, 200));
         assertEquals(1, suspended.get("totalElements").asLong());

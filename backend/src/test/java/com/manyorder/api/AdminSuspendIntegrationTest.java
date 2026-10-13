@@ -28,7 +28,8 @@ class AdminSuspendIntegrationTest extends IntegrationTestBase {
 
     private void suspend(long storeId, String token, int expected) throws Exception {
         mockMvc.perform(post("/admin/merchants/" + storeId + "/suspend")
-                        .header("Authorization", "Bearer " + token))
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"Policy review\"}"))
                 .andExpect(status().is(expected));
     }
 
@@ -62,7 +63,9 @@ class AdminSuspendIntegrationTest extends IntegrationTestBase {
 
         // Unsuspend restores storefront + login.
         mockMvc.perform(post("/admin/merchants/" + storeId + "/unsuspend")
-                        .header("Authorization", "Bearer " + admin)).andExpect(status().isNoContent());
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"Issue resolved\"}"))
+                .andExpect(status().isNoContent());
         mockMvc.perform(get("/public/stores/suspend-test-store")).andExpect(status().isOk());
         assertTrue(loginAndGetToken("suspend-me@test.com", "password123").length() > 0, "login works again");
         assertTrue(adminAuditLogRepository.findAllByOrderByCreatedAtDesc().stream()

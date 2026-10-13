@@ -87,24 +87,25 @@ class AdminLockdownIntegrationTest extends IntegrationTestBase {
         getWithToken("/admin/audit-log?storeId=" + storeId, admin, 200);
         getWithToken("/admin/merchants", admin, 200);
 
-        // Hide / unhide a product (the only product mutations admins keep).
-        mockMvc.perform(patch(p + "/" + productId + "/deactivate").header("Authorization", "Bearer " + admin))
+        // Hide a product needs a reason; unhide does not (not a notifiable action).
+        String reason = "{\"reason\":\"Policy review\"}";
+        mockMvc.perform(json(patch(p + "/" + productId + "/deactivate"), reason).header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk());
         mockMvc.perform(patch(p + "/" + productId + "/activate").header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk());
 
-        // Switch a discount off / on (the only discount mutations admins keep).
+        // Switch a discount off (reason required) / on (no reason).
         long discountId = createMerchantDiscount(merchant, storeId, "LOCK10");
         String d = "/admin/merchants/" + storeId + "/discounts";
-        mockMvc.perform(patch(d + "/" + discountId + "/deactivate").header("Authorization", "Bearer " + admin))
+        mockMvc.perform(json(patch(d + "/" + discountId + "/deactivate"), reason).header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk());
         mockMvc.perform(patch(d + "/" + discountId + "/activate").header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk());
 
-        // Store-level suspend / unsuspend stay.
-        mockMvc.perform(post("/admin/merchants/" + storeId + "/suspend").header("Authorization", "Bearer " + admin))
+        // Store-level suspend / unsuspend stay, each with a reason.
+        mockMvc.perform(json(post("/admin/merchants/" + storeId + "/suspend"), reason).header("Authorization", "Bearer " + admin))
                 .andExpect(status().isNoContent());
-        mockMvc.perform(post("/admin/merchants/" + storeId + "/unsuspend").header("Authorization", "Bearer " + admin))
+        mockMvc.perform(json(post("/admin/merchants/" + storeId + "/unsuspend"), reason).header("Authorization", "Bearer " + admin))
                 .andExpect(status().isNoContent());
     }
 

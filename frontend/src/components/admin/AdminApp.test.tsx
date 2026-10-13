@@ -16,7 +16,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
       overview: () => Promise.resolve(OVERVIEW),
       listMerchants: () => Promise.resolve([]),
       searchMerchants: () => searchMock(),
-      suspend: (id: number) => suspendMock(id),
+      suspend: (id: number, reason: string) => suspendMock(id, reason),
       unsuspend: vi.fn().mockResolvedValue(undefined),
       getMerchant: vi.fn(),
       auditLog: () => Promise.resolve([]),
@@ -82,12 +82,13 @@ describe('AdminApp', () => {
     await user.click(screen.getByRole('button', { name: 'Merchants' }));
     await screen.findByText('Kiri Brew');
 
-    // Row action (accessible name includes the store); opens the confirm dialog.
+    // Row action (accessible name includes the store); opens the reason dialog.
     await user.click(screen.getByRole('button', { name: 'Suspend Kiri Brew' }));
-    // Dialog confirm button's accessible name is exactly "Suspend".
-    await user.click(await screen.findByRole('button', { name: 'Suspend' }));
+    // A reason is required before the Suspend button enables.
+    await user.type(await screen.findByLabelText('Reason (shown to the owner)'), 'Spam listings');
+    await user.click(screen.getByRole('button', { name: 'Suspend' }));
 
-    await waitFor(() => expect(suspendMock).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(suspendMock).toHaveBeenCalledWith(7, 'Spam listings'));
   });
 
   it('left nav switches between Overview, Merchants and Activity', async () => {

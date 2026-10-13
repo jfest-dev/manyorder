@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const listMock = vi.fn();
+const deactivateMock = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api')>();
@@ -13,7 +15,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
       productsFor: () => ({
         list: () => listMock(),
         activate: vi.fn(),
-        deactivate: vi.fn(),
+        deactivate: (id: number, reason?: string) => deactivateMock(id, reason),
         delete: vi.fn(),
         reorder: vi.fn(),
       }),
@@ -22,6 +24,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
 });
 
 import { ProductsList } from './ProductsList';
+import { ConfirmProvider } from '../ConfirmDialog';
 import type { ProductResponse } from '../../lib/api';
 
 const PRODUCT = {
@@ -32,6 +35,7 @@ const PRODUCT = {
 beforeEach(() => {
   cleanup();
   listMock.mockReset().mockResolvedValue([PRODUCT]);
+  deactivateMock.mockReset().mockResolvedValue({ ...PRODUCT, isActive: false });
 });
 
 describe('ProductsList admin read-only vs editable', () => {
@@ -44,6 +48,19 @@ describe('ProductsList admin read-only vs editable', () => {
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
     // Hide/unhide (the ToggleSwitch labelled Active/Draft) remains.
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
+  });
+
+  it('read-only: hiding a product needs a reason, then calls deactivate with it', async () => {
+    const user = userEvent.setup();
+    render(<ConfirmProvider><ProductsList storeId={5} currency="SGD" adminMerchantId={5} readOnly /></ConfirmProvider>);
+    await screen.findAllByText('Widget');
+
+    await user.click(screen.getAllByRole('switch', { name: 'Active' })[0]);
+    expect(await screen.findByText('Hide Widget?')).toBeTruthy();
+
+    await user.type(screen.getByLabelText('Reason (shown to the owner)'), 'Misleading photo');
+    await user.click(screen.getByRole('button', { name: 'Hide' }));
+    await waitFor(() => expect(deactivateMock).toHaveBeenCalledWith(11, 'Misleading photo'));
   });
 
   it('editable: Add and Edit are present', async () => {

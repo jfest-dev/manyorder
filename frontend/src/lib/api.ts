@@ -1127,8 +1127,10 @@ export const adminApi = {
   storeDetail: (merchantId: number) => request<AdminStoreDetail>(`/admin/merchants/${merchantId}/detail`),
   auditLog: (storeId?: number) =>
     request<AdminAuditLogEntry[]>(`/admin/audit-log${storeId != null ? `?storeId=${storeId}` : ''}`),
-  suspend: (merchantId: number) => request<void>(`/admin/merchants/${merchantId}/suspend`, { method: 'POST' }),
-  unsuspend: (merchantId: number) => request<void>(`/admin/merchants/${merchantId}/unsuspend`, { method: 'POST' }),
+  suspend: (merchantId: number, reason: string) =>
+    request<void>(`/admin/merchants/${merchantId}/suspend`, { method: 'POST', body: { reason } }),
+  unsuspend: (merchantId: number, reason: string) =>
+    request<void>(`/admin/merchants/${merchantId}/unsuspend`, { method: 'POST', body: { reason } }),
 
   /** Customer management scoped to one merchant — same shape as customersApi (minus storeId),
    *  so an admin can drive the shared Customers screen against /admin endpoints. */
@@ -1148,8 +1150,8 @@ export const adminApi = {
     list: () => request<ProductResponse[]>(`/admin/merchants/${merchantId}/products`),
     activate: (productId: number) =>
       request<ProductResponse>(`/admin/merchants/${merchantId}/products/${productId}/activate`, { method: 'PATCH' }),
-    deactivate: (productId: number) =>
-      request<ProductResponse>(`/admin/merchants/${merchantId}/products/${productId}/deactivate`, { method: 'PATCH' }),
+    deactivate: (productId: number, reason?: string) =>
+      request<ProductResponse>(`/admin/merchants/${merchantId}/products/${productId}/deactivate`, { method: 'PATCH', body: { reason } }),
     delete: (productId: number) =>
       request<void>(`/admin/merchants/${merchantId}/products/${productId}`, { method: 'DELETE' }),
     reorder: (productIds: number[]) =>
@@ -1169,8 +1171,8 @@ export const adminApi = {
       request<DiscountResponse[]>(`/admin/merchants/${merchantId}/discounts/reorder`, { method: 'PATCH', body: { discountIds } }),
     activate: (discountId: number) =>
       request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts/${discountId}/activate`, { method: 'PATCH' }),
-    deactivate: (discountId: number) =>
-      request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts/${discountId}/deactivate`, { method: 'PATCH' }),
+    deactivate: (discountId: number, reason?: string) =>
+      request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts/${discountId}/deactivate`, { method: 'PATCH', body: { reason } }),
   }),
 
   /** Order management scoped to one merchant (admin scope: list + status/payment only,

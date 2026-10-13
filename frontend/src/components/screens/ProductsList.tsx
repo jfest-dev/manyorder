@@ -6,6 +6,7 @@ import { ReorderableList } from '../ReorderableList';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { productsApi, adminApi, storesApi, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { useConfirmReason } from '../ConfirmDialog';
 import { LOW_STOCK_AT } from '../storefront/storefrontTypes';
 
 interface ProductsListProps {
@@ -102,12 +103,13 @@ const ALL_CATEGORIES = '__all__';
 
 export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adminMerchantId, readOnly = false }: ProductsListProps) {
   const isAdmin = adminMerchantId != null;
+  const confirmReason = useConfirmReason();
   const api = useMemo(() => (isAdmin
     ? adminApi.productsFor(adminMerchantId!)
     : {
         list: () => productsApi.list(storeId),
         activate: (pid: number) => productsApi.activate(storeId, pid),
-        deactivate: (pid: number) => productsApi.deactivate(storeId, pid),
+        deactivate: (pid: number, _reason?: string) => productsApi.deactivate(storeId, pid),
         delete: (pid: number) => productsApi.delete(storeId, pid),
         reorder: (ids: number[]) => productsApi.reorder(storeId, ids),
       }
@@ -212,13 +214,26 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
   // endpoints. Optimistic with the server response merged in; reverts on failure.
   const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
   const toggleActive = async (product: ProductResponse, next: boolean) => {
+    // An admin hiding a product must give a reason (the owner is emailed); every
+    // other flip (unhide, or any merchant toggle) is immediate.
+    let reason: string | undefined;
+    if (isAdmin && !next) {
+      const r = await confirmReason({
+        title: `Hide ${product.name}?`,
+        message: 'The owner will be emailed with your reason. The product stays hidden until unhidden.',
+        confirmLabel: 'Hide', tone: 'danger',
+        reasonLabel: 'Reason (shown to the owner)',
+      });
+      if (r == null) return; // cancelled: leave the switch as it was
+      reason = r;
+    }
     const previous = products;
     setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, isActive: next } : p)));
     setTogglingIds((s) => new Set(s).add(product.id));
     try {
       const updated = next
         ? await api.activate(product.id)
-        : await api.deactivate(product.id);
+        : await api.deactivate(product.id, reason);
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     } catch (e) {
       setProducts(previous); // revert so the switch never lies

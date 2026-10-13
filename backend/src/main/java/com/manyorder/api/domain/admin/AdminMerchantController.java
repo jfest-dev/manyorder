@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -32,15 +33,18 @@ public class AdminMerchantController {
     private final CurrentUserService currentUserService;
     private final AdminAuditService adminAuditService;
     private final AdminMerchantService adminMerchantService;
+    private final MerchantActionMailer merchantActionMailer;
 
     public AdminMerchantController(MerchantRepository merchantRepository,
                                    CurrentUserService currentUserService,
                                    AdminAuditService adminAuditService,
-                                   AdminMerchantService adminMerchantService) {
+                                   AdminMerchantService adminMerchantService,
+                                   MerchantActionMailer merchantActionMailer) {
         this.merchantRepository = merchantRepository;
         this.currentUserService = currentUserService;
         this.adminAuditService = adminAuditService;
         this.adminMerchantService = adminMerchantService;
+        this.merchantActionMailer = merchantActionMailer;
     }
 
     /** All merchants (including suspended/archived), newest first, with per-store counts. */
@@ -73,31 +77,45 @@ public class AdminMerchantController {
         return adminMerchantService.getStoreDetail(currentUserService.require(authentication), merchantId);
     }
 
-    /** Suspend a merchant: hides its storefront and blocks owner/staff login. Idempotent. */
+    /** Suspend a merchant: hides its storefront and blocks owner/staff login. Idempotent.
+     *  Requires a written reason, saved to the audit log and emailed to the owner. */
     @PostMapping("/{merchantId}/suspend")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Transactional
-    public void suspend(@PathVariable Long merchantId, Authentication authentication) {
+    public void suspend(@PathVariable Long merchantId, @RequestBody AdminReasonRequest body, Authentication authentication) {
+        String reason = body.validated();
         User admin = currentUserService.require(authentication);
         Merchant merchant = requireMerchant(merchantId);
         if (!merchant.isSuspended()) {
             merchant.setSuspendedAt(LocalDateTime.now());
             merchantRepository.save(merchant);
-            adminAuditService.record(admin, "SUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), merchant.getName());
+            adminAuditService.record(admin, "SUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), reason);
+            notifyOwner(merchant, MerchantActionMailer.Action.SUSPENDED, reason);
         }
     }
 
-    /** Lift a suspension. Idempotent. */
+    /** Lift a suspension. Idempotent. Requires a reason, saved and emailed like suspend. */
     @PostMapping("/{merchantId}/unsuspend")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Transactional
-    public void unsuspend(@PathVariable Long merchantId, Authentication authentication) {
+    public void unsuspend(@PathVariable Long merchantId, @RequestBody AdminReasonRequest body, Authentication authentication) {
+        String reason = body.validated();
         User admin = currentUserService.require(authentication);
         Merchant merchant = requireMerchant(merchantId);
         if (merchant.isSuspended()) {
             merchant.setSuspendedAt(null);
             merchantRepository.save(merchant);
-            adminAuditService.record(admin, "UNSUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), merchant.getName());
+            adminAuditService.record(admin, "UNSUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), reason);
+            notifyOwner(merchant, MerchantActionMailer.Action.UNSUSPENDED, reason);
+        }
+    }
+
+    /** Email the owner, swallowing any failure: a failed notice must never undo the action. */
+    private void notifyOwner(Merchant merchant, MerchantActionMailer.Action action, String reason) {
+        try {
+            merchantActionMailer.notifyOwner(merchant, action, reason);
+        } catch (Exception e) {
+            // Deliberately ignored: the suspension/reinstatement is already recorded.
         }
     }
 

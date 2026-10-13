@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi, AdminMetrics, AdminMerchantSummary, ApiError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { useConfirm } from '../ConfirmDialog';
+import { useConfirmReason } from '../ConfirmDialog';
 import { Button } from '../Button';
 import { Toast } from '../Toast';
 import { Customers } from '../screens/Customers';
@@ -36,7 +36,7 @@ function Tile({ label, value }: { label: string; value: number }) {
  *  drill-down opened from Merchants. Reached only when the user's role is PLATFORM_ADMIN. */
 export function AdminApp() {
   const { user, logout } = useAuth();
-  const confirm = useConfirm();
+  const confirmReason = useConfirmReason();
 
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,18 +81,19 @@ export function AdminApp() {
 
   const toggleSuspend = async (m: AdminMerchantSummary) => {
     const suspend = m.status !== 'SUSPENDED';
-    const ok = await confirm({
+    const reason = await confirmReason({
       title: suspend ? `Suspend ${m.name}?` : `Unsuspend ${m.name}?`,
       message: suspend
-        ? 'This hides their storefront and blocks the owner (and staff) from signing in until you lift it.'
-        : 'This restores their storefront and lets the owner sign in again.',
+        ? 'This hides their storefront and blocks the owner (and staff) from signing in until you lift it. The owner will be emailed with your reason.'
+        : 'This restores their storefront and lets the owner sign in again. The owner will be emailed with your reason.',
       confirmLabel: suspend ? 'Suspend' : 'Unsuspend',
       tone: suspend ? 'danger' : 'default',
+      reasonLabel: 'Reason (shown to the owner)',
     });
-    if (!ok) return;
+    if (reason == null) return;
     setBusyId(m.id);
     try {
-      await (suspend ? adminApi.suspend(m.id) : adminApi.unsuspend(m.id));
+      await (suspend ? adminApi.suspend(m.id, reason) : adminApi.unsuspend(m.id, reason));
       showNotice(suspend ? `${m.name} suspended.` : `${m.name} unsuspended.`);
       loadMetrics();
       setMerchantsReload((n) => n + 1);

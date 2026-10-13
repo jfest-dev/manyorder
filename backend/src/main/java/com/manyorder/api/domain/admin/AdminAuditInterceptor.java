@@ -30,6 +30,9 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(AdminAuditInterceptor.class);
 
+    /** Request attribute a handler may set so its audit row carries a reason/detail. */
+    public static final String DETAIL_ATTRIBUTE = "adminAuditDetail";
+
     private final AdminAuditClassifier classifier;
     private final AdminAuditService auditService;
     private final CurrentUserService currentUserService;
@@ -51,7 +54,9 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
             classifier.classify(method, pathWithinApp(request)).ifPresent(e -> {
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                 User actor = currentUserService.require(auth);
-                auditService.record(actor, e.action(), e.targetType(), e.targetId(), e.merchantId(), null);
+                Object detail = request.getAttribute(DETAIL_ATTRIBUTE);
+                auditService.record(actor, e.action(), e.targetType(), e.targetId(), e.merchantId(),
+                        detail instanceof String s ? s : null);
             });
         } catch (Exception e) {
             // Auditing must never affect the response (already sent) or surface an error.

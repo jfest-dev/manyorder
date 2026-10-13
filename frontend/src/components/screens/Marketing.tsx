@@ -8,7 +8,7 @@ import { MoneyField } from '../MoneyField';
 import { DatePicker } from '../DatePicker';
 import { Checkbox } from '../Checkbox';
 import { ToggleSwitch } from '../ToggleSwitch';
-import { useConfirm } from '../ConfirmDialog';
+import { useConfirm, useConfirmReason } from '../ConfirmDialog';
 import { Toast } from '../Toast';
 import { discountsApi, adminApi, DiscountResponse, DiscountType, DiscountPayload, ApiError, productsApi, ProductResponse } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
@@ -109,6 +109,7 @@ const BLANK: FormState = {
 
 export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly = false }: MarketingProps) {
   const confirm = useConfirm();
+  const confirmReason = useConfirmReason();
   const isAdmin = adminMerchantId != null;
   const api = useMemo(() => (isAdmin
     ? adminApi.discountsFor(adminMerchantId!)
@@ -119,7 +120,7 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly
         delete: (id: number) => discountsApi.delete(storeId, id),
         reorder: (ids: number[]) => discountsApi.reorder(storeId, ids),
         activate: (id: number) => discountsApi.update(storeId, id, { active: true }),
-        deactivate: (id: number) => discountsApi.update(storeId, id, { active: false }),
+        deactivate: (id: number, _reason?: string) => discountsApi.update(storeId, id, { active: false }),
       }
   ), [isAdmin, adminMerchantId, storeId]);
   const loadProducts = useMemo(() => (isAdmin
@@ -356,20 +357,34 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly
   // Admin read-only exception: switch a discount off/on (only the Active flag).
   const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
   const toggleActive = async (d: DiscountResponse, next: boolean) => {
+    // Switching a discount off asks for confirmation; an admin must also give a
+    // reason, which is emailed to the owner. Switching on is immediate.
+    let reason: string | undefined;
     if (!next) {
-      const ok = await confirm({
-        title: 'Switch off this discount?',
-        message: 'Customers will no longer be able to use it.',
-        confirmLabel: 'Switch off',
-        tone: 'danger',
-      });
-      if (!ok) return;
+      if (isAdmin) {
+        const r = await confirmReason({
+          title: 'Switch off this discount?',
+          message: 'Customers will no longer be able to use it. The owner will be emailed with your reason.',
+          confirmLabel: 'Switch off', tone: 'danger',
+          reasonLabel: 'Reason (shown to the owner)',
+        });
+        if (r == null) return;
+        reason = r;
+      } else {
+        const ok = await confirm({
+          title: 'Switch off this discount?',
+          message: 'Customers will no longer be able to use it.',
+          confirmLabel: 'Switch off',
+          tone: 'danger',
+        });
+        if (!ok) return;
+      }
     }
     const previous = discounts;
     setDiscounts((ds) => ds.map((x) => (x.id === d.id ? { ...x, active: next } : x)));
     setTogglingIds((s) => new Set(s).add(d.id));
     try {
-      const updated = next ? await api.activate(d.id) : await api.deactivate(d.id);
+      const updated = next ? await api.activate(d.id) : await api.deactivate(d.id, reason);
       setDiscounts((ds) => ds.map((x) => (x.id === updated.id ? updated : x)));
     } catch (e) {
       setDiscounts(previous); // revert so the switch never lies
