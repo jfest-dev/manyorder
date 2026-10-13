@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Copy, Check } from 'lucide-react';
 import { adminApi, AdminStoreDetail, AdminAuditLogEntry, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { formatDate, formatDateTime } from '../../lib/adminDatetime';
@@ -6,6 +7,29 @@ import { formatDate, formatDateTime } from '../../lib/adminDatetime';
 const EMPTY = '-';
 function text(v: string | null | undefined): string {
   return v && v.trim() !== '' ? v : EMPTY;
+}
+
+/** A value with a small copy button, or a plain dash when there is nothing to copy. */
+function CopyableValue({ value }: { value: string | null | undefined }) {
+  const [copied, setCopied] = useState(false);
+  if (!value || value.trim() === '') return <>{EMPTY}</>;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard blocked - the value is on screen to copy manually */ }
+  };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+      {value}
+      <button type="button" onClick={copy} aria-label={copied ? 'Copied' : `Copy ${value}`}
+        style={{ display: 'inline-flex', background: 'none', border: 'none', padding: 2, cursor: 'pointer',
+          color: copied ? '#047857' : 'var(--text-muted)' }}>
+        {copied ? <Check size={14} /> : <Copy size={14} />}
+      </button>
+    </span>
+  );
 }
 
 const cardStyle: React.CSSProperties = {
@@ -107,7 +131,8 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
       <div style={cardStyle}>
         <p style={titleStyle}>Owner</p>
         <Row label="Name" value={text(owner.name)} />
-        <Row label="Email" value={text(owner.email)} />
+        <Row label="Email" value={<CopyableValue value={owner.email} />} />
+        <Row label="Phone" value={<CopyableValue value={owner.phone} />} />
         <Row label="Email verified" value={owner.verified ? 'Yes' : 'No'} />
         <Row label="Owner since" value={formatDate(owner.createdAt)} />
       </div>

@@ -1064,7 +1064,7 @@ export interface AdminStoreDetail {
   slug: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
   currency: string;
-  owner: { name: string; email: string; verified: boolean; createdAt: string };
+  owner: { name: string; email: string; phone: string | null; verified: boolean; createdAt: string };
   profile: {
     email: string | null;
     phoneNumber: string | null;

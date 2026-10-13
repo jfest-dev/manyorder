@@ -198,7 +198,7 @@ public class AdminMerchantService {
         User owner = m.getOwner();
 
         var ownerDto = new AdminStoreDetailResponse.Owner(
-                owner.getFullName(), owner.getEmail(), owner.isVerified(), owner.getCreatedAt());
+                owner.getFullName(), owner.getEmail(), owner.getPhone(), owner.isVerified(), owner.getCreatedAt());
 
         var profile = new AdminStoreDetailResponse.Profile(
                 m.getEmail(), m.getPhoneNumber(), m.getBusinessType(),

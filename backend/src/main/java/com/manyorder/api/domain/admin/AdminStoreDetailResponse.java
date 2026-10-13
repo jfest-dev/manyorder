@@ -20,7 +20,7 @@ public record AdminStoreDetailResponse(
         List<AdminAuditLogResponse> recentActions) {
 
     /** The account that owns the store. */
-    public record Owner(String name, String email, boolean verified, LocalDateTime createdAt) {}
+    public record Owner(String name, String email, String phone, boolean verified, LocalDateTime createdAt) {}
 
     /** Stored store-profile fields. */
     public record Profile(

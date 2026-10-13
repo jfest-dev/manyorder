@@ -29,7 +29,7 @@ import { StoreDetail } from './StoreDetail';
 
 const DETAIL = {
   id: 5, name: 'Kiri Brew', slug: 'kirikiri-brew', status: 'ACTIVE', currency: 'SGD',
-  owner: { name: 'Demo Merchant', email: 'owner@kiri.test', verified: true, createdAt: '2026-01-02T10:00:00' },
+  owner: { name: 'Demo Merchant', email: 'owner@kiri.test', phone: '+6599998888', verified: true, createdAt: '2026-01-02T10:00:00' },
   profile: {
     email: 'hello@kiri.test', phoneNumber: '+6581234567', businessType: 'Cafe',
     streetAddress: '1 Coffee Rd', city: 'Singapore', postalCode: '123456',
@@ -77,6 +77,23 @@ describe('StoreDetail', () => {
     expect(screen.getByText('DEACTIVATE_PRODUCT')).toBeTruthy();
     // Shared date helper: "2 January 2026", never numeric with seconds
     expect(screen.getByText('2 January 2026')).toBeTruthy();
+  });
+
+  it('shows the owner phone with a copy button', async () => {
+    render(<StoreDetail merchantId={5} />);
+    await screen.findByText('owner@kiri.test');
+    expect(screen.getByText('+6599998888')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy +6599998888' })).toBeTruthy();
+    // The owner email is copyable too.
+    expect(screen.getByRole('button', { name: 'Copy owner@kiri.test' })).toBeTruthy();
+  });
+
+  it('shows a dash for an owner with no phone', async () => {
+    storeDetail.mockResolvedValue({ ...DETAIL, owner: { ...DETAIL.owner, phone: null } });
+    render(<StoreDetail merchantId={5} />);
+    await screen.findByText('owner@kiri.test');
+    // No copy button is rendered for the missing owner phone.
+    expect(screen.queryByRole('button', { name: /Copy \+6599998888/ })).toBeNull();
   });
 
   it('hides the non-functional WhatsApp-verified field', async () => {
