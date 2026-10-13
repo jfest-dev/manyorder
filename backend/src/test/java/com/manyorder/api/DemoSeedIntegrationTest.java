@@ -56,6 +56,12 @@ class DemoSeedIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void demoOwnerHasANormalName() {
+        assertEquals("Alex Tan", store("kirikiri-brew").getOwner().getFullName(),
+                "the seeded demo owner should read as a real person, not \"Demo Merchant\"");
+    }
+
+    @Test
     void eachStoreHasEightProductsInDisplayOrder() {
         assertEquals(8, products("kirikiri-brew").size());
         assertEquals(8, products("seoul-sakura").size());

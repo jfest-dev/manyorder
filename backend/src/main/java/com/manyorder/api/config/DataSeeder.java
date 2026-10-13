@@ -108,7 +108,7 @@ public class DataSeeder implements CommandLineRunner {
         String hash = passwordEncoder.encode(demoPassword.isEmpty() ? "password123" : demoPassword);
 
         // Demo accounts ship pre-verified so recruiters never see the nag banner.
-        User merchantUser = new User("Demo Merchant", "manyorder.app@gmail.com", hash, UserRole.MERCHANT);
+        User merchantUser = new User("Alex Tan", "manyorder.app@gmail.com", hash, UserRole.MERCHANT);
         merchantUser.setVerified(true);
         merchantUser = userRepository.save(merchantUser);
 
