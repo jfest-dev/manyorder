@@ -28,6 +28,10 @@ public class User {
 
     private String fullName;
 
+    /** Optional contact phone for the account holder. Nullable so the column can be
+     *  added to an existing users table without a backfill. */
+    private String phone;
+
     @Column(unique = true, nullable = false)
     private String email;
 
@@ -72,6 +76,9 @@ public class User {
 
     public Long getId() { return id; }
     public String getFullName() { return fullName; }
+    public void setFullName(String fullName) { this.fullName = fullName; }
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
