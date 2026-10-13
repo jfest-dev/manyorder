@@ -12,6 +12,7 @@ import { CheckoutView } from './CheckoutView';
 import { OrderConfirmationView } from './OrderConfirmationView';
 import { OrderLookupView } from './OrderLookupView';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
+import { purgeRecentOrderRecall } from '../../lib/legacyCleanup';
 import {
   parseCart, addLine, setLineQty, removeLine, updateLine, hydrateCart, healCart, reconcileStock,
   cartLineCount, plainQuantities, productTotals, plainSignature, lineSignature,
@@ -43,6 +44,9 @@ export function StorefrontApp() {
   const [checkingStock, setCheckingStock] = useState(false);
 
   const cartKey = store ? `manyorder_cart_${store.id}` : null;
+
+  // Clear any last-order copy the removed recall shortcut may have left behind.
+  useEffect(() => { purgeRecentOrderRecall(); }, []);
 
   useEffect(() => {
     let cancelled = false;
