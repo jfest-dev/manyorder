@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CheckCircle2, MessageCircle, Copy, Check } from 'lucide-react';
+import { CheckCircle2, MessageCircle, Copy, Check, ExternalLink } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
 import { orderSummaryLines, waLink, type WaOrderSection } from '../../lib/whatsapp';
 import { OrderStatusBadge } from '../StatusBadge';
@@ -139,15 +139,18 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
 
         {trackingUrl && (
           <div style={{ marginTop: '16px', maxWidth: '340px', marginInline: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', background: '#F9FAFB', border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '8px 10px' }}>
-              <span style={{ flex: 1, minWidth: 0, fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{trackingUrl}</span>
-              <button onClick={copyTrackingLink} aria-label="Copy tracking link"
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', height: '30px', padding: '0 10px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'white', color: linkCopied ? '#047857' : 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
-                {linkCopied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy tracking link</>}
+            <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <a href={trackingUrl} target="_blank" rel="noopener noreferrer"
+                style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', height: '44px', borderRadius: '10px', background: 'var(--primary-solid)', color: 'white', fontSize: '14px', fontWeight: 700, textDecoration: 'none' }}>
+                <ExternalLink size={16} /> Track my order
+              </a>
+              <button onClick={copyTrackingLink} aria-label="Copy link"
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', height: '44px', padding: '0 12px', borderRadius: '10px', border: '1px solid var(--border-subtle)', background: 'white', color: linkCopied ? '#047857' : 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                {linkCopied ? <><Check size={15} /> Copied</> : <><Copy size={15} /> Copy link</>}
               </button>
             </div>
-            <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0 }}>
-              Save or screenshot this page. Use this link to check your order status anytime.
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0 }}>
+              Track your order anytime with this link.
             </p>
           </div>
         )}

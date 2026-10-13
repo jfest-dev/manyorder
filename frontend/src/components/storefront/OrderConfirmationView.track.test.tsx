@@ -26,12 +26,16 @@ const store = { currency: 'SGD', phoneNumber: '+6591234567', name: 'Kiri Brew', 
 beforeEach(() => cleanup());
 
 describe('OrderConfirmationView tracking link', () => {
-  it('shows a copyable tracking link and the save/screenshot copy', () => {
+  it('offers a Track my order button that opens the tracking page in a new tab, plus Copy link and the one-line copy', () => {
     render(<OrderConfirmationView result={result} store={store} onBackToShop={() => {}} />);
 
-    expect(screen.getByLabelText('Copy tracking link')).toBeTruthy();
-    expect(screen.getByText(new RegExp(`/track/${TOKEN}`))).toBeTruthy();
-    expect(screen.getByText('Save or screenshot this page. Use this link to check your order status anytime.')).toBeTruthy();
+    const track = screen.getByRole('link', { name: /Track my order/ });
+    expect(track.getAttribute('href')).toBe(`${window.location.origin}/track/${TOKEN}`);
+    expect(track.getAttribute('target')).toBe('_blank');
+    expect(track.getAttribute('rel') ?? '').toContain('noopener');
+
+    expect(screen.getByLabelText('Copy link')).toBeTruthy();
+    expect(screen.getByText('Track your order anytime with this link.')).toBeTruthy();
   });
 
   it('does not put the tracking link in the WhatsApp message', () => {
