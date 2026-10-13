@@ -422,7 +422,25 @@ export const authApi = {
   me: () => request<LoginResponse>('/auth/me'),
 };
 
+export interface AccountDetails {
+  userId: number;
+  fullName: string;
+  email: string;
+  role: 'MERCHANT' | 'STAFF' | 'PLATFORM_ADMIN';
+  verified: boolean;
+  phone: string | null;
+  staffStoreId: number | null;
+}
+
 export const accountApi = {
+  /** The signed-in user's own account details (name, email, phone, verified). */
+  me: () => request<AccountDetails>('/account'),
+
+  /** Update the signed-in user's own name (required) and optional phone. An empty
+   *  phone clears it. Never changes email, role or verified. */
+  updateProfile: (payload: { fullName: string; phone?: string }) =>
+    request<AccountDetails>('/account', { method: 'PUT', body: payload }),
+
   /**
    * Change the signed-in user's password. The server re-verifies the current
    * password (403 "Incorrect password" on mismatch) and enforces the same

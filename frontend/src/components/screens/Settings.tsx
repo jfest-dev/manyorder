@@ -4,10 +4,10 @@ import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
 import { Checkbox } from '../Checkbox';
 import { PasswordField } from '../PasswordField';
-import { accountApi, storesApi, uploadsApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
-import { validatePassword, PASSWORD_RULE_TEXT } from '../../lib/password';
+import { storesApi, uploadsApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { useConfirm } from '../ConfirmDialog';
+import { AccountSettings } from './AccountSettings';
 
 interface SettingsProps {
   storeId: number;
@@ -89,13 +89,8 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [errorKey, setErrorKey] = useState<{ key: string; msg: string } | null>(null);
 
-  // Change Password (Account card).
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [pwSaving, setPwSaving] = useState(false);
-  const [pwSaved, setPwSaved] = useState(false);
-  const [pwError, setPwError] = useState('');
+  // Settings has two tabs: the store's settings and the signed-in user's account.
+  const [tab, setTab] = useState<'store' | 'account'>('store');
 
   // Store logo (Store Details card). A newly picked file is held locally and
   // previewed via an object URL; it's uploaded only when the card is saved, so a
@@ -284,39 +279,6 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
     }
   };
 
-  const canChangePassword =
-    currentPassword.length > 0 && newPassword.length > 0 && confirmPassword.length > 0;
-
-  const changePassword = async () => {
-    setPwError('');
-    setPwSaved(false);
-    const trimmedNew = newPassword.trim();
-    const strengthError = validatePassword(trimmedNew);
-    if (strengthError) {
-      setPwError(strengthError);
-      return;
-    }
-    if (trimmedNew !== confirmPassword.trim()) {
-      setPwError('New passwords do not match.');
-      return;
-    }
-    setPwSaving(true);
-    try {
-      await accountApi.changePassword(currentPassword.trim(), trimmedNew);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setPwSaved(true);
-      window.setTimeout(() => setPwSaved(false), 4000);
-    } catch (e: any) {
-      let msg = 'Could not update password';
-      if (e instanceof ApiError) msg = e.status === 403 ? 'Incorrect password.' : e.message;
-      setPwError(msg);
-    } finally {
-      setPwSaving(false);
-    }
-  };
-
   // A card is dirty when any field it owns differs from the last-saved baseline
   // (null/undefined normalized to '' so untouched empty fields never read dirty).
   const norm = (v: unknown) => (v === undefined || v === null ? '' : v);
@@ -364,13 +326,27 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
 
   return (
     <div>
-      <div style={{ marginBottom: '24px' }}>
+      <div style={{ marginBottom: '20px' }}>
         <h1 style={{ marginBottom: '8px' }}>Settings</h1>
         <p className="text-small" style={{ color: 'var(--text-secondary)' }}>
           Manage your store settings and preferences
         </p>
       </div>
 
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '24px' }}>
+        {(['store', 'account'] as const).map((t) => (
+          <button key={t} type="button" onClick={() => setTab(t)}
+            style={{ padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: 600,
+              textTransform: 'capitalize', color: tab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
+              borderBottom: tab === t ? '2px solid var(--primary-solid)' : '2px solid transparent' }}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'account' && <AccountSettings />}
+
+      {tab === 'store' && (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '820px' }}>
         {/* Store details */}
         <div style={sectionCard}>
@@ -592,47 +568,6 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
           />
         </div>
 
-        {/* Account - account-level actions that apply to you, not a specific store */}
-        <div style={sectionCard}>
-          <h3 style={{ marginBottom: '4px' }}>Account</h3>
-          <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '20px' }}>
-            These settings apply to your account, not to any single store.
-          </p>
-
-          <p className="text-small" style={{ fontWeight: 600, marginBottom: '12px' }}>Change Password</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '420px' }}>
-            <PasswordField
-              label="Current Password"
-              value={currentPassword}
-              onChange={(v) => { setCurrentPassword(v); if (pwError) setPwError(''); }}
-              placeholder="Your current password"
-            />
-            <PasswordField
-              label="New Password"
-              value={newPassword}
-              onChange={(v) => { setNewPassword(v); if (pwError) setPwError(''); }}
-              placeholder={PASSWORD_RULE_TEXT}
-            />
-            <PasswordField
-              label="Confirm New Password"
-              value={confirmPassword}
-              onChange={(v) => { setConfirmPassword(v); if (pwError) setPwError(''); }}
-              placeholder="Repeat your password"
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '20px' }}>
-            <Button variant="primary" onClick={changePassword} disabled={pwSaving || !canChangePassword}>
-              {pwSaving ? 'Updating…' : 'Update password'}
-            </Button>
-            {pwSaved && (
-              <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Password updated</span>
-            )}
-            {pwError && (
-              <span className="text-small" style={{ color: 'var(--error-color)' }}>{pwError}</span>
-            )}
-          </div>
-        </div>
-
         {/* Danger zone */}
         <div style={{ ...sectionCard, border: '1px solid var(--error-color)', marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -648,6 +583,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
           </Button>
         </div>
       </div>
+      )}
 
       {showArchive && (
         <div
