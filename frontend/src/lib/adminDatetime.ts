@@ -29,6 +29,14 @@ export function formatDate(iso?: string | null): string {
   return d ? d.toLocaleDateString('en-GB', DATE_OPTS) : EMPTY;
 }
 
+const SHORT_DATE_OPTS: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+
+/** Compact day + short month, e.g. "3 Oct". For dense axes and chart labels. */
+export function formatShortDate(iso?: string | null): string {
+  const d = parse(iso);
+  return d ? d.toLocaleDateString('en-GB', SHORT_DATE_OPTS) : EMPTY;
+}
+
 export function formatDateTime(iso?: string | null): string {
   const d = parse(iso);
   if (!d) return EMPTY;

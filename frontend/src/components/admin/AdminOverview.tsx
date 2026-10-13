@@ -4,7 +4,7 @@ import {
   AdminOverviewAttentionGroup, AdminOverviewCurrencyValue,
 } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
-import { formatDate, formatDateTime } from '../../lib/adminDatetime';
+import { formatDate, formatDateTime, formatShortDate } from '../../lib/adminDatetime';
 
 interface Props {
   /** Open a store's drill-down from any link in the Overview. */
@@ -62,24 +62,31 @@ function StoreLink({ id, name, onOpenStore }: { id: number; name: string; onOpen
 function OrderValue({ last30, allTime }: { last30: AdminOverviewCurrencyValue[]; allTime: AdminOverviewCurrencyValue[] }) {
   const block = (label: string, rows: AdminOverviewCurrencyValue[]) => (
     <div style={{ flex: '1 1 220px', minWidth: 200 }}>
-      <div className="text-xs" style={{ color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 8 }}>{label}</div>
+      <div className="text-xs" style={{ color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 10 }}>{label}</div>
       {rows.length === 0 ? (
         <div className="text-small" style={{ color: 'var(--text-muted)' }}>No recorded value yet.</div>
-      ) : rows.map((r) => (
-        <div key={r.currency} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, padding: '4px 0' }}>
-          <span style={{ fontSize: 18, fontWeight: 700 }}>{formatMoney(r.total, r.currency)}</span>
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{r.currency} · {r.orders} {r.orders === 1 ? 'order' : 'orders'}</span>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {rows.map((r) => (
+            <div key={r.currency}>
+              {/* Symbol-only amount, large; the currency code lives in the muted line below. */}
+              <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15 }}>{formatMoney(r.total, r.currency)}</div>
+              <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 3 }}>
+                {r.orders} {r.orders === 1 ? 'order' : 'orders'} - {r.currency}
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
   return (
     <Panel title="Order value">
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32 }}>
         {block('Last 30 days', last30)}
         {block('All time', allTime)}
       </div>
-      <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '12px 0 0' }}>{PAYMENT_NOTE}</p>
+      <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '16px 0 0' }}>{PAYMENT_NOTE}</p>
     </Panel>
   );
 }
@@ -87,21 +94,30 @@ function OrderValue({ last30, allTime }: { last30: AdminOverviewCurrencyValue[];
 function OrdersPerDay({ days }: { days: { date: string; count: number }[] }) {
   const max = Math.max(1, ...days.map((d) => d.count));
   const total = days.reduce((sum, d) => sum + d.count, 0);
+  const peak = days.reduce((p, d) => (d.count > p ? d.count : p), 0);
+  // Label only the first day that hits the peak, so one count floats above the chart.
+  const peakIndex = peak > 0 ? days.findIndex((d) => d.count === peak) : -1;
   return (
-    <Panel title="Orders per day (last 30 days)">
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120 }}>
-        {days.map((d) => (
-          <div key={d.date} title={`${formatDate(d.date)}: ${d.count}`}
-            style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}>
-            <div style={{ height: `${(d.count / max) * 100}%`, minHeight: d.count > 0 ? 2 : 0,
-              background: 'var(--primary-solid)', borderRadius: '2px 2px 0 0' }} />
+    <Panel title={`${total} ${total === 1 ? 'order' : 'orders'} in the last 30 days`}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 128 }}>
+        {days.map((d, i) => (
+          <div key={d.date} title={`${formatShortDate(d.date)}: ${d.count} ${d.count === 1 ? 'order' : 'orders'}`}
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-end', height: '100%' }}>
+            {i === peakIndex && (
+              <div className="text-xs" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 2 }}>{d.count}</div>
+            )}
+            {d.count > 0 ? (
+              <div style={{ height: `${Math.max(4, (d.count / max) * 100)}%`, background: 'var(--primary-solid)', borderRadius: '2px 2px 0 0' }} />
+            ) : (
+              // Zero days still get a thin baseline marker so the row never looks broken.
+              <div style={{ height: 2, background: 'var(--border-strong)' }} />
+            )}
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(days[0]?.date)}</span>
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{total} in 30 days</span>
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(days[days.length - 1]?.date)}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 6 }}>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatShortDate(days[0]?.date)}</span>
+        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatShortDate(days[days.length - 1]?.date)}</span>
       </div>
     </Panel>
   );

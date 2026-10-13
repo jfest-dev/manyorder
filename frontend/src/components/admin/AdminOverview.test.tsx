@@ -39,8 +39,10 @@ describe('AdminOverview', () => {
     expect(await screen.findByText("Order value recorded by merchants. ManyOrder doesn't process payments.")).toBeTruthy();
     expect(screen.getByText('Top stores by orders (last 30 days)')).toBeTruthy();
     expect(screen.getByText('Owners not verified')).toBeTruthy();
-    // Total caption under the bars (sum of i%3 over 30 days = 30).
-    expect(screen.getByText('30 in 30 days')).toBeTruthy();
+    // Chart heading carries the 30-day total (sum of i%3 over 30 days = 30).
+    expect(screen.getByText('30 orders in the last 30 days')).toBeTruthy();
+    // Order value: symbol-only amount, with a muted "N orders - CUR" line under it.
+    expect(screen.getByText('7 orders - SGD')).toBeTruthy();
     expect(screen.getByText('Fresh Store')).toBeTruthy();
     expect(screen.getByText('Pat Owner')).toBeTruthy();
     expect(screen.getByText('SUSPEND_MERCHANT')).toBeTruthy();
