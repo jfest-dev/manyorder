@@ -1,11 +1,24 @@
 package com.manyorder.api.domain.admin;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.manyorder.api.domain.admin.AdminOverviewResponse.AttentionGroup;
+import com.manyorder.api.domain.admin.AdminOverviewResponse.CurrencyValue;
+import com.manyorder.api.domain.admin.AdminOverviewResponse.DayCount;
+import com.manyorder.api.domain.admin.AdminOverviewResponse.NeedsAttention;
+import com.manyorder.api.domain.admin.AdminOverviewResponse.NewStore;
+import com.manyorder.api.domain.admin.AdminOverviewResponse.StoreRef;
+import com.manyorder.api.domain.admin.AdminOverviewResponse.TopStore;
 
 import com.manyorder.api.domain.customer.CustomerRepository;
 import com.manyorder.api.domain.merchant.Merchant;
@@ -120,6 +133,63 @@ public class AdminMerchantService {
                 orderRepository.count(),
                 customerRepository.count(),
                 merchantRepository.countByCreatedAtAfter(LocalDateTime.now().minusDays(30)));
+    }
+
+    /** How many stores to sample per "Needs attention" category (true totals are counted separately). */
+    private static final int ATTENTION_SAMPLE = 5;
+    /** A floor timestamp standing in for "all time" in the value-by-currency query. */
+    private static final LocalDateTime ALL_TIME = LocalDateTime.of(1970, 1, 1, 0, 0);
+
+    @Transactional(readOnly = true)
+    public AdminOverviewResponse overview() {
+        LocalDateTime since30 = LocalDateTime.now().minusDays(30);
+
+        List<CurrencyValue> value30 = orderRepository.valueByCurrencySince(REVENUE_STATUSES, since30).stream()
+                .map(r -> new CurrencyValue(r.getCurrency(), r.getTotal(), r.getOrders())).toList();
+        List<CurrencyValue> valueAll = orderRepository.valueByCurrencySince(REVENUE_STATUSES, ALL_TIME).stream()
+                .map(r -> new CurrencyValue(r.getCurrency(), r.getTotal(), r.getOrders())).toList();
+
+        List<TopStore> topStores = orderRepository.topStoresSince(REVENUE_STATUSES, since30, PageRequest.of(0, 5)).stream()
+                .map(r -> new TopStore(r.getId(), r.getName(), r.getSlug(), r.getCurrency(), r.getOrders(), r.getValue()))
+                .toList();
+
+        PageRequest sample = PageRequest.of(0, ATTENTION_SAMPLE);
+        NeedsAttention attention = new NeedsAttention(
+                group(merchantRepository.countUnverifiedOwnerStores(),
+                        merchantRepository.findUnverifiedOwnerStores(sample)),
+                group(merchantRepository.countStoresWithoutProducts(),
+                        merchantRepository.findStoresWithoutProducts(sample)),
+                group(merchantRepository.countActiveStoresWithoutRecentOrders(since30),
+                        merchantRepository.findActiveStoresWithoutRecentOrders(since30, sample)),
+                group(merchantRepository.countBySuspendedAtIsNotNull(),
+                        merchantRepository.findTop5BySuspendedAtIsNotNullOrderBySuspendedAtDesc()));
+
+        List<NewStore> newest = merchantRepository.findTop5ByOrderByCreatedAtDesc().stream()
+                .map(m -> new NewStore(m.getId(), m.getName(), m.getSlug(), m.getOwner().getFullName(), m.getCreatedAt()))
+                .toList();
+
+        List<AdminAuditLogResponse> actions = auditLogRepository.findTop5ByOrderByCreatedAtDesc().stream()
+                .map(AdminAuditLogResponse::from).toList();
+
+        return new AdminOverviewResponse(value30, valueAll, ordersPerDay(), topStores, attention, newest, actions);
+    }
+
+    /** Orders placed on each of the last 30 calendar days (zero-filled), bucketed in memory. */
+    private List<DayCount> ordersPerDay() {
+        LocalDate start = LocalDate.now().minusDays(29);
+        Map<LocalDate, Long> counts = orderRepository.createdAtSince(start.atStartOfDay()).stream()
+                .collect(Collectors.groupingBy(LocalDateTime::toLocalDate, Collectors.counting()));
+        List<DayCount> days = new ArrayList<>(30);
+        for (int i = 0; i < 30; i++) {
+            LocalDate d = start.plusDays(i);
+            days.add(new DayCount(d, counts.getOrDefault(d, 0L)));
+        }
+        return days;
+    }
+
+    private AttentionGroup group(long count, List<Merchant> items) {
+        return new AttentionGroup(count,
+                items.stream().map(m -> new StoreRef(m.getId(), m.getName(), m.getSlug())).toList());
     }
 
     @Transactional(readOnly = true)

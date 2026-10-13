@@ -1085,8 +1085,31 @@ export interface AdminStoreDetail {
   recentActions: AdminAuditLogEntry[];
 }
 
+export interface AdminOverviewCurrencyValue { currency: string; total: number; orders: number; }
+export interface AdminOverviewDayCount { date: string; count: number; }
+export interface AdminOverviewTopStore { id: number; name: string; slug: string; currency: string; orders: number; value: number; }
+export interface AdminOverviewStoreRef { id: number; name: string; slug: string; }
+export interface AdminOverviewAttentionGroup { count: number; items: AdminOverviewStoreRef[]; }
+export interface AdminOverviewNeedsAttention {
+  unverifiedOwners: AdminOverviewAttentionGroup;
+  noProducts: AdminOverviewAttentionGroup;
+  noOrders30Days: AdminOverviewAttentionGroup;
+  suspended: AdminOverviewAttentionGroup;
+}
+export interface AdminOverviewNewStore { id: number; name: string; slug: string; ownerName: string; createdAt: string; }
+export interface AdminOverview {
+  valueLast30Days: AdminOverviewCurrencyValue[];
+  valueAllTime: AdminOverviewCurrencyValue[];
+  ordersPerDay: AdminOverviewDayCount[];
+  topStores: AdminOverviewTopStore[];
+  needsAttention: AdminOverviewNeedsAttention;
+  newestStores: AdminOverviewNewStore[];
+  recentActions: AdminAuditLogEntry[];
+}
+
 export const adminApi = {
   metrics: () => request<AdminMetrics>('/admin/metrics'),
+  overview: () => request<AdminOverview>('/admin/metrics/overview'),
   listMerchants: () => request<AdminMerchantSummary[]>('/admin/merchants'),
   searchMerchants: (params: AdminMerchantSearchParams = {}) => {
     const qs = new URLSearchParams();

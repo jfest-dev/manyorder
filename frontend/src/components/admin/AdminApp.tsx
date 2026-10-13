@@ -12,6 +12,7 @@ import { Dashboard } from '../screens/Dashboard';
 import { StoreDetail } from './StoreDetail';
 import { StoreHeader } from './StoreHeader';
 import { AdminActivity } from './AdminActivity';
+import { AdminOverview } from './AdminOverview';
 import { MerchantsList } from './MerchantsList';
 
 type Section = 'overview' | 'merchants' | 'activity';
@@ -70,6 +71,13 @@ export function AdminApp() {
 
   const showNotice = (msg: string) => { setNotice(msg); window.setTimeout(() => setNotice(null), 2400); };
   const goSection = (s: Section) => { setSelected(null); setSection(s); };
+
+  // Open a store drill-down by id (from any Overview link); fetches its summary first.
+  const openStore = (id: number) => {
+    adminApi.getMerchant(id)
+      .then((m) => { setSelected(m); setTab('overview'); setSection('merchants'); })
+      .catch((e) => showNotice(e instanceof ApiError ? e.message : 'Could not open store'));
+  };
 
   const toggleSuspend = async (m: AdminMerchantSummary) => {
     const suspend = m.status !== 'SUSPENDED';
@@ -173,15 +181,18 @@ export function AdminApp() {
           )}
 
           {!loading && !error && !selected && section === 'overview' && metrics && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-              <Tile label="Merchants" value={metrics.totalMerchants} />
-              <Tile label="Active" value={metrics.activeMerchants} />
-              <Tile label="Suspended" value={metrics.suspendedMerchants} />
-              <Tile label="Archived" value={metrics.archivedMerchants} />
-              <Tile label="Orders" value={metrics.totalOrders} />
-              <Tile label="Customers" value={metrics.totalCustomers} />
-              <Tile label="New (30d)" value={metrics.newMerchantsLast30Days} />
-            </div>
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                <Tile label="Merchants" value={metrics.totalMerchants} />
+                <Tile label="Active" value={metrics.activeMerchants} />
+                <Tile label="Suspended" value={metrics.suspendedMerchants} />
+                <Tile label="Archived" value={metrics.archivedMerchants} />
+                <Tile label="Orders" value={metrics.totalOrders} />
+                <Tile label="Customers" value={metrics.totalCustomers} />
+                <Tile label="New (30d)" value={metrics.newMerchantsLast30Days} />
+              </div>
+              <AdminOverview onOpenStore={openStore} />
+            </>
           )}
 
           {!loading && !error && !selected && section === 'merchants' && (

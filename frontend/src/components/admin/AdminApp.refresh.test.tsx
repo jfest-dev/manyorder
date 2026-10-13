@@ -16,7 +16,20 @@ vi.mock('../../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api')>();
   return {
     ...actual,
-    adminApi: { ...actual.adminApi, metrics: () => metrics() },
+    adminApi: {
+      ...actual.adminApi,
+      metrics: () => metrics(),
+      overview: () => Promise.resolve({
+        valueLast30Days: [], valueAllTime: [],
+        ordersPerDay: Array.from({ length: 30 }, (_, i) => ({ date: `2026-09-${String(i + 1).padStart(2, '0')}`, count: 0 })),
+        topStores: [],
+        needsAttention: {
+          unverifiedOwners: { count: 0, items: [] }, noProducts: { count: 0, items: [] },
+          noOrders30Days: { count: 0, items: [] }, suspended: { count: 0, items: [] },
+        },
+        newestStores: [], recentActions: [],
+      }),
+    },
   };
 });
 

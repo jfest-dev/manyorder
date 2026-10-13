@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -81,4 +82,35 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findByCustomer(Customer customer);
     List<Order> findByStatus(OrderStatus status);
     List<Order> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    // --- Admin Overview: grouped aggregates, never a per-store loop. ---
+
+    /** Recorded order value grouped by store currency, for the given statuses since a cutoff. */
+    @Query("""
+            SELECT o.merchant.currency AS currency, COALESCE(SUM(o.totalAmount), 0) AS total, COUNT(o) AS orders
+            FROM Order o
+            WHERE o.status IN :statuses AND o.createdAt >= :since
+            GROUP BY o.merchant.currency
+            ORDER BY o.merchant.currency
+            """)
+    List<CurrencyValueRow> valueByCurrencySince(@Param("statuses") Collection<OrderStatus> statuses,
+                                                @Param("since") LocalDateTime since);
+
+    /** Timestamps of all orders since a cutoff, for bucketing into per-day counts in memory. */
+    @Query("SELECT o.createdAt FROM Order o WHERE o.createdAt >= :since")
+    List<LocalDateTime> createdAtSince(@Param("since") LocalDateTime since);
+
+    /** Stores ranked by order count since a cutoff, with recorded value (given statuses only). */
+    @Query("""
+            SELECT o.merchant.id AS id, o.merchant.name AS name, o.merchant.slug AS slug,
+                   o.merchant.currency AS currency, COUNT(o) AS orders,
+                   COALESCE(SUM(CASE WHEN o.status IN :statuses THEN o.totalAmount ELSE 0 END), 0) AS value
+            FROM Order o
+            WHERE o.createdAt >= :since
+            GROUP BY o.merchant.id, o.merchant.name, o.merchant.slug, o.merchant.currency
+            ORDER BY COUNT(o) DESC
+            """)
+    List<TopStoreRow> topStoresSince(@Param("statuses") Collection<OrderStatus> statuses,
+                                     @Param("since") LocalDateTime since,
+                                     Pageable pageable);
 }

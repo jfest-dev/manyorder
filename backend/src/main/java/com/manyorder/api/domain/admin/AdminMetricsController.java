@@ -19,4 +19,10 @@ public class AdminMetricsController {
     public AdminMetricsResponse metrics() {
         return adminMerchantService.metrics();
     }
+
+    /** Rich Overview: order value by currency, orders per day, top stores, attention, newest, recent actions. */
+    @GetMapping("/overview")
+    public AdminOverviewResponse overview() {
+        return adminMerchantService.overview();
+    }
 }
