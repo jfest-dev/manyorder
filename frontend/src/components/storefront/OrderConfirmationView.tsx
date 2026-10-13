@@ -134,7 +134,7 @@ export function OrderConfirmationView({ result, store, onBackToShop, heading = '
           {!split && <OrderStatusBadge status={toOrderStatus(orders[0].orderStatus)} />}
         </div>
         <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '10px', maxWidth: '300px', marginInline: 'auto' }}>
-          Take a screenshot of this page. You'll need your order number and phone number to track your order.
+          Screenshot this page to keep your order number.
         </p>
 
         {trackingUrl && (

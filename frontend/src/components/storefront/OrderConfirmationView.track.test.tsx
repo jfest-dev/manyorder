@@ -38,6 +38,11 @@ describe('OrderConfirmationView tracking link', () => {
     expect(screen.getByText('Track your order anytime with this link.')).toBeTruthy();
   });
 
+  it('keeps the order-number note short', () => {
+    render(<OrderConfirmationView result={result} store={store} onBackToShop={() => {}} />);
+    expect(screen.getByText('Screenshot this page to keep your order number.')).toBeTruthy();
+  });
+
   it('does not put the tracking link in the WhatsApp message', () => {
     render(<OrderConfirmationView result={result} store={store} onBackToShop={() => {}} />);
     const wa = screen.getByRole('link', { name: /Message on WhatsApp/ });
