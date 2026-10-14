@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { mockMatchMedia } from '../../test-utils/matchMedia';
 
 const auditLog = vi.fn();
 const listMerchants = vi.fn();
@@ -23,6 +24,7 @@ const ENTRIES = Array.from({ length: 25 }, (_, i) => ({
 
 beforeEach(() => {
   cleanup();
+  mockMatchMedia(false);
   auditLog.mockReset().mockResolvedValue(ENTRIES);
   listMerchants.mockReset().mockResolvedValue([]);
 });

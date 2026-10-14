@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { adminApi, AdminAuditLogEntry, AdminMerchantSummary, ApiError } from '../../lib/api';
 import { formatDateTime } from '../../lib/adminDatetime';
 import { Select } from '../Select';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 const PAGE_SIZE = 20;
 
 /** Global admin audit feed: newest first, filterable by store, 20 per page. */
 export function AdminActivity() {
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const [entries, setEntries] = useState<AdminAuditLogEntry[]>([]);
   const [stores, setStores] = useState<AdminMerchantSummary[]>([]);
   const [storeFilter, setStoreFilter] = useState(''); // '' = all stores
@@ -53,7 +55,7 @@ export function AdminActivity() {
       <h2 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 4px' }}>Activity</h2>
       <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '0 0 14px' }}>Changes platform admins made across all stores.</p>
 
-      <div style={{ maxWidth: 280, marginBottom: 14 }}>
+      <div style={{ maxWidth: isMobile ? '100%' : 280, marginBottom: 14 }}>
         <Select value={storeFilter} onChange={setStoreFilter} options={storeOptions} ariaLabel="Filter by store" />
       </div>
 
@@ -67,24 +69,25 @@ export function AdminActivity() {
         <>
           <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)' }}>
             {pageItems.map((a) => (
-              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 14px', borderTop: '1px solid var(--border-subtle)' }}>
+              <div key={a.id} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row',
+                justifyContent: 'space-between', gap: isMobile ? 4 : 16, padding: '10px 14px', borderTop: '1px solid var(--border-subtle)' }}>
                 <div style={{ minWidth: 0 }}>
                   <div className="text-small" style={{ fontWeight: 600 }}>{a.action}</div>
-                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)', wordBreak: 'break-word' }}>
                     {a.targetType ? `${a.targetType}${a.targetId != null ? ` #${a.targetId}` : ''}` : '-'}
                     {a.merchantId != null ? ` · store #${a.merchantId}` : ''}
                     {a.detail ? ` · ${a.detail}` : ''}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{a.actorEmail}</div>
+                <div style={{ textAlign: isMobile ? 'left' : 'right', flexShrink: 0 }}>
+                  <div className="text-xs" style={{ color: 'var(--text-secondary)', wordBreak: 'break-all' }}>{a.actorEmail}</div>
                   <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDateTime(a.createdAt)}</div>
                 </div>
               </div>
             ))}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
               Showing {(currentPage - 1) * PAGE_SIZE + 1} to {Math.min(currentPage * PAGE_SIZE, entries.length)} of {entries.length}
             </span>
@@ -104,7 +107,7 @@ export function AdminActivity() {
 
 function pagerBtn(disabled: boolean): React.CSSProperties {
   return {
-    padding: '6px 12px', borderRadius: 'var(--radius-field)', border: '1px solid var(--border-subtle)',
+    padding: '8px 14px', minHeight: 40, borderRadius: 'var(--radius-field)', border: '1px solid var(--border-subtle)',
     background: 'var(--bg-card)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
     fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
   };

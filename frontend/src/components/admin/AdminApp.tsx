@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Menu, X } from 'lucide-react';
 import { adminApi, AdminMetrics, AdminMerchantSummary, ApiError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useConfirmReason } from '../ConfirmDialog';
 import { Button } from '../Button';
 import { Toast } from '../Toast';
@@ -21,6 +23,19 @@ const NAV: { key: Section; label: string }[] = [
   { key: 'merchants', label: 'Merchants' },
   { key: 'activity', label: 'Activity' },
 ];
+
+/** One left-nav / drawer entry. Shared so the sidebar and the mobile drawer match. */
+function navButton(n: { key: Section; label: string }, active: boolean, onClick: () => void) {
+  return (
+    <button key={n.key} type="button" onClick={onClick} aria-current={active ? 'page' : undefined}
+      style={{ textAlign: 'left', padding: '10px 12px', minHeight: 44, borderRadius: 'var(--radius-field)', border: 'none', cursor: 'pointer',
+        fontSize: 14, fontWeight: active ? 700 : 500,
+        background: active ? 'var(--bg-card-subtle)' : 'transparent',
+        color: active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+      {n.label}
+    </button>
+  );
+}
 
 function Tile({ label, value }: { label: string; value: number }) {
   return (
@@ -47,6 +62,8 @@ export function AdminApp() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [merchantsReload, setMerchantsReload] = useState(0);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const loadMetrics = () =>
     adminApi.metrics()
@@ -107,34 +124,32 @@ export function AdminApp() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          {isMobile && (
+            <button type="button" aria-label="Open menu" onClick={() => setDrawerOpen(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44,
+                margin: '-10px 0', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}>
+              <Menu size={22} />
+            </button>
+          )}
           <strong style={{ fontSize: 16 }}>Platform Admin</strong>
-          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Cross-store administration</span>
+          {!isMobile && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Cross-store administration</span>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{user?.email}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          {!isMobile && <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{user?.email}</span>}
           <Button variant="secondary" onClick={logout}>Log out</Button>
         </div>
       </header>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', maxWidth: 1200, margin: '0 auto' }}>
-        <nav aria-label="Admin sections" style={{ width: 180, flexShrink: 0, padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {NAV.map((n) => {
-            const active = !selected && section === n.key;
-            return (
-              <button key={n.key} type="button" onClick={() => goSection(n.key)} aria-current={active ? 'page' : undefined}
-                style={{ textAlign: 'left', padding: '8px 12px', borderRadius: 'var(--radius-field)', border: 'none', cursor: 'pointer',
-                  fontSize: 14, fontWeight: active ? 700 : 500,
-                  background: active ? 'var(--bg-card-subtle)' : 'transparent',
-                  color: active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                {n.label}
-              </button>
-            );
-          })}
-        </nav>
+        {!isMobile && (
+          <nav aria-label="Admin sections" style={{ width: 180, flexShrink: 0, padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {NAV.map((n) => navButton(n, !selected && section === n.key, () => goSection(n.key)))}
+          </nav>
+        )}
 
-        <main style={{ flex: 1, minWidth: 0, padding: '20px' }}>
+        <main style={{ flex: 1, minWidth: 0, padding: isMobile ? '16px' : '20px' }}>
           {loading && <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading…</p>}
           {error && <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>}
 
@@ -148,11 +163,14 @@ export function AdminApp() {
 
               <StoreHeader summary={selected} />
 
-              <div style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 20, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 20,
+                overflowX: 'auto', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch' }}>
                 {(['overview', 'dashboard', 'customers', 'products', 'orders', 'marketing'] as const).map((t) => (
                   <button key={t} type="button" onClick={() => setTab(t)}
-                    style={{ padding: '8px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-                      textTransform: 'capitalize', color: tab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    ref={tab === t ? (el) => { try { el?.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch { /* jsdom: no-op */ } } : undefined}
+                    style={{ padding: '10px 14px', minHeight: 44, flexShrink: 0, whiteSpace: 'nowrap', background: 'none', border: 'none',
+                      cursor: 'pointer', fontSize: 13, fontWeight: 600, textTransform: 'capitalize',
+                      color: tab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
                       borderBottom: tab === t ? '2px solid var(--primary-solid)' : '2px solid transparent' }}>
                     {t}
                   </button>
@@ -208,6 +226,25 @@ export function AdminApp() {
           {!loading && !error && !selected && section === 'activity' && <AdminActivity />}
         </main>
       </div>
+
+      {isMobile && drawerOpen && (
+        <div role="dialog" aria-label="Menu" aria-modal="true" onClick={() => setDrawerOpen(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1100, display: 'flex' }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ width: 240, maxWidth: '80%', height: '100%', background: 'var(--bg-card)', padding: '16px 12px',
+              display: 'flex', flexDirection: 'column', gap: 4, boxShadow: 'var(--shadow-overlay)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 8px' }}>
+              <strong style={{ fontSize: 15 }}>Menu</strong>
+              <button type="button" aria-label="Close menu" onClick={() => setDrawerOpen(false)}
+                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44,
+                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                <X size={20} />
+              </button>
+            </div>
+            {NAV.map((n) => navButton(n, !selected && section === n.key, () => { goSection(n.key); setDrawerOpen(false); }))}
+          </div>
+        </div>
+      )}
 
       {notice && <Toast message={notice} />}
     </div>

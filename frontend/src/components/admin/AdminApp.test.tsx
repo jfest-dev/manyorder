@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { mockMatchMedia } from '../../test-utils/matchMedia';
 
 const suspendMock = vi.fn().mockResolvedValue(undefined);
 const searchMock = vi.fn();
@@ -57,6 +58,7 @@ function renderAdmin() {
 
 beforeEach(() => {
   cleanup();
+  mockMatchMedia(false); // desktop by default
   metricsMock.mockReset().mockResolvedValue(METRICS);
   searchMock.mockReset().mockResolvedValue({ content: [MERCHANT], totalElements: 1, totalPages: 1, page: 1 });
   suspendMock.mockClear();
@@ -89,6 +91,20 @@ describe('AdminApp', () => {
     await user.click(screen.getByRole('button', { name: 'Suspend' }));
 
     await waitFor(() => expect(suspendMock).toHaveBeenCalledWith(7, 'Spam listings'));
+  });
+
+  it('on mobile, a menu button opens the nav drawer', async () => {
+    mockMatchMedia(true);
+    const user = userEvent.setup();
+    renderAdmin();
+    await screen.findByText('New (30d)'); // Overview loaded
+
+    // No persistent sidebar on mobile; a menu button opens a drawer.
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const drawer = await screen.findByRole('dialog', { name: 'Menu' });
+    await user.click(within(drawer).getByRole('button', { name: 'Merchants' }));
+
+    expect(await screen.findByText('Kiri Brew')).toBeTruthy(); // navigated, drawer closed
   });
 
   it('left nav switches between Overview, Merchants and Activity', async () => {

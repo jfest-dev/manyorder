@@ -12,11 +12,15 @@ import {
 export const dialogOverlayStyle: CSSProperties = {
   position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1000,
   display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+  // Let a tall dialog scroll rather than clip when the on-screen keyboard is open.
+  overflowY: 'auto',
 };
 export const dialogCardStyle: CSSProperties = {
   background: 'var(--bg-card)', borderRadius: 'var(--radius-medium)', padding: '20px',
   width: '100%', maxWidth: '380px', border: '1px solid var(--border-strong)',
   boxShadow: 'var(--shadow-overlay)',
+  // Keep the card within the viewport (keyboard-safe); its own content scrolls.
+  maxHeight: '90vh', overflowY: 'auto',
 };
 
 const btnBase: CSSProperties = {

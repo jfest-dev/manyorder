@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { mockMatchMedia } from '../../test-utils/matchMedia';
 
 const searchMerchants = vi.fn();
 
@@ -38,6 +39,7 @@ function renderList() {
 
 beforeEach(() => {
   cleanup();
+  mockMatchMedia(false);
   searchMerchants.mockReset().mockImplementation((p: { page?: number }) => Promise.resolve(pageFor(p?.page ?? 1)));
 });
 
@@ -73,5 +75,22 @@ describe('MerchantsList', () => {
     await user.type(screen.getByLabelText('Search merchants'), 'kiri');
     await waitFor(() =>
       expect(searchMerchants).toHaveBeenCalledWith(expect.objectContaining({ q: 'kiri', page: 1 })));
+  });
+
+  it('on mobile, hides filters behind a Filters button and lists stores as cards', async () => {
+    mockMatchMedia(true);
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText('Showing 1 to 20 of 25');
+
+    // Filter dropdowns are collapsed until the Filters button is tapped.
+    expect(screen.queryByLabelText('Filter by status')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Filters' }));
+    expect(await screen.findByLabelText('Filter by status')).toBeTruthy();
+
+    // Stores render as cards with per-store View / Suspend actions (no data table).
+    expect(screen.getByRole('button', { name: 'View Store 1' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Suspend Store 1' })).toBeTruthy();
+    expect(document.querySelector('table')).toBeNull();
   });
 });
