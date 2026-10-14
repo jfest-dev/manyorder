@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import { adminApi, AdminMerchantPage, AdminMerchantSummary, ApiError } from '../../lib/api';
-import { Select } from '../Select';
+import { Select, SelectOption } from '../Select';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { BUSINESS_TYPES } from '../../lib/storeFields';
 
 const PAGE_SIZE = 20;
 
@@ -22,13 +23,6 @@ const CURRENCY_OPTIONS = [
   { value: '', label: 'All currencies' },
   { value: 'SGD', label: 'SGD' },
   { value: 'IDR', label: 'IDR' },
-];
-const BUSINESS_TYPE_OPTIONS = [
-  { value: '', label: 'All business types' },
-  { value: 'Food & Beverage', label: 'Food & Beverage' },
-  { value: 'Retail', label: 'Retail' },
-  { value: 'Services', label: 'Services' },
-  { value: 'Other', label: 'Other' },
 ];
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
@@ -59,6 +53,32 @@ export function MerchantsList({ onView, onToggleSuspend, busyId, reloadToken }: 
   const [data, setData] = useState<AdminMerchantPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [extraTypes, setExtraTypes] = useState<string[]>([]);
+
+  // The filter offers the shared six, then any other values found in stores
+  // (legacy types), grouped under an "Other values" header.
+  const businessTypeFilterOptions = useMemo<SelectOption[]>(() => {
+    const six = BUSINESS_TYPES.map((o) => o.value);
+    const others = extraTypes.filter((v) => !six.includes(v));
+    const opts: SelectOption[] = [
+      { value: '', label: 'All business types' },
+      ...BUSINESS_TYPES,
+    ];
+    if (others.length > 0) {
+      opts.push({ value: '__other_header__', label: 'Other values', disabled: true });
+      others.forEach((v) => opts.push({ value: v, label: v }));
+    }
+    return opts;
+  }, [extraTypes]);
+
+  // Load the distinct business-type values once, for the filter's "Other values".
+  useEffect(() => {
+    let cancelled = false;
+    adminApi.businessTypes()
+      .then((list) => { if (!cancelled) setExtraTypes(list); })
+      .catch(() => { /* non-fatal: the filter just shows the shared six */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // Debounce the search box so we don't fire a request per keystroke.
   useEffect(() => {
@@ -120,7 +140,7 @@ export function MerchantsList({ onView, onToggleSuspend, busyId, reloadToken }: 
               <Select value={currency} onChange={onFilter(setCurrency)} options={CURRENCY_OPTIONS} ariaLabel="Filter by currency" height={isMobile ? 40 : 32} />
             </div>
             <div style={{ width: isMobile ? 'auto' : 170 }}>
-              <Select value={businessType} onChange={onFilter(setBusinessType)} options={BUSINESS_TYPE_OPTIONS} ariaLabel="Filter by business type" height={isMobile ? 40 : 32} />
+              <Select value={businessType} onChange={onFilter(setBusinessType)} options={businessTypeFilterOptions} ariaLabel="Filter by business type" height={isMobile ? 40 : 32} />
             </div>
             <div style={{ width: isMobile ? 'auto' : 150 }}>
               <Select value={sort} onChange={onFilter(setSort)} options={SORT_OPTIONS} ariaLabel="Sort by" height={isMobile ? 40 : 32} />

@@ -63,6 +63,12 @@ public class AdminMerchantService {
         return merchantRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toSummary).toList();
     }
 
+    /** Distinct business-type values present across all stores (for the admin filter). */
+    @Transactional(readOnly = true)
+    public List<String> listBusinessTypes() {
+        return merchantRepository.findDistinctBusinessTypes();
+    }
+
     /**
      * Filtered, sorted, paged merchants for the admin Merchants screen.
      * Search matches store name, slug, owner name and owner email (case-insensitive).

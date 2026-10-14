@@ -10,7 +10,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api')>();
   return {
     ...actual,
-    adminApi: { ...actual.adminApi, searchMerchants: (params?: unknown) => searchMerchants(params) },
+    adminApi: { ...actual.adminApi, searchMerchants: (params?: unknown) => searchMerchants(params), businessTypes: () => Promise.resolve([]) },
   };
 });
 

@@ -2,7 +2,7 @@ import * as RS from '@radix-ui/react-select';
 import { Check, ChevronDown } from 'lucide-react';
 import type { CSSProperties } from 'react';
 
-export interface SelectOption { value: string; label: string; }
+export interface SelectOption { value: string; label: string; disabled?: boolean; }
 
 interface SelectProps {
   value: string;
@@ -69,15 +69,21 @@ export function Select({
               <RS.Item
                 key={o.value}
                 value={toRadix(o.value)}
+                disabled={o.disabled}
                 className="mo-select-item"
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
-                  padding: '8px 10px', fontSize, color: 'var(--text-primary)',
-                  borderRadius: 'var(--radius-field)', cursor: 'pointer', outline: 'none', userSelect: 'none',
+                  padding: '8px 10px', borderRadius: 'var(--radius-field)',
+                  cursor: o.disabled ? 'default' : 'pointer', outline: 'none', userSelect: 'none',
+                  color: o.disabled ? 'var(--text-muted)' : 'var(--text-primary)',
+                  fontWeight: o.disabled ? 700 : undefined,
+                  textTransform: o.disabled ? 'uppercase' : undefined,
+                  letterSpacing: o.disabled ? '0.04em' : undefined,
+                  fontSize: o.disabled ? 11 : fontSize,
                 }}
               >
                 <RS.ItemText>{o.label}</RS.ItemText>
-                <RS.ItemIndicator><Check size={15} /></RS.ItemIndicator>
+                {!o.disabled && <RS.ItemIndicator><Check size={15} /></RS.ItemIndicator>}
               </RS.Item>
             ))}
           </RS.Viewport>

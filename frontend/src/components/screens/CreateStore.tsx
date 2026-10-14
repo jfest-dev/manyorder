@@ -4,7 +4,8 @@ import { Button } from '../Button';
 import { Card } from '../Card';
 import { Upload, LogOut, Store, X, Loader2 } from 'lucide-react';
 import { storeInitials } from '../../lib/initials';
-import { Select } from '../Select';
+import { PhoneField } from '../PhoneField';
+import { BUSINESS_TYPES, CURRENCIES, STORE_FIELD_TEXT } from '../../lib/storeFields';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 
 interface CreateStoreProps {
@@ -57,8 +58,6 @@ interface CreateStoreProps {
   };
 }
 
-const COUNTRY_CODES = ['+65', '+62'];
-
 const slugify = (input: string) => {
   return input
     .toLowerCase()
@@ -77,36 +76,13 @@ const themeColors = [
   { name: 'Orange', color: '#F97316' },
 ];
 
-const categories = [
-  { value: 'fashion', label: 'Fashion & Apparel' },
-  { value: 'food', label: 'Food & Beverage' },
-  { value: 'electronics', label: 'Electronics' },
-  { value: 'beauty', label: 'Beauty & Cosmetics' },
-  { value: 'home', label: 'Home & Living' },
-  { value: 'other', label: 'Other' },
-];
-
-const currencies = [
-  { value: 'sgd', label: 'Singapore Dollar (SGD)' },
-  { value: 'idr', label: 'Indonesian Rupiah (IDR)' },
-];
-
-const countryCodes = [
-  { value: '+65', label: '+65 (Singapore)' },
-  { value: '+62', label: '+62 (Indonesia)' },
-];
 
 export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile, initialData }: CreateStoreProps) {
-  // Split a saved combined phone (e.g. "+65 9123") back into code + number.
-  const initialCode = COUNTRY_CODES.find((c) => initialData?.phone?.startsWith(c)) || '+65';
-  const initialPhone = initialData?.phone ? initialData.phone.slice(initialCode.length) : '';
-
   const [storeName, setStoreName] = useState(initialData?.name || '');
   const [category, setCategory] = useState(initialData?.category || 'food');
-  const [currency, setCurrency] = useState(initialData?.currency || 'sgd');
+  const [currency, setCurrency] = useState(initialData?.currency || 'SGD');
   const [selectedColor, setSelectedColor] = useState(initialData?.color || '#000000');
-  const [countryCode, setCountryCode] = useState(initialCode);
-  const [phoneNumber, setPhoneNumber] = useState(initialPhone);
+  const [phone, setPhone] = useState(initialData?.phone || '');
   const [storeLink, setStoreLink] = useState(initialData?.storeLink || '');
   // Only a direct edit to the link field stops auto-follow. We persist this
   // flag into the draft so it survives a Back round-trip - an auto-derived
@@ -179,7 +155,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
 
         // extra fields (won’t break App.tsx)
         currency,
-        phone: `${countryCode}${phoneNumber}`,
+        phone,
         storeLink,
         storeLinkTouched,
         streetAddress,
@@ -311,46 +287,20 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
               />
 
               <FieldSelect
-                label="Business type"
+                label={STORE_FIELD_TEXT.businessTypeLabel}
                 placeholder="Select business type"
-                options={categories}
+                options={BUSINESS_TYPES}
                 value={category}
                 onChange={setCategory}
-                helperText="Help us understand your business better"
+                helperText={STORE_FIELD_TEXT.businessTypeHelper}
               />
 
-              <div>
-                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-                  Phone
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
-                  <Select
-                    value={countryCode}
-                    onChange={setCountryCode}
-                    options={countryCodes}
-                    ariaLabel="Country code"
-                  />
-
-                  <input
-                    type="tel"
-                    placeholder="8123 4567"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    style={{
-                      height: '40px',
-                      padding: '0 12px',
-                      border: '1px solid var(--border-strong)',
-                      borderRadius: 'var(--radius-field)',
-                      background: 'var(--bg-card)',
-                      fontSize: '13px',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px' }}>
-                  This will be your WhatsApp / contact number.
-                </p>
-              </div>
+              <PhoneField
+                label={STORE_FIELD_TEXT.phoneLabel}
+                helperText={STORE_FIELD_TEXT.phoneHelper}
+                value={phone}
+                onChange={setPhone}
+              />
 
               <div>
                 <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
@@ -399,12 +349,12 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
               </div>
 
               <FieldSelect
-                label="Currency"
+                label={STORE_FIELD_TEXT.currencyLabel}
                 placeholder="Select currency"
-                options={currencies}
+                options={CURRENCIES}
                 value={currency}
                 onChange={setCurrency}
-                helperText="Auto-selects from country, but you can change it anytime"
+                helperText={STORE_FIELD_TEXT.currencyHelperEditable}
               />
 
               {/* Address & hours - shown on the storefront; editable later in Settings. */}

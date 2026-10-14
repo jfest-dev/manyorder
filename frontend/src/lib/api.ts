@@ -1129,6 +1129,7 @@ export const adminApi = {
   metrics: () => request<AdminMetrics>('/admin/metrics'),
   overview: () => request<AdminOverview>('/admin/metrics/overview'),
   listMerchants: () => request<AdminMerchantSummary[]>('/admin/merchants'),
+  businessTypes: () => request<string[]>('/admin/merchants/business-types'),
   searchMerchants: (params: AdminMerchantSearchParams = {}) => {
     const qs = new URLSearchParams();
     if (params.q) qs.set('q', params.q);

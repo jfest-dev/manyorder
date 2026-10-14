@@ -16,6 +16,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
       metrics: () => metricsMock(),
       overview: () => Promise.resolve(OVERVIEW),
       listMerchants: () => Promise.resolve([]),
+      businessTypes: () => Promise.resolve([]),
       searchMerchants: () => searchMock(),
       suspend: (id: number, reason: string) => suspendMock(id, reason),
       unsuspend: vi.fn().mockResolvedValue(undefined),

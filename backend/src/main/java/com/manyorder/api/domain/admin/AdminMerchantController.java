@@ -53,6 +53,12 @@ public class AdminMerchantController {
         return adminMerchantService.listMerchants();
     }
 
+    /** Distinct business-type values across all stores, for the Merchants filter. */
+    @GetMapping("/business-types")
+    public List<String> businessTypes() {
+        return adminMerchantService.listBusinessTypes();
+    }
+
     /** Filtered, sorted, paged merchants for the Merchants screen. {@code page} is 1-based. */
     @GetMapping("/search")
     public AdminMerchantPage search(@RequestParam(required = false) String q,

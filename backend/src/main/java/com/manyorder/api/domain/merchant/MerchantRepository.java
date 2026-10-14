@@ -67,4 +67,8 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long> {
     @Query("SELECT COUNT(m) FROM Merchant m WHERE m.archivedAt IS NULL AND m.suspendedAt IS NULL AND NOT EXISTS "
             + "(SELECT o FROM Order o WHERE o.merchant = m AND o.createdAt >= :since)")
     long countActiveStoresWithoutRecentOrders(@Param("since") LocalDateTime since);
+
+    /** Distinct non-blank business-type values across all stores, for the admin filter. */
+    @Query("SELECT DISTINCT m.businessType FROM Merchant m WHERE m.businessType IS NOT NULL AND m.businessType <> '' ORDER BY m.businessType")
+    List<String> findDistinctBusinessTypes();
 }

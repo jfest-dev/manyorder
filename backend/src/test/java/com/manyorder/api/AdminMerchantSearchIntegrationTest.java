@@ -65,4 +65,24 @@ class AdminMerchantSearchIntegrationTest extends IntegrationTestBase {
         String merchant = registerAndGetToken("search-nonadmin@test.com", "MERCHANT", null);
         getWithToken("/admin/merchants/search?q=x", merchant, 403);
     }
+
+    @Test
+    void businessTypes_listsDistinctValues_adminOnly() throws Exception {
+        String admin = loginAndGetToken("admin@manyorder.app", "password123");
+        String owner = registerAndGetToken("bt-owner@test.com", "MERCHANT", null);
+        // Create a store carrying a specific business type.
+        mockMvc.perform(post("/merchant/stores").header("Authorization", "Bearer " + owner)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"storeName\":\"BT Store\",\"slug\":\"bt-store\",\"businessType\":\"electronics\"}"))
+                .andExpect(status().isCreated());
+
+        JsonNode types = json(getWithToken("/admin/merchants/business-types", admin, 200));
+        assertTrue(types.isArray());
+        boolean found = false;
+        for (JsonNode t : types) if ("electronics".equals(t.asText())) found = true;
+        assertTrue(found, "distinct list includes the created store's business type");
+
+        // Merchant token is forbidden.
+        getWithToken("/admin/merchants/business-types", owner, 403);
+    }
 }

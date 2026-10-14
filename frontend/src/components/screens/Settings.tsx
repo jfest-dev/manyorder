@@ -4,10 +4,12 @@ import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
 import { Checkbox } from '../Checkbox';
 import { PasswordField } from '../PasswordField';
-import { storesApi, uploadsApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
+import { storesApi, uploadsApi, ordersApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { useConfirm } from '../ConfirmDialog';
 import { AccountSettings } from './AccountSettings';
+import { PhoneField } from '../PhoneField';
+import { businessTypeOptions, CURRENCIES, STORE_FIELD_TEXT } from '../../lib/storeFields';
 
 interface SettingsProps {
   storeId: number;
@@ -91,6 +93,8 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
 
   // Settings has two tabs: the store's settings and the signed-in user's account.
   const [tab, setTab] = useState<'store' | 'account'>('store');
+  // Whether the store has any orders yet: once it does, currency is locked.
+  const [hasOrders, setHasOrders] = useState(false);
 
   // Store logo (Store Details card). A newly picked file is held locally and
   // previewed via an object URL; it's uploaded only when the card is saved, so a
@@ -117,7 +121,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
         slug: s.slug,
         storeEmail: s.email ?? '',
         storePhone: s.phone ?? '',
-        businessType: s.businessType ?? 'Food & Beverage',
+        businessType: s.businessType ?? '',
         currency: s.currency,
         themeColor: s.themeColor ?? '#000000',
         logoUrl: s.logoUrl ?? '',
@@ -135,6 +139,8 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
       setSlugTouchedFrom(s.slug);
       setSavedCurrency(s.currency);
       setSavedName(s.name);
+      // Currency locks once the store has taken any order.
+      ordersApi.list(storeId).then((os) => setHasOrders(os.length > 0)).catch(() => { /* leave editable */ });
     } catch (e: any) {
       setErrorKey({ key: 'store', msg: e?.message || 'Could not load store settings' });
     } finally {
@@ -410,16 +416,11 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <FieldInput label="Store Name" value={form.storeName || ''} onChange={(v) => set('storeName', v)} required />
             <FieldSelect
-              label="Business Type"
-              options={[
-                { value: 'Food & Beverage', label: 'Food & Beverage' },
-                { value: 'Retail', label: 'Retail' },
-                { value: 'Services', label: 'Services' },
-                { value: 'Other', label: 'Other' },
-              ]}
-              value={form.businessType || 'Food & Beverage'}
+              label={STORE_FIELD_TEXT.businessTypeLabel}
+              options={businessTypeOptions(form.businessType)}
+              value={form.businessType || ''}
               onChange={(v) => set('businessType', v)}
-              helperText="Help us understand your business better"
+              helperText={STORE_FIELD_TEXT.businessTypeHelper}
             />
             <FieldInput
               label="Email Address"
@@ -428,11 +429,11 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               onChange={(v) => set('storeEmail', v)}
               helperText="Customer support and notifications email"
             />
-            <FieldInput
-              label="Phone"
+            <PhoneField
+              label={STORE_FIELD_TEXT.phoneLabel}
+              helperText={STORE_FIELD_TEXT.phoneHelper}
               value={form.storePhone || ''}
               onChange={(v) => set('storePhone', v)}
-              helperText="This will be your contact number."
             />
             <FieldInput
               label="Store Link"
@@ -444,18 +445,33 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
                   : `manyorder.app/${form.slug || 'your-store'} · the link you share with customers`
               }
             />
-            <FieldSelect
-              label="Currency"
-              options={[
-                { value: 'SGD', label: 'Singapore Dollar (SGD)' },
-                { value: 'IDR', label: 'Indonesian Rupiah (IDR)' },
-              ]}
-              value={form.currency || 'SGD'}
-              onChange={(v) => set('currency', v)}
-              helperText="Auto-selects from country, but you can change it anytime"
-            />
+            {hasOrders ? (
+              <div>
+                <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
+                  {STORE_FIELD_TEXT.currencyLabel}
+                </label>
+                <input
+                  value={(CURRENCIES.find((c) => c.value === form.currency)?.label) ?? form.currency ?? ''}
+                  readOnly aria-label="Currency"
+                  style={{ width: '100%', height: '40px', padding: '0 12px', border: '1px solid var(--border-subtle)',
+                    borderRadius: 'var(--radius-field)', background: 'var(--bg-card-subtle)', color: 'var(--text-secondary)',
+                    fontSize: '13px', outline: 'none' }}
+                />
+                <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
+                  {STORE_FIELD_TEXT.currencyHelperLocked}
+                </p>
+              </div>
+            ) : (
+              <FieldSelect
+                label={STORE_FIELD_TEXT.currencyLabel}
+                options={CURRENCIES}
+                value={form.currency || 'SGD'}
+                onChange={(v) => set('currency', v)}
+                helperText={STORE_FIELD_TEXT.currencyHelperEditable}
+              />
+            )}
             <div>
-              <p className="text-small" style={{ fontWeight: 500, marginBottom: '8px' }}>Theme Color</p>
+              <p className="text-small" style={{ fontWeight: 500, marginBottom: '8px' }}>Theme color</p>
               <div style={{ display: 'flex', gap: '10px' }}>
                 {THEME_COLORS.map((c) => (
                   <button
@@ -520,10 +536,10 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
         <div style={sectionCard}>
           <h3 style={{ marginBottom: '20px' }}>Store Address & Hours</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <FieldInput label="Street Address" placeholder="123 Main Street" value={form.streetAddress || ''} onChange={(v) => set('streetAddress', v)} helperText="Shown to customers on your storefront." />
+            <FieldInput label="Street address" placeholder="123 Main Street" value={form.streetAddress || ''} onChange={(v) => set('streetAddress', v)} helperText="Shown to customers on your storefront." />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <FieldInput label="City" placeholder="Singapore" value={form.city || ''} onChange={(v) => set('city', v)} />
-              <FieldInput label="Postal Code" placeholder="123456" value={form.postalCode || ''} onChange={(v) => set('postalCode', v)} />
+              <FieldInput label="Postal code" placeholder="123456" value={form.postalCode || ''} onChange={(v) => set('postalCode', v)} />
             </div>
             <FieldInput label="Operating hours" placeholder="e.g. Mon to Sat, 9am to 6pm · Closed Sun" value={form.operatingHours || ''} onChange={(v) => set('operatingHours', v)} helperText="Free text, shown on your storefront." />
           </div>
