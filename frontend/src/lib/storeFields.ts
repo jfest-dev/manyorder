@@ -37,10 +37,22 @@ export const CURRENCIES: Option[] = [
 
 /** Country codes offered by the shared phone input. */
 export const PHONE_COUNTRY_CODES = ['+65', '+62'];
+
+/** Full names shown in the open dropdown list. */
 export const PHONE_COUNTRY_OPTIONS: Option[] = [
-  { value: '+65', label: '+65 (Singapore)' },
-  { value: '+62', label: '+62 (Indonesia)' },
+  { value: '+65', label: 'Singapore +65' },
+  { value: '+62', label: 'Indonesia +62' },
 ];
+
+/**
+ * Compact label for the closed trigger: flag plus code only, so it never gets
+ * cut off in a narrow field. On platforms without emoji flags the regional
+ * letters show instead (e.g. "SG +65"), which is why the code is always kept.
+ */
+export const PHONE_CODE_SHORT: Record<string, string> = {
+  '+65': '🇸🇬 +65',
+  '+62': '🇮🇩 +62',
+};
 
 /**
  * Split a stored phone into a known country code + the rest. If it does not

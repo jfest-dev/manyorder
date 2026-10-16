@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Select } from './Select';
-import { PHONE_COUNTRY_OPTIONS, combinePhone, splitPhone } from '../lib/storeFields';
+import { PHONE_CODE_SHORT, PHONE_COUNTRY_OPTIONS, combinePhone, splitPhone } from '../lib/storeFields';
 
 interface PhoneFieldProps {
   /** The stored combined phone string (e.g. "+6591234567" or a legacy value). */
@@ -58,6 +58,7 @@ export function PhoneField({ value, onChange, label, helperText }: PhoneFieldPro
           options={PHONE_COUNTRY_OPTIONS}
           placeholder="Code"
           ariaLabel="Country code"
+          renderValue={(v) => PHONE_CODE_SHORT[v] ?? v}
         />
         <input
           type="tel"

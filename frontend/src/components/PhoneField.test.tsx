@@ -36,6 +36,13 @@ describe('PhoneField', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('shows a compact flag + code in the closed dropdown, not the full country name', () => {
+    render(<PhoneField value="+6598887777" onChange={vi.fn()} />);
+    const code = screen.getByLabelText('Country code').textContent ?? '';
+    expect(code).toContain('+65');          // code always present, never cut off
+    expect(code).not.toContain('Singapore'); // full name stays in the open list only
+  });
+
   it('emits the combined value when the number is edited', async () => {
     const user = userEvent.setup();
     render(<Harness initial="+6591112222" />);

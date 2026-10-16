@@ -1,6 +1,6 @@
 import * as RS from '@radix-ui/react-select';
 import { Check, ChevronDown } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export interface SelectOption { value: string; label: string; disabled?: boolean; }
 
@@ -16,6 +16,8 @@ interface SelectProps {
   fontSize?: number;
   /** Extra styles merged onto the trigger (e.g. width overrides). */
   triggerStyle?: CSSProperties;
+  /** Render a compact label in the closed trigger (the open list still shows option.label). */
+  renderValue?: (value: string) => ReactNode;
 }
 
 // Radix forbids an empty-string Item value (it's reserved for "clear"), but the
@@ -33,7 +35,7 @@ const fromRadix = (v: string) => (v === EMPTY ? '' : v);
  */
 export function Select({
   value, onChange, options, placeholder = 'Select…', disabled, ariaLabel,
-  height = 40, fontSize = 13, triggerStyle,
+  height = 40, fontSize = 13, triggerStyle, renderValue,
 }: SelectProps) {
   return (
     <RS.Root value={toRadix(value)} onValueChange={(v) => onChange(fromRadix(v))} disabled={disabled}>
@@ -48,7 +50,11 @@ export function Select({
           ...triggerStyle,
         }}
       >
-        <RS.Value placeholder={placeholder} />
+        {renderValue && value !== '' ? (
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderValue(value)}</span>
+        ) : (
+          <RS.Value placeholder={placeholder} />
+        )}
         <RS.Icon asChild><ChevronDown size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} /></RS.Icon>
       </RS.Trigger>
       <RS.Portal>
