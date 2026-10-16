@@ -101,8 +101,8 @@ describe('AdminApp', () => {
     await screen.findByText('New (30d)'); // Overview loaded
 
     // No persistent sidebar on mobile; a menu button opens a drawer.
-    await user.click(screen.getByRole('button', { name: 'Open menu' }));
-    const drawer = await screen.findByRole('dialog', { name: 'Menu' });
+    await user.click(screen.getByRole('button', { name: 'Open navigation' }));
+    const drawer = await screen.findByRole('dialog', { name: 'Admin navigation' });
     await user.click(within(drawer).getByRole('button', { name: 'Merchants' }));
 
     expect(await screen.findByText('Kiri Brew')).toBeTruthy(); // navigated, drawer closed

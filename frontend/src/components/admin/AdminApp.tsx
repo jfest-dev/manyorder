@@ -127,7 +127,7 @@ export function AdminApp() {
         padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           {isMobile && (
-            <button type="button" aria-label="Open menu" onClick={() => setDrawerOpen(true)}
+            <button type="button" aria-label="Open navigation" onClick={() => setDrawerOpen(true)}
               style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44,
                 margin: '-10px 0', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)' }}>
               <Menu size={22} />
@@ -228,14 +228,13 @@ export function AdminApp() {
       </div>
 
       {isMobile && drawerOpen && (
-        <div role="dialog" aria-label="Menu" aria-modal="true" onClick={() => setDrawerOpen(false)}
+        <div role="dialog" aria-label="Admin navigation" aria-modal="true" onClick={() => setDrawerOpen(false)}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1100, display: 'flex' }}>
           <div onClick={(e) => e.stopPropagation()}
             style={{ width: 240, maxWidth: '80%', height: '100%', background: 'var(--bg-card)', padding: '16px 12px',
               display: 'flex', flexDirection: 'column', gap: 4, boxShadow: 'var(--shadow-overlay)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 8px' }}>
-              <strong style={{ fontSize: 15 }}>Menu</strong>
-              <button type="button" aria-label="Close menu" onClick={() => setDrawerOpen(false)}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '0 4px 8px' }}>
+              <button type="button" aria-label="Close navigation" onClick={() => setDrawerOpen(false)}
                 style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44,
                   background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
                 <X size={20} />
