@@ -4,6 +4,7 @@ import {
   AdminOverviewAttentionGroup, AdminOverviewCurrencyValue,
 } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
+import { ADMIN_FONT } from './adminTokens';
 import { formatDate, formatDateTime, formatShortDate } from '../../lib/adminDatetime';
 
 interface Props {
@@ -44,7 +45,7 @@ export function AdminOverview({ onOpenStore }: Props) {
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)', background: 'var(--bg-card)', padding: '16px' }}>
-      <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 12px' }}>{title}</h3>
+      <h3 style={{ fontSize: ADMIN_FONT.heading, fontWeight: 700, margin: '0 0 12px' }}>{title}</h3>
       {children}
     </section>
   );
@@ -53,7 +54,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 function StoreLink({ id, name, onOpenStore }: { id: number; name: string; onOpenStore: (id: number) => void }) {
   return (
     <button type="button" onClick={() => onOpenStore(id)}
-      style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, fontSize: 13, textAlign: 'left' }}>
+      style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, fontSize: ADMIN_FONT.body, textAlign: 'left' }}>
       {name}
     </button>
   );
@@ -70,7 +71,7 @@ function OrderValue({ last30, allTime }: { last30: AdminOverviewCurrencyValue[];
           {rows.map((r) => (
             <div key={r.currency}>
               {/* Symbol-only amount, large; the currency code lives in the muted line below. */}
-              <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15 }}>{formatMoney(r.total, r.currency)}</div>
+              <div style={{ fontSize: ADMIN_FONT.metric, fontWeight: 800, lineHeight: 1.15 }}>{formatMoney(r.total, r.currency)}</div>
               <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 3 }}>
                 {r.orders} {r.orders === 1 ? 'order' : 'orders'} - {r.currency}
               </div>

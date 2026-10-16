@@ -16,6 +16,7 @@ import { StoreHeader } from './StoreHeader';
 import { AdminActivity } from './AdminActivity';
 import { AdminOverview } from './AdminOverview';
 import { MerchantsList } from './MerchantsList';
+import { ADMIN_FONT, ADMIN_SIZE, adminText } from './adminTokens';
 
 type Section = 'overview' | 'merchants' | 'activity';
 const NAV: { key: Section; label: string }[] = [
@@ -28,8 +29,8 @@ const NAV: { key: Section; label: string }[] = [
 function navButton(n: { key: Section; label: string }, active: boolean, onClick: () => void) {
   return (
     <button key={n.key} type="button" onClick={onClick} aria-current={active ? 'page' : undefined}
-      style={{ textAlign: 'left', padding: '10px 12px', minHeight: 44, borderRadius: 'var(--radius-field)', border: 'none', cursor: 'pointer',
-        fontSize: 14, fontWeight: active ? 700 : 500,
+      style={{ textAlign: 'left', padding: '10px 12px', minHeight: ADMIN_SIZE.tapTarget, borderRadius: ADMIN_SIZE.radiusField, border: 'none', cursor: 'pointer',
+        fontSize: ADMIN_FONT.body, fontWeight: active ? 700 : 500,
         background: active ? 'var(--bg-card-subtle)' : 'transparent',
         color: active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
       {n.label}
@@ -39,10 +40,10 @@ function navButton(n: { key: Section; label: string }, active: boolean, onClick:
 
 function Tile({ label, value }: { label: string; value: number }) {
   return (
-    <div style={{ flex: '1 1 140px', minWidth: 140, padding: '16px', borderRadius: 'var(--radius-medium)',
+    <div style={{ flex: '1 1 140px', minWidth: 140, padding: ADMIN_SIZE.cardPadding, borderRadius: ADMIN_SIZE.radiusCard,
       background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
-      <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)' }}>{value}</div>
-      <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>{label}</div>
+      <div style={{ ...adminText.metric, color: 'var(--text-primary)' }}>{value}</div>
+      <div style={{ ...adminText.caption, color: 'var(--text-secondary)', marginTop: 4 }}>{label}</div>
     </div>
   );
 }
@@ -122,7 +123,7 @@ export function AdminApp() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
+    <div className="admin-console" style={{ minHeight: '100vh', background: 'var(--bg-app)' }}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
@@ -133,11 +134,11 @@ export function AdminApp() {
               <Menu size={22} />
             </button>
           )}
-          <strong style={{ fontSize: 16 }}>Platform Admin</strong>
-          {!isMobile && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Cross-store administration</span>}
+          <strong style={{ ...adminText.heading }}>Platform Admin</strong>
+          {!isMobile && <span style={{ ...adminText.caption, color: 'var(--text-muted)' }}>Cross-store administration</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-          {!isMobile && <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{user?.email}</span>}
+          {!isMobile && <span style={{ ...adminText.caption, color: 'var(--text-secondary)' }}>{user?.email}</span>}
           <Button variant="secondary" onClick={logout}>Log out</Button>
         </div>
       </header>
@@ -150,16 +151,16 @@ export function AdminApp() {
         )}
 
         <main style={{ flex: 1, minWidth: 0, padding: isMobile ? '16px' : '20px' }}>
-          {loading && <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading…</p>}
-          {error && <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>}
+          {loading && <p style={{ ...adminText.body, color: 'var(--text-secondary)' }}>Loading…</p>}
+          {error && <p style={{ ...adminText.body, color: 'var(--error-color)' }}>{error}</p>}
 
           {!loading && !error && selected && (
             <div>
               <button type="button" onClick={() => setSelected(null)}
-                style={{ background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, padding: 0, marginBottom: 10 }}>
+                style={{ ...adminText.body, background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, padding: 0, marginBottom: 10 }}>
                 ← All merchants
               </button>
-              <h2 style={{ margin: '0 0 12px', fontSize: 16, lineHeight: 1.3 }}>{selected.name}</h2>
+              <h2 style={{ margin: '0 0 12px', ...adminText.title, lineHeight: 1.3 }}>{selected.name}</h2>
 
               <StoreHeader summary={selected} />
 
@@ -168,8 +169,8 @@ export function AdminApp() {
                 {(['overview', 'dashboard', 'customers', 'products', 'orders', 'marketing'] as const).map((t) => (
                   <button key={t} type="button" onClick={() => setTab(t)}
                     ref={tab === t ? (el) => { try { el?.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch { /* jsdom: no-op */ } } : undefined}
-                    style={{ padding: '10px 14px', minHeight: 44, flexShrink: 0, whiteSpace: 'nowrap', background: 'none', border: 'none',
-                      cursor: 'pointer', fontSize: 13, fontWeight: 600, textTransform: 'capitalize',
+                    style={{ padding: '10px 14px', minHeight: ADMIN_SIZE.tapTarget, flexShrink: 0, whiteSpace: 'nowrap', background: 'none', border: 'none',
+                      cursor: 'pointer', fontSize: ADMIN_FONT.body, fontWeight: 600, textTransform: 'capitalize',
                       color: tab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
                       borderBottom: tab === t ? '2px solid var(--primary-solid)' : '2px solid transparent' }}>
                     {t}

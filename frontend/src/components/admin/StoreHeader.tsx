@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink, Copy, Check } from 'lucide-react';
 import { adminApi, AdminMerchantSummary } from '../../lib/api';
+import { ADMIN_FONT } from './adminTokens';
 
 const STATUS_STYLE: Record<AdminMerchantSummary['status'], { bg: string; color: string; label: string }> = {
   ACTIVE: { bg: '#ECFDF5', color: '#047857', label: 'Active' },
@@ -22,7 +23,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   return (
     <button type="button" onClick={onCopy} aria-label={label}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
-        cursor: 'pointer', color: copied ? '#047857' : 'var(--text-muted)', padding: 2, fontSize: 12 }}>
+        cursor: 'pointer', color: copied ? '#047857' : 'var(--text-muted)', padding: 2, fontSize: ADMIN_FONT.caption }}>
       {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>
   );
@@ -70,7 +71,7 @@ export function StoreHeader({ summary }: { summary: AdminMerchantSummary }) {
           background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}>
           Platform admin view
         </span>
-        <span style={{ padding: '2px 10px', borderRadius: 999, background: status.bg, color: status.color, fontSize: 11, fontWeight: 600 }}>
+        <span style={{ padding: '2px 10px', borderRadius: 999, background: status.bg, color: status.color, fontSize: ADMIN_FONT.caption, fontWeight: 600 }}>
           {status.label}
         </span>
       </div>

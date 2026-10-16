@@ -3,6 +3,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import { adminApi, AdminMerchantPage, AdminMerchantSummary, ApiError } from '../../lib/api';
 import { Select, SelectOption } from '../Select';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { ADMIN_FONT, ADMIN_SIZE } from './adminTokens';
 import { BUSINESS_TYPES } from '../../lib/storeFields';
 
 const PAGE_SIZE = 20;
@@ -107,7 +108,7 @@ export function MerchantsList({ onView, onToggleSuspend, busyId, reloadToken }: 
 
   return (
     <>
-      <h2 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 12px' }}>Merchants</h2>
+      <h2 style={{ fontSize: ADMIN_FONT.heading, fontWeight: 700, margin: '0 0 12px' }}>Merchants</h2>
 
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -117,15 +118,15 @@ export function MerchantsList({ onView, onToggleSuspend, busyId, reloadToken }: 
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search name, slug or owner"
             aria-label="Search merchants"
-            style={{ flex: 1, minWidth: 0, height: isMobile ? 40 : 32, padding: '0 12px', fontSize: 13,
+            style={{ flex: 1, minWidth: 0, height: isMobile ? ADMIN_SIZE.tapTarget : ADMIN_SIZE.controlHeight, padding: '0 12px', fontSize: ADMIN_FONT.body,
               border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)',
               background: 'var(--bg-card)', color: 'var(--text-primary)', fontFamily: 'inherit', outline: 'none' }}
           />
           {isMobile && (
             <button type="button" onClick={() => setShowFilters((v) => !v)} aria-expanded={showFilters} aria-label="Filters"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 40, padding: '0 12px', flexShrink: 0,
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: ADMIN_SIZE.tapTarget, padding: '0 12px', flexShrink: 0,
                 border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', background: 'var(--bg-card)',
-                color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                color: 'var(--text-primary)', fontSize: ADMIN_FONT.body, fontWeight: 600, cursor: 'pointer' }}>
               <SlidersHorizontal size={15} /> Filters
             </button>
           )}
@@ -134,16 +135,16 @@ export function MerchantsList({ onView, onToggleSuspend, busyId, reloadToken }: 
         {(!isMobile || showFilters) && (
           <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
             <div style={{ width: isMobile ? 'auto' : 150 }}>
-              <Select value={status} onChange={onFilter(setStatus)} options={STATUS_OPTIONS} ariaLabel="Filter by status" height={isMobile ? 40 : 32} />
+              <Select value={status} onChange={onFilter(setStatus)} options={STATUS_OPTIONS} ariaLabel="Filter by status" height={isMobile ? ADMIN_SIZE.tapTarget : ADMIN_SIZE.controlHeight} />
             </div>
             <div style={{ width: isMobile ? 'auto' : 140 }}>
-              <Select value={currency} onChange={onFilter(setCurrency)} options={CURRENCY_OPTIONS} ariaLabel="Filter by currency" height={isMobile ? 40 : 32} />
+              <Select value={currency} onChange={onFilter(setCurrency)} options={CURRENCY_OPTIONS} ariaLabel="Filter by currency" height={isMobile ? ADMIN_SIZE.tapTarget : ADMIN_SIZE.controlHeight} />
             </div>
             <div style={{ width: isMobile ? 'auto' : 170 }}>
-              <Select value={businessType} onChange={onFilter(setBusinessType)} options={businessTypeFilterOptions} ariaLabel="Filter by business type" height={isMobile ? 40 : 32} />
+              <Select value={businessType} onChange={onFilter(setBusinessType)} options={businessTypeFilterOptions} ariaLabel="Filter by business type" height={isMobile ? ADMIN_SIZE.tapTarget : ADMIN_SIZE.controlHeight} />
             </div>
             <div style={{ width: isMobile ? 'auto' : 150 }}>
-              <Select value={sort} onChange={onFilter(setSort)} options={SORT_OPTIONS} ariaLabel="Sort by" height={isMobile ? 40 : 32} />
+              <Select value={sort} onChange={onFilter(setSort)} options={SORT_OPTIONS} ariaLabel="Sort by" height={isMobile ? ADMIN_SIZE.tapTarget : ADMIN_SIZE.controlHeight} />
             </div>
           </div>
         )}
@@ -169,7 +170,7 @@ export function MerchantsList({ onView, onToggleSuspend, busyId, reloadToken }: 
                         <div style={{ fontWeight: 600, wordBreak: 'break-word' }}>{m.name}</div>
                         <div className="text-xs" style={{ color: 'var(--text-muted)', wordBreak: 'break-all' }}>/{m.slug}</div>
                       </div>
-                      <span style={{ flexShrink: 0, padding: '2px 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: 11, fontWeight: 600 }}>{s.label}</span>
+                      <span style={{ flexShrink: 0, padding: '2px 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: ADMIN_FONT.caption, fontWeight: 600 }}>{s.label}</span>
                     </div>
                     <div className="text-xs" style={{ color: 'var(--text-secondary)', wordBreak: 'break-all', marginTop: 6 }}>{m.ownerEmail}</div>
                     <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 6 }}>
@@ -195,7 +196,7 @@ export function MerchantsList({ onView, onToggleSuspend, busyId, reloadToken }: 
             </div>
           ) : (
             <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: ADMIN_FONT.body }}>
                 <thead>
                   <tr style={{ background: 'var(--bg-card-subtle)' }}>
                     {['Store', 'Owner', 'Status', 'Products', 'Orders', 'Customers', ''].map((h, i) => (
@@ -214,7 +215,7 @@ export function MerchantsList({ onView, onToggleSuspend, busyId, reloadToken }: 
                         </td>
                         <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{m.ownerEmail}</td>
                         <td style={{ padding: '10px 14px' }}>
-                          <span style={{ padding: '2px 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: 11, fontWeight: 600 }}>{s.label}</span>
+                          <span style={{ padding: '2px 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: ADMIN_FONT.caption, fontWeight: 600 }}>{s.label}</span>
                         </td>
                         <td style={{ padding: '10px 14px' }}>{m.productCount}</td>
                         <td style={{ padding: '10px 14px' }}>{m.orderCount}</td>
@@ -263,6 +264,6 @@ function pagerBtn(disabled: boolean): React.CSSProperties {
   return {
     padding: '8px 14px', minHeight: 40, borderRadius: 'var(--radius-field)', border: '1px solid var(--border-subtle)',
     background: 'var(--bg-card)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
-    fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
+    fontSize: ADMIN_FONT.body, fontWeight: 600, color: 'var(--text-primary)',
   };
 }

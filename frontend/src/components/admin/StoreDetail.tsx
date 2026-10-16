@@ -3,6 +3,7 @@ import { Copy, Check } from 'lucide-react';
 import { adminApi, AdminStoreDetail, AdminAuditLogEntry, ProductResponse, ApiError } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { formatDate, formatDateTime } from '../../lib/adminDatetime';
+import { ADMIN_FONT } from './adminTokens';
 
 const EMPTY = '-';
 function text(v: string | null | undefined): string {
@@ -37,7 +38,7 @@ const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)', padding: '16px', marginBottom: '16px',
 };
 const titleStyle: React.CSSProperties = {
-  fontSize: 13, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase',
+  fontSize: ADMIN_FONT.small, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase',
   color: 'var(--text-muted)', margin: '0 0 12px',
 };
 
@@ -53,7 +54,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ flex: '1 1 120px', minWidth: 120, padding: '12px', borderRadius: 'var(--radius-medium)', background: 'var(--bg-card-subtle)', border: '1px solid var(--border-subtle)' }}>
-      <div style={{ fontSize: 20, fontWeight: 700 }}>{value}</div>
+      <div style={{ fontSize: ADMIN_FONT.title, fontWeight: 700 }}>{value}</div>
       <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>{label}</div>
     </div>
   );
@@ -101,7 +102,7 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
       <div style={cardStyle}>
         <p style={titleStyle}>Activity</p>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.1 }}>{money(activity.revenue)}</div>
+          <div style={{ fontSize: ADMIN_FONT.metric, fontWeight: 800, lineHeight: 1.1 }}>{money(activity.revenue)}</div>
           <div className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: 4 }}>Revenue (completed and delivered)</div>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>

@@ -3,6 +3,7 @@ import { adminApi, AdminAuditLogEntry, AdminMerchantSummary, ApiError } from '..
 import { formatDateTime } from '../../lib/adminDatetime';
 import { Select } from '../Select';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { ADMIN_FONT } from './adminTokens';
 
 const PAGE_SIZE = 20;
 
@@ -52,7 +53,7 @@ export function AdminActivity() {
 
   return (
     <div>
-      <h2 style={{ fontSize: 15, fontWeight: 600, margin: '0 0 4px' }}>Activity</h2>
+      <h2 style={{ fontSize: ADMIN_FONT.heading, fontWeight: 700, margin: '0 0 4px' }}>Activity</h2>
       <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '0 0 14px' }}>Changes platform admins made across all stores.</p>
 
       <div style={{ maxWidth: isMobile ? '100%' : 280, marginBottom: 14 }}>
@@ -109,6 +110,6 @@ function pagerBtn(disabled: boolean): React.CSSProperties {
   return {
     padding: '8px 14px', minHeight: 40, borderRadius: 'var(--radius-field)', border: '1px solid var(--border-subtle)',
     background: 'var(--bg-card)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
-    fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
+    fontSize: ADMIN_FONT.body, fontWeight: 600, color: 'var(--text-primary)',
   };
 }
