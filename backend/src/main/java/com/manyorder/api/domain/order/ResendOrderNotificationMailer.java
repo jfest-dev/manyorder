@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.email.EmailLayout;
 
 /**
  * Delivers "new order" notifications to merchants through Resend's REST API.
@@ -95,26 +96,23 @@ public class ResendOrderNotificationMailer implements OrderNotificationMailer {
                 ? "Orders #" + orders.get(0).getId() + " and #" + orders.get(1).getId() + " (ready and pre-order)"
                 : "Order #" + primary.getId();
 
-        return """
-                <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 520px; margin: 0 auto; color: #1f2937;">
-                  <h2 style="margin-bottom: 4px;">New order at %s</h2>
-                  <p style="color: #4b5563; margin-top: 0;">%s</p>
-                  <p style="color: #4b5563; margin: 0 0 4px;"><strong>Customer:</strong> %s</p>
-                  <p style="color: #4b5563; margin: 0 0 16px;"><strong>Fulfilment:</strong> %s</p>
-                  <table style="width:100%%; border-collapse: collapse; font-size: 14px;">
-                    %s
-                    <tr><td style="padding:8px 0 0; border-top:1px solid #e5e7eb; font-weight:700;">Total</td>
-                        <td style="padding:8px 0 0; border-top:1px solid #e5e7eb; text-align:right; font-weight:700;">%s</td></tr>
-                  </table>
-                  <p style="color: #6b7280; font-size: 13px; margin-top: 20px;">Open your ManyOrder dashboard to confirm and fulfil this order.</p>
-                </div>
+        String inner = """
+                <p style="color:#4b5563;margin:0 0 4px;">%s</p>
+                <p style="color:#4b5563;margin:0 0 4px;"><strong>Customer:</strong> %s</p>
+                <p style="color:#4b5563;margin:0 0 16px;"><strong>Fulfilment:</strong> %s</p>
+                <table style="width:100%%;border-collapse:collapse;font-size:14px;">
+                  %s
+                  <tr><td style="padding:8px 0 0;border-top:1px solid #e5e7eb;font-weight:700;">Total</td>
+                      <td style="padding:8px 0 0;border-top:1px solid #e5e7eb;text-align:right;font-weight:700;">%s</td></tr>
+                </table>
+                <p style="color:#6b7280;font-size:13px;margin-top:20px;">Open your ManyOrder dashboard to confirm and fulfil this order.</p>
                 """.formatted(
-                escape(merchant.getName()),
-                orderRef,
+                escape(orderRef),
                 escape(primary.getContactName()),
                 primary.getOrderType().name().equals("DELIVERY") ? "Delivery" : "Pickup",
                 lines.toString(),
                 money(grandTotal, currency));
+        return EmailLayout.shell("New order at " + merchant.getName(), inner);
     }
 
     private static String money(BigDecimal amount, String currency) {

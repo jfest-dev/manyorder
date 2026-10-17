@@ -2,6 +2,8 @@ package com.manyorder.api.domain.product;
 
 import java.util.Map;
 
+import com.manyorder.api.email.EmailLayout;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -90,27 +92,15 @@ public class ResendLowStockMailer implements LowStockMailer {
     static String buildHtml(String storeName, String productName, int stock, String productsUrl) {
         boolean outOfStock = stock == 0;
         String heading = outOfStock
-                ? escape(productName) + " is out of stock"
-                : escape(productName) + " is almost out (" + stock + " left)";
+                ? productName + " is out of stock"
+                : productName + " is almost out (" + stock + " left)";
         String body = outOfStock
                 ? "Customers can't order it until you restock."
-                : escape(productName) + " at " + escape(storeName) + " has " + stock
+                : EmailLayout.escape(productName) + " at " + EmailLayout.escape(storeName) + " has " + stock
                         + " left. Update its stock in Products so customers can keep ordering.";
-        return """
-                <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 480px; margin: 0 auto; color: #1f2937;">
-                  <h2 style="margin-bottom: 8px;">%s</h2>
-                  <p style="color: #4b5563;">%s</p>
-                  <p style="margin: 24px 0;">
-                    <a href="%s" style="background: #111827; color: #ffffff; padding: 12px 20px; border-radius: 8px; text-decoration: none; display: inline-block;">Open Products</a>
-                  </p>
-                  <p style="color: #9ca3af; font-size: 12px;">Turn off low stock emails in Settings.</p>
-                </div>
-                """.formatted(heading, body, productsUrl);
-    }
-
-    /** Minimal HTML-escaping for merchant-supplied text. */
-    private static String escape(String raw) {
-        if (raw == null) return "";
-        return raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        String inner = "<p style=\"margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;\">" + body + "</p>"
+                + EmailLayout.button("Open Products", productsUrl)
+                + "<p style=\"color:#9ca3af;font-size:12px;\">Turn off low stock emails in Settings.</p>";
+        return EmailLayout.shell(heading, inner);
     }
 }

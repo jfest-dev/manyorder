@@ -1,5 +1,7 @@
 package com.manyorder.api.domain.emailverification;
 
+import com.manyorder.api.email.EmailLayout;
+
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -63,16 +65,12 @@ public class ResendEmailVerificationMailer implements EmailVerificationMailer {
     }
 
     private String buildHtml(String verifyUrl) {
-        return """
-                <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 480px; margin: 0 auto; color: #1f2937;">
-                  <h2 style="margin-bottom: 8px;">Confirm your email</h2>
-                  <p style="color: #4b5563;">Welcome to ManyOrder. Confirm this email address so we can send you order notifications and account updates. This link expires in 24 hours.</p>
-                  <p style="margin: 24px 0;">
-                    <a href="%s" style="background: #111827; color: #ffffff; padding: 12px 20px; border-radius: 8px; text-decoration: none; display: inline-block;">Confirm my email</a>
-                  </p>
-                  <p style="color: #6b7280; font-size: 13px;">If you didn't create a ManyOrder account, you can safely ignore this email.</p>
-                  <p style="color: #9ca3af; font-size: 12px; word-break: break-all;">Or paste this link into your browser:<br>%s</p>
-                </div>
-                """.formatted(verifyUrl, verifyUrl);
+        String inner = """
+                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;">Welcome to ManyOrder. Confirm this email address so we can send you order notifications and account updates. This link expires in 24 hours.</p>
+                %s
+                <p style="color:#6b7280;font-size:13px;">If you didn't create a ManyOrder account, you can safely ignore this email.</p>
+                <p style="color:#9ca3af;font-size:12px;word-break:break-all;">Or paste this link into your browser:<br>%s</p>
+                """.formatted(EmailLayout.button("Confirm my email", verifyUrl), EmailLayout.escape(verifyUrl));
+        return EmailLayout.shell("Confirm your email", inner);
     }
 }
