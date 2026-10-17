@@ -89,39 +89,39 @@ public class AdminMerchantController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Transactional
     public void suspend(@PathVariable Long merchantId, @RequestBody AdminReasonRequest body, Authentication authentication) {
-        String reason = body.validated();
+        String reason = body.validated(); // restricting: reason required, always email
         User admin = currentUserService.require(authentication);
         Merchant merchant = requireMerchant(merchantId);
         if (!merchant.isSuspended()) {
             merchant.setSuspendedAt(LocalDateTime.now());
             merchantRepository.save(merchant);
-            adminAuditService.record(admin, "SUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), reason);
-            notifyOwner(merchant, MerchantActionMailer.Action.SUSPENDED, reason);
+            boolean sent = notifyOwner(merchant, MerchantActionMailer.Action.SUSPENDED, reason);
+            adminAuditService.record(admin, "SUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), reason, sent);
         }
     }
 
-    /** Lift a suspension. Idempotent. Requires a reason, saved and emailed like suspend. */
+    /** Lift a suspension. Idempotent. Restoring: reason optional, emails the owner by default. */
     @PostMapping("/{merchantId}/unsuspend")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Transactional
     public void unsuspend(@PathVariable Long merchantId, @RequestBody AdminReasonRequest body, Authentication authentication) {
-        String reason = body.validated();
+        String reason = body.optionalReason();
         User admin = currentUserService.require(authentication);
         Merchant merchant = requireMerchant(merchantId);
         if (merchant.isSuspended()) {
             merchant.setSuspendedAt(null);
             merchantRepository.save(merchant);
-            adminAuditService.record(admin, "UNSUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), reason);
-            notifyOwner(merchant, MerchantActionMailer.Action.UNSUSPENDED, reason);
+            boolean sent = body.shouldEmail() && notifyOwner(merchant, MerchantActionMailer.Action.UNSUSPENDED, reason);
+            adminAuditService.record(admin, "UNSUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), reason, sent);
         }
     }
 
-    /** Email the owner, swallowing any failure: a failed notice must never undo the action. */
-    private void notifyOwner(Merchant merchant, MerchantActionMailer.Action action, String reason) {
+    /** Email the owner, swallowing any failure: a failed notice must never undo the action. Returns whether sent. */
+    private boolean notifyOwner(Merchant merchant, MerchantActionMailer.Action action, String reason) {
         try {
-            merchantActionMailer.notifyOwner(merchant, action, reason);
+            return merchantActionMailer.notifyOwner(merchant, action, reason);
         } catch (Exception e) {
-            // Deliberately ignored: the suspension/reinstatement is already recorded.
+            return false; // deliberately ignored: the action is already recorded
         }
     }
 

@@ -119,7 +119,7 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly
         update: (id: number, p: Partial<DiscountPayload>) => discountsApi.update(storeId, id, p),
         delete: (id: number) => discountsApi.delete(storeId, id),
         reorder: (ids: number[]) => discountsApi.reorder(storeId, ids),
-        activate: (id: number) => discountsApi.update(storeId, id, { active: true }),
+        activate: (id: number, _reason?: string, _email?: boolean) => discountsApi.update(storeId, id, { active: true }),
         deactivate: (id: number, _reason?: string) => discountsApi.update(storeId, id, { active: false }),
       }
   ), [isAdmin, adminMerchantId, storeId]);
@@ -357,34 +357,43 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly
   // Admin read-only exception: switch a discount off/on (only the Active flag).
   const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
   const toggleActive = async (d: DiscountResponse, next: boolean) => {
-    // Switching a discount off asks for confirmation; an admin must also give a
-    // reason, which is emailed to the owner. Switching on is immediate.
+    // Admin: switching off requires a reason and always emails; switching on takes
+    // an optional reason and emails by default (with an "Email the owner" checkbox).
+    // A merchant switching off gets a plain confirm; switching on is immediate.
     let reason: string | undefined;
-    if (!next) {
-      if (isAdmin) {
-        const r = await confirmReason({
-          title: 'Switch off this discount?',
-          message: 'Customers will no longer be able to use it. The owner will be emailed with your reason.',
-          confirmLabel: 'Switch off', tone: 'danger',
-          reasonLabel: 'Reason (shown to the owner)',
-        });
-        if (r == null) return;
-        reason = r;
-      } else {
-        const ok = await confirm({
-          title: 'Switch off this discount?',
-          message: 'Customers will no longer be able to use it.',
-          confirmLabel: 'Switch off',
-          tone: 'danger',
-        });
-        if (!ok) return;
-      }
+    let emailOwner = true;
+    if (isAdmin) {
+      const r = await confirmReason(next
+        ? {
+            title: 'Switch this discount on?',
+            message: 'Customers can use it again.',
+            confirmLabel: 'Switch on',
+            reasonLabel: 'Reason (shown to the owner)',
+            reasonOptional: true, emailOwnerDefault: true,
+          }
+        : {
+            title: 'Switch off this discount?',
+            message: 'Customers will no longer be able to use it. The owner will be emailed with your reason.',
+            confirmLabel: 'Switch off', tone: 'danger',
+            reasonLabel: 'Reason (shown to the owner)',
+          });
+      if (r == null) return;
+      reason = r.reason;
+      emailOwner = r.emailOwner;
+    } else if (!next) {
+      const ok = await confirm({
+        title: 'Switch off this discount?',
+        message: 'Customers will no longer be able to use it.',
+        confirmLabel: 'Switch off',
+        tone: 'danger',
+      });
+      if (!ok) return;
     }
     const previous = discounts;
     setDiscounts((ds) => ds.map((x) => (x.id === d.id ? { ...x, active: next } : x)));
     setTogglingIds((s) => new Set(s).add(d.id));
     try {
-      const updated = next ? await api.activate(d.id) : await api.deactivate(d.id, reason);
+      const updated = next ? await api.activate(d.id, reason, emailOwner) : await api.deactivate(d.id, reason);
       setDiscounts((ds) => ds.map((x) => (x.id === updated.id ? updated : x)));
     } catch (e) {
       setDiscounts(previous); // revert so the switch never lies

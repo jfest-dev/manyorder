@@ -58,7 +58,7 @@ public class AdminProductController {
         return productService.getProduct(store(auth, merchantId), productId);
     }
 
-    /** Hide (deactivate) a product. Requires a reason, saved to the audit log and emailed to the owner. */
+    /** Hide (deactivate) a product. Restricting: reason required, always emails the owner. */
     @PatchMapping("/{productId}/deactivate")
     public ProductResponse deactivate(@PathVariable Long merchantId, @PathVariable Long productId,
                                       @RequestBody AdminReasonRequest body, Authentication auth,
@@ -66,17 +66,33 @@ public class AdminProductController {
         String reason = body.validated();
         Merchant store = store(auth, merchantId);
         ProductResponse result = productService.deactivateProduct(store, productId);
+        boolean sent = notify(store, MerchantActionMailer.Action.PRODUCT_HIDDEN, reason);
         request.setAttribute(AdminAuditInterceptor.DETAIL_ATTRIBUTE, reason);
-        try {
-            merchantActionMailer.notifyOwner(store, MerchantActionMailer.Action.PRODUCT_HIDDEN, reason);
-        } catch (Exception e) {
-            // A failed notice must never undo the hide, which is already committed.
-        }
+        request.setAttribute(AdminAuditInterceptor.EMAIL_SENT_ATTRIBUTE, sent);
         return result;
     }
 
+    /** Unhide (activate) a product. Restoring: reason optional, emails the owner by default. */
     @PatchMapping("/{productId}/activate")
-    public ProductResponse activate(@PathVariable Long merchantId, @PathVariable Long productId, Authentication auth) {
-        return productService.activateProduct(store(auth, merchantId), productId);
+    public ProductResponse activate(@PathVariable Long merchantId, @PathVariable Long productId,
+                                    @RequestBody(required = false) AdminReasonRequest body, Authentication auth,
+                                    HttpServletRequest request) {
+        AdminReasonRequest req = body == null ? new AdminReasonRequest(null, null) : body;
+        String reason = req.optionalReason();
+        Merchant store = store(auth, merchantId);
+        ProductResponse result = productService.activateProduct(store, productId);
+        boolean sent = req.shouldEmail() && notify(store, MerchantActionMailer.Action.PRODUCT_SHOWN, reason);
+        request.setAttribute(AdminAuditInterceptor.DETAIL_ATTRIBUTE, reason);
+        request.setAttribute(AdminAuditInterceptor.EMAIL_SENT_ATTRIBUTE, sent);
+        return result;
+    }
+
+    /** Email the owner, swallowing any failure (a failed notice never undoes the action). */
+    private boolean notify(Merchant store, MerchantActionMailer.Action action, String reason) {
+        try {
+            return merchantActionMailer.notifyOwner(store, action, reason);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

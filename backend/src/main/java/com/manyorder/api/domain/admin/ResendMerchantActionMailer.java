@@ -1,5 +1,10 @@
 package com.manyorder.api.domain.admin;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -11,15 +16,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.email.EmailLayout;
 
 /**
- * Delivers admin-action notices to store owners through Resend's REST API.
- *
- * <p>From "ManyOrder &lt;no-reply@manyorder.app&gt;" with Reply-To
- * admin@manyorder.app. Like the other Resend mailers, it no-ops (with a log
- * line) when {@code app.resend.api-key} is blank, and every send failure is
- * swallowed so it can never undo the action that triggered it. All
- * owner/store/reason text is HTML-escaped before it reaches the body.
+ * Delivers admin-action notices to store owners through Resend, on the shared
+ * email layout. From "ManyOrder &lt;no-reply@manyorder.app&gt;" with Reply-To
+ * admin@manyorder.app. No-ops (returning false) when the Resend key is blank or
+ * the owner has no email, and swallows send failures so a notice can never undo
+ * the action. Returns true only when an email was actually dispatched.
  */
 @Component
 public class ResendMerchantActionMailer implements MerchantActionMailer {
@@ -28,33 +32,44 @@ public class ResendMerchantActionMailer implements MerchantActionMailer {
     private static final String RESEND_EMAILS_URL = "https://api.resend.com/emails";
     private static final String FROM = "ManyOrder <no-reply@manyorder.app>";
     private static final String REPLY_TO = "admin@manyorder.app";
+    private static final DateTimeFormatter WHEN =
+            DateTimeFormatter.ofPattern("d MMM yyyy, h:mm a", Locale.ENGLISH);
 
     private final String apiKey;
+    private final String dashboardUrl;
     private final RestClient restClient = RestClient.create();
 
-    public ResendMerchantActionMailer(@Value("${app.resend.api-key:}") String apiKey) {
+    public ResendMerchantActionMailer(
+            @Value("${app.resend.api-key:}") String apiKey,
+            @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
+        this.dashboardUrl = frontendBaseUrl;
     }
 
     @Override
-    public void notifyOwner(Merchant merchant, Action action, String reason) {
+    public boolean notifyOwner(Merchant merchant, Action action, String reason) {
         String to = merchant.getOwner() == null ? null : merchant.getOwner().getEmail();
         if (to == null || to.isBlank()) {
-            log.info("Store {} owner has no email — skipping admin-action notice", merchant.getId());
-            return;
+            log.info("Store {} owner has no email — skipping {} notice", merchant.getId(), action);
+            return false;
         }
         if (apiKey.isEmpty()) {
-            log.info("Resend API key not configured — skipping {} notice to {} (store {})",
-                    action, to, merchant.getId());
-            return;
+            log.info("Resend API key not configured — skipping {} notice to store {}", action, merchant.getId());
+            return false;
         }
+
+        List<EmailLayout.Row> rows = new ArrayList<>();
+        rows.add(new EmailLayout.Row("Store", merchant.getName()));
+        rows.add(new EmailLayout.Row("What happened", action.whatHappened()));
+        if (reason != null && !reason.isBlank()) rows.add(new EmailLayout.Row("Reason", reason.trim()));
+        rows.add(new EmailLayout.Row("Date and time", LocalDateTime.now().format(WHEN)));
 
         Map<String, Object> payload = Map.of(
                 "from", FROM,
                 "to", to,
                 "reply_to", REPLY_TO,
-                "subject", "Update to your ManyOrder store: " + merchant.getName(),
-                "html", buildHtml(merchant, action, reason));
+                "subject", action.subject(merchant.getName()),
+                "html", EmailLayout.render(action.whatHappened(), action.intro(), rows, dashboardUrl));
         try {
             restClient.post()
                     .uri(RESEND_EMAILS_URL)
@@ -63,27 +78,10 @@ public class ResendMerchantActionMailer implements MerchantActionMailer {
                     .body(payload)
                     .retrieve()
                     .toBodilessEntity();
+            return true;
         } catch (Exception e) {
-            log.warn("Failed to send {} notice to {}: {}", action, to, e.getMessage());
+            log.warn("Failed to send {} notice to store {}: {}", action, merchant.getId(), e.getMessage());
+            return false;
         }
-    }
-
-    private String buildHtml(Merchant merchant, Action action, String reason) {
-        return """
-                <div style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 520px; margin: 0 auto; color: #1f2937;">
-                  <h2 style="margin-bottom: 4px;">Update to your store</h2>
-                  <p style="color: #4b5563;">ManyOrder has %s.</p>
-                  <p style="color: #4b5563; margin: 0 0 4px;"><strong>Store:</strong> %s</p>
-                  <p style="color: #4b5563; margin: 0 0 16px;"><strong>Reason:</strong> %s</p>
-                  <p style="color: #6b7280; font-size: 13px;">Reply to this email to reach the ManyOrder admin team.</p>
-                </div>
-                """.formatted(action.phrase(), escape(merchant.getName()), escape(reason));
-    }
-
-    /** Minimal HTML-escaping for store name and the admin-supplied reason. */
-    private static String escape(String raw) {
-        if (raw == null) return "";
-        return raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                .replace("\"", "&quot;").replace("'", "&#39;");
     }
 }

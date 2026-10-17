@@ -108,7 +108,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
     ? adminApi.productsFor(adminMerchantId!)
     : {
         list: () => productsApi.list(storeId),
-        activate: (pid: number) => productsApi.activate(storeId, pid),
+        activate: (pid: number, _reason?: string, _email?: boolean) => productsApi.activate(storeId, pid),
         deactivate: (pid: number, _reason?: string) => productsApi.deactivate(storeId, pid),
         delete: (pid: number) => productsApi.delete(storeId, pid),
         reorder: (ids: number[]) => productsApi.reorder(storeId, ids),
@@ -214,25 +214,36 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
   // endpoints. Optimistic with the server response merged in; reverts on failure.
   const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
   const toggleActive = async (product: ProductResponse, next: boolean) => {
-    // An admin hiding a product must give a reason (the owner is emailed); every
-    // other flip (unhide, or any merchant toggle) is immediate.
+    // Admin: hiding requires a reason and always emails the owner; unhiding takes
+    // an optional reason and emails by default (with an "Email the owner" checkbox).
+    // Any merchant toggle is immediate.
     let reason: string | undefined;
-    if (isAdmin && !next) {
-      const r = await confirmReason({
-        title: `Hide ${product.name}?`,
-        message: 'The owner will be emailed with your reason. The product stays hidden until unhidden.',
-        confirmLabel: 'Hide', tone: 'danger',
-        reasonLabel: 'Reason (shown to the owner)',
-      });
+    let emailOwner = true;
+    if (isAdmin) {
+      const r = await confirmReason(next
+        ? {
+            title: `Unhide ${product.name}?`,
+            message: 'The product becomes visible to customers again.',
+            confirmLabel: 'Unhide',
+            reasonLabel: 'Reason (shown to the owner)',
+            reasonOptional: true, emailOwnerDefault: true,
+          }
+        : {
+            title: `Hide ${product.name}?`,
+            message: 'The owner will be emailed with your reason. The product stays hidden until unhidden.',
+            confirmLabel: 'Hide', tone: 'danger',
+            reasonLabel: 'Reason (shown to the owner)',
+          });
       if (r == null) return; // cancelled: leave the switch as it was
-      reason = r;
+      reason = r.reason;
+      emailOwner = r.emailOwner;
     }
     const previous = products;
     setProducts((prev) => prev.map((p) => (p.id === product.id ? { ...p, isActive: next } : p)));
     setTogglingIds((s) => new Set(s).add(product.id));
     try {
       const updated = next
-        ? await api.activate(product.id)
+        ? await api.activate(product.id, reason, emailOwner)
         : await api.deactivate(product.id, reason);
       setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
     } catch (e) {

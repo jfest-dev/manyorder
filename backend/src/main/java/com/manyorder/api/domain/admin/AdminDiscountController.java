@@ -49,6 +49,7 @@ public class AdminDiscountController {
 
     // Switch a discount off/on only (the Active flag). No other field may be edited by admin.
     /** Switch a discount off. Requires a reason, saved to the audit log and emailed to the owner. */
+    /** Switch a discount off. Restricting: reason required, always emails the owner. */
     @PatchMapping("/{discountId}/deactivate")
     public DiscountResponse deactivate(@PathVariable Long merchantId, @PathVariable Long discountId,
                                        @RequestBody AdminReasonRequest body, Authentication auth,
@@ -56,17 +57,32 @@ public class AdminDiscountController {
         String reason = body.validated();
         Merchant store = store(auth, merchantId);
         DiscountResponse result = discountService.deactivateDiscount(store, discountId);
+        boolean sent = notify(store, MerchantActionMailer.Action.DISCOUNT_DISABLED, reason);
         request.setAttribute(AdminAuditInterceptor.DETAIL_ATTRIBUTE, reason);
-        try {
-            merchantActionMailer.notifyOwner(store, MerchantActionMailer.Action.DISCOUNT_DISABLED, reason);
-        } catch (Exception e) {
-            // A failed notice must never undo the switch-off, which is already committed.
-        }
+        request.setAttribute(AdminAuditInterceptor.EMAIL_SENT_ATTRIBUTE, sent);
         return result;
     }
 
+    /** Switch a discount on. Restoring: reason optional, emails the owner by default. */
     @PatchMapping("/{discountId}/activate")
-    public DiscountResponse activate(@PathVariable Long merchantId, @PathVariable Long discountId, Authentication auth) {
-        return discountService.activateDiscount(store(auth, merchantId), discountId);
+    public DiscountResponse activate(@PathVariable Long merchantId, @PathVariable Long discountId,
+                                     @RequestBody(required = false) AdminReasonRequest body, Authentication auth,
+                                     HttpServletRequest request) {
+        AdminReasonRequest req = body == null ? new AdminReasonRequest(null, null) : body;
+        String reason = req.optionalReason();
+        Merchant store = store(auth, merchantId);
+        DiscountResponse result = discountService.activateDiscount(store, discountId);
+        boolean sent = req.shouldEmail() && notify(store, MerchantActionMailer.Action.DISCOUNT_ENABLED, reason);
+        request.setAttribute(AdminAuditInterceptor.DETAIL_ATTRIBUTE, reason);
+        request.setAttribute(AdminAuditInterceptor.EMAIL_SENT_ATTRIBUTE, sent);
+        return result;
+    }
+
+    private boolean notify(Merchant store, MerchantActionMailer.Action action, String reason) {
+        try {
+            return merchantActionMailer.notifyOwner(store, action, reason);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

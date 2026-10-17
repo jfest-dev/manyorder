@@ -32,6 +32,8 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 
     /** Request attribute a handler may set so its audit row carries a reason/detail. */
     public static final String DETAIL_ATTRIBUTE = "adminAuditDetail";
+    /** Request attribute a handler may set (Boolean) to record whether an owner email was sent. */
+    public static final String EMAIL_SENT_ATTRIBUTE = "adminAuditEmailSent";
 
     private final AdminAuditClassifier classifier;
     private final AdminAuditService auditService;
@@ -55,8 +57,10 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                 User actor = currentUserService.require(auth);
                 Object detail = request.getAttribute(DETAIL_ATTRIBUTE);
+                Object sent = request.getAttribute(EMAIL_SENT_ATTRIBUTE);
                 auditService.record(actor, e.action(), e.targetType(), e.targetId(), e.merchantId(),
-                        detail instanceof String s ? s : null);
+                        detail instanceof String s ? s : null,
+                        sent instanceof Boolean b ? b : null);
             });
         } catch (Exception e) {
             // Auditing must never affect the response (already sent) or surface an error.

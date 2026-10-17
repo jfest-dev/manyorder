@@ -99,19 +99,24 @@ export function AdminApp() {
 
   const toggleSuspend = async (m: AdminMerchantSummary) => {
     const suspend = m.status !== 'SUSPENDED';
-    const reason = await confirmReason({
+    const result = await confirmReason({
       title: suspend ? `Suspend ${m.name}?` : `Unsuspend ${m.name}?`,
       message: suspend
         ? 'This hides their storefront and blocks the owner (and staff) from signing in until you lift it. The owner will be emailed with your reason.'
-        : 'This restores their storefront and lets the owner sign in again. The owner will be emailed with your reason.',
+        : 'This restores their storefront and lets the owner sign in again.',
       confirmLabel: suspend ? 'Suspend' : 'Unsuspend',
       tone: suspend ? 'danger' : 'default',
       reasonLabel: 'Reason (shown to the owner)',
+      // Restricting action requires a reason; restoring makes it optional with an email checkbox.
+      reasonOptional: !suspend,
+      emailOwnerDefault: suspend ? undefined : true,
     });
-    if (reason == null) return;
+    if (result == null) return;
     setBusyId(m.id);
     try {
-      await (suspend ? adminApi.suspend(m.id, reason) : adminApi.unsuspend(m.id, reason));
+      await (suspend
+        ? adminApi.suspend(m.id, result.reason)
+        : adminApi.unsuspend(m.id, result.reason, result.emailOwner));
       showNotice(suspend ? `${m.name} suspended.` : `${m.name} unsuspended.`);
       loadMetrics();
       setMerchantsReload((n) => n + 1);

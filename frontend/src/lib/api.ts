@@ -1056,6 +1056,7 @@ export interface AdminAuditLogEntry {
   merchantId: number | null;
   detail: string | null;
   createdAt: string;
+  emailSent?: boolean | null;
 }
 
 export interface AdminStoreDetail {
@@ -1148,8 +1149,8 @@ export const adminApi = {
     request<AdminAuditLogEntry[]>(`/admin/audit-log${storeId != null ? `?storeId=${storeId}` : ''}`),
   suspend: (merchantId: number, reason: string) =>
     request<void>(`/admin/merchants/${merchantId}/suspend`, { method: 'POST', body: { reason } }),
-  unsuspend: (merchantId: number, reason: string) =>
-    request<void>(`/admin/merchants/${merchantId}/unsuspend`, { method: 'POST', body: { reason } }),
+  unsuspend: (merchantId: number, reason: string, emailOwner: boolean) =>
+    request<void>(`/admin/merchants/${merchantId}/unsuspend`, { method: 'POST', body: { reason, emailOwner } }),
 
   /** Customer management scoped to one merchant — same shape as customersApi (minus storeId),
    *  so an admin can drive the shared Customers screen against /admin endpoints. */
@@ -1167,8 +1168,8 @@ export const adminApi = {
    *  delete, reorder — full field-editing/photo stays in the merchant flow). */
   productsFor: (merchantId: number) => ({
     list: () => request<ProductResponse[]>(`/admin/merchants/${merchantId}/products`),
-    activate: (productId: number) =>
-      request<ProductResponse>(`/admin/merchants/${merchantId}/products/${productId}/activate`, { method: 'PATCH' }),
+    activate: (productId: number, reason?: string, emailOwner?: boolean) =>
+      request<ProductResponse>(`/admin/merchants/${merchantId}/products/${productId}/activate`, { method: 'PATCH', body: { reason, emailOwner } }),
     deactivate: (productId: number, reason?: string) =>
       request<ProductResponse>(`/admin/merchants/${merchantId}/products/${productId}/deactivate`, { method: 'PATCH', body: { reason } }),
     delete: (productId: number) =>
@@ -1188,8 +1189,8 @@ export const adminApi = {
       request<void>(`/admin/merchants/${merchantId}/discounts/${discountId}`, { method: 'DELETE' }),
     reorder: (discountIds: number[]) =>
       request<DiscountResponse[]>(`/admin/merchants/${merchantId}/discounts/reorder`, { method: 'PATCH', body: { discountIds } }),
-    activate: (discountId: number) =>
-      request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts/${discountId}/activate`, { method: 'PATCH' }),
+    activate: (discountId: number, reason?: string, emailOwner?: boolean) =>
+      request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts/${discountId}/activate`, { method: 'PATCH', body: { reason, emailOwner } }),
     deactivate: (discountId: number, reason?: string) =>
       request<DiscountResponse>(`/admin/merchants/${merchantId}/discounts/${discountId}/deactivate`, { method: 'PATCH', body: { reason } }),
   }),

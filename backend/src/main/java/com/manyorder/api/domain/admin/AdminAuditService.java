@@ -22,7 +22,16 @@ public class AdminAuditService {
     @Transactional
     public AdminAuditLog record(User actor, String action, String targetType,
                                 Long targetId, Long merchantId, String detail) {
-        return repository.save(new AdminAuditLog(
-                actor.getId(), actor.getEmail(), action, targetType, targetId, merchantId, detail));
+        return record(actor, action, targetType, targetId, merchantId, detail, null);
+    }
+
+    /** As {@link #record}, also noting whether an owner email was sent (null = not applicable). */
+    @Transactional
+    public AdminAuditLog record(User actor, String action, String targetType,
+                                Long targetId, Long merchantId, String detail, Boolean emailSent) {
+        AdminAuditLog entry = new AdminAuditLog(
+                actor.getId(), actor.getEmail(), action, targetType, targetId, merchantId, detail);
+        entry.setEmailSent(emailSent);
+        return repository.save(entry);
     }
 }

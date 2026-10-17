@@ -52,6 +52,10 @@ public class AdminAuditLog {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
+    /** Whether an owner email was sent for this action (null for actions that never email). */
+    @Column(name = "email_sent")
+    private Boolean emailSent;
+
     protected AdminAuditLog() {
         // JPA only
     }
@@ -77,4 +81,6 @@ public class AdminAuditLog {
     public Long getMerchantId() { return merchantId; }
     public String getDetail() { return detail; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public Boolean getEmailSent() { return emailSent; }
+    public void setEmailSent(Boolean emailSent) { this.emailSent = emailSent; }
 }
