@@ -211,7 +211,7 @@ export function AdminApp() {
                 <Tile label="Merchants" value={metrics.totalMerchants} />
                 <Tile label="Active" value={metrics.activeMerchants} />
                 <Tile label="Suspended" value={metrics.suspendedMerchants} />
-                <Tile label="Archived" value={metrics.archivedMerchants} />
+                <Tile label="Deleted by owner" value={metrics.archivedMerchants} />
                 <Tile label="Orders" value={metrics.totalOrders} />
                 <Tile label="Customers" value={metrics.totalCustomers} />
                 <Tile label="New (30d)" value={metrics.newMerchantsLast30Days} />

@@ -77,6 +77,15 @@ describe('MerchantsList', () => {
       expect(searchMerchants).toHaveBeenCalledWith(expect.objectContaining({ q: 'kiri', page: 1 })));
   });
 
+  it('labels an archived store "Deleted by owner", not "Archived"', async () => {
+    searchMerchants.mockResolvedValue({
+      content: [{ ...row(1), status: 'ARCHIVED' as const }], totalElements: 1, totalPages: 1, page: 1,
+    });
+    renderList();
+    expect(await screen.findByText('Deleted by owner')).toBeTruthy();
+    expect(screen.queryByText('Archived')).toBeNull();
+  });
+
   it('on mobile, hides filters behind a Filters button and lists stores as cards', async () => {
     mockMatchMedia(true);
     const user = userEvent.setup();

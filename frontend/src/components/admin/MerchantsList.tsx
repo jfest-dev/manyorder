@@ -11,14 +11,14 @@ const PAGE_SIZE = 20;
 const STATUS_STYLE: Record<AdminMerchantSummary['status'], { bg: string; color: string; label: string }> = {
   ACTIVE: { bg: '#ECFDF5', color: '#047857', label: 'Active' },
   SUSPENDED: { bg: '#FEE2E2', color: '#B91C1C', label: 'Suspended' },
-  ARCHIVED: { bg: '#F3F4F6', color: '#4B5563', label: 'Archived' },
+  ARCHIVED: { bg: '#F3F4F6', color: '#4B5563', label: 'Deleted by owner' },
 };
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
   { value: 'ACTIVE', label: 'Active' },
   { value: 'SUSPENDED', label: 'Suspended' },
-  { value: 'ARCHIVED', label: 'Archived' },
+  { value: 'ARCHIVED', label: 'Deleted by owner' },
 ];
 const CURRENCY_OPTIONS = [
   { value: '', label: 'All currencies' },

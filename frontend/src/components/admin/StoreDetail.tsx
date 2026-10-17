@@ -157,7 +157,7 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
         <Row label="Created" value={formatDateTime(profile.createdAt)} />
         <Row label="Last viewed orders" value={formatDateTime(profile.lastOrdersViewedAt)} />
         <Row label="Suspended" value={formatDateTime(profile.suspendedAt)} />
-        <Row label="Archived" value={formatDateTime(profile.archivedAt)} />
+        <Row label="Deleted by owner" value={formatDateTime(profile.archivedAt)} />
       </div>
 
       {/* Admin activity on this store */}
