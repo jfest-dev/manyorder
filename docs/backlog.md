@@ -2,6 +2,21 @@
 
 Planned work, not yet built.
 
+## After applying
+
+Ideas captured from recent planning, to pick up after applying. One line each.
+
+- Cities in the admin: a nullable country column, a City column and filter on the Merchants list, and a "Stores by city" panel on the Overview (with a normalized SG/ID city dropdown plus Other; no device or IP location).
+- Welcome flow: greet the owner by name after sign-up, a "Set up your store" checklist (logo, first product, delivery settings, share link) with progress, friendly empty states, a celebration when the store is ready, and a welcome email on the shared layout.
+- Roles and staff invites: Owner / Manager / Staff with a per-screen permission table, owner-initiated email invites (staff set their own password, one store each, removable), and staff actions attributed in the activity log.
+- "Send alerts to": a per-store recipient list for new-order and low-stock alerts (owner login email by default, plus store email and chosen staff), with per-person alert settings.
+- Editable templates (platform admin): edit the wording of every email and WhatsApp message with placeholders, live preview on the fixed shared layout, test-send, reset-to-default, version history, and placeholder validation.
+- Request-deletion flow: a merchant "Request deletion" in Settings that files an admin-reviewed request, where approval runs the real erase.
+- Phone verification: verify the store contact phone (SMS code, or a "send a test message" check); compare provider options and per-message cost for Singapore and Indonesia.
+- CSV import: bulk-import products (and maybe customers) from a CSV, with a column mapping step and validation.
+- Platform-wide vouchers: codes the platform admin can issue across stores, separate from a store's own discounts.
+- Privacy notice: a published privacy policy and the in-app links/consent needed before real merchants and customers.
+
 ## Deployment note: adding a value to a database-backed enum under ddl-auto
 
 This is a recurring migration gotcha, not a one-off. It applies to **any** future
