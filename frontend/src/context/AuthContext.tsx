@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user,
       isAuthenticated: user !== null,
-      login: async (email, password, remember) => applySession(await authApi.login(email, password), remember),
+      login: async (email, password, remember) => applySession(await authApi.login(email, password, remember), remember),
       register: async (payload) => applySession(await authApi.register(payload), true),
       loginWithGoogle: async (idToken) => applySession(await authApi.google(idToken), true),
       refreshUser,

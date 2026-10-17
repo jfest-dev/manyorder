@@ -58,7 +58,10 @@ public class AuthService {
             throw badCredentials();
         }
         requireNotSuspended(user);
-        return toLoginResponse(user);
+        // Remember me extends the session to the longer lifetime, except a platform
+        // admin always gets the standard (short) lifetime whatever the box says.
+        boolean longLived = request.isRemember() && user.getRole() != UserRole.PLATFORM_ADMIN;
+        return toLoginResponse(user, longLived);
     }
 
     /** Block sign-in for an admin-suspended account: a MERCHANT with any suspended
@@ -173,7 +176,11 @@ public class AuthService {
     /** Build the session payload for a user, minting a fresh JWT. Public so the
      *  authenticated /auth/me can re-serve current state (e.g. verified flag). */
     public LoginResponse toLoginResponse(User user) {
-        String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole().name());
+        return toLoginResponse(user, false);
+    }
+
+    public LoginResponse toLoginResponse(User user, boolean rememberMe) {
+        String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole().name(), rememberMe);
         Long staffStoreId = user.getStaffStore() != null ? user.getStaffStore().getId() : null;
         return new LoginResponse(
                 user.getId(), user.getFullName(), user.getEmail(),

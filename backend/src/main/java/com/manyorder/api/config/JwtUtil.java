@@ -16,21 +16,31 @@ public class JwtUtil {
 
     private final SecretKey secretKey;
     private final long expirationMs;
+    private final long rememberExpirationMs;
 
     public JwtUtil(
             @Value("${app.jwt.secret}") String secret,
-            @Value("${app.jwt.expiration-ms}") long expirationMs) {
+            @Value("${app.jwt.expiration-ms}") long expirationMs,
+            @Value("${app.jwt.remember-expiration-ms:2592000000}") long rememberExpirationMs) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes());
         this.expirationMs = expirationMs;
+        this.rememberExpirationMs = rememberExpirationMs;
     }
 
+    /** Standard-lifetime token (the default session length). */
     public String generateToken(Long userId, String email, String role) {
+        return generateToken(userId, email, role, false);
+    }
+
+    /** When {@code rememberMe}, the token lasts the longer remember-me lifetime instead. */
+    public String generateToken(Long userId, String email, String role, boolean rememberMe) {
+        long ttl = rememberMe ? rememberExpirationMs : expirationMs;
         return Jwts.builder()
                 .subject(email)
                 .claim("uid", userId)
                 .claim("role", role)
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + expirationMs))
+                .expiration(new Date(System.currentTimeMillis() + ttl))
                 .signWith(secretKey)
                 .compact();
     }

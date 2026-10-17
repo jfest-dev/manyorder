@@ -364,8 +364,8 @@ export interface UpdateStorePayload {
 // ---------- Endpoints ----------
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    request<LoginResponse>('/auth/login', { method: 'POST', body: { email, password }, auth: false }),
+  login: (email: string, password: string, remember = false) =>
+    request<LoginResponse>('/auth/login', { method: 'POST', body: { email, password, remember }, auth: false }),
 
   register: (payload: {
     fullName: string;
