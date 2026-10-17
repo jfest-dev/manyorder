@@ -56,6 +56,14 @@ public class AdminAuditLog {
     @Column(name = "email_sent")
     private Boolean emailSent;
 
+    /** Snapshot of the store name at the time, so the row reads correctly if the store is renamed/removed. */
+    @Column(name = "store_name")
+    private String storeName;
+
+    /** Snapshot of what the action touched (product name, discount code), for the same reason. */
+    @Column(name = "target_label")
+    private String targetLabel;
+
     protected AdminAuditLog() {
         // JPA only
     }
@@ -83,4 +91,8 @@ public class AdminAuditLog {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public Boolean getEmailSent() { return emailSent; }
     public void setEmailSent(Boolean emailSent) { this.emailSent = emailSent; }
+    public String getStoreName() { return storeName; }
+    public void setStoreName(String storeName) { this.storeName = storeName; }
+    public String getTargetLabel() { return targetLabel; }
+    public void setTargetLabel(String targetLabel) { this.targetLabel = targetLabel; }
 }

@@ -96,7 +96,8 @@ public class AdminMerchantController {
             merchant.setSuspendedAt(LocalDateTime.now());
             merchantRepository.save(merchant);
             boolean sent = notifyOwner(merchant, MerchantActionMailer.Action.SUSPENDED, reason);
-            adminAuditService.record(admin, "SUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), reason, sent);
+            adminAuditService.record(admin, "SUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(),
+                    reason, sent, merchant.getName(), merchant.getName());
         }
     }
 
@@ -112,7 +113,8 @@ public class AdminMerchantController {
             merchant.setSuspendedAt(null);
             merchantRepository.save(merchant);
             boolean sent = body.shouldEmail() && notifyOwner(merchant, MerchantActionMailer.Action.UNSUSPENDED, reason);
-            adminAuditService.record(admin, "UNSUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(), reason, sent);
+            adminAuditService.record(admin, "UNSUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(),
+                    reason, sent, merchant.getName(), merchant.getName());
         }
     }
 

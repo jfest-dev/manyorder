@@ -69,6 +69,8 @@ public class AdminProductController {
         boolean sent = notify(store, MerchantActionMailer.Action.PRODUCT_HIDDEN, reason);
         request.setAttribute(AdminAuditInterceptor.DETAIL_ATTRIBUTE, reason);
         request.setAttribute(AdminAuditInterceptor.EMAIL_SENT_ATTRIBUTE, sent);
+        request.setAttribute(AdminAuditInterceptor.STORE_NAME_ATTRIBUTE, store.getName());
+        request.setAttribute(AdminAuditInterceptor.TARGET_LABEL_ATTRIBUTE, result.getName());
         return result;
     }
 
@@ -84,6 +86,8 @@ public class AdminProductController {
         boolean sent = req.shouldEmail() && notify(store, MerchantActionMailer.Action.PRODUCT_SHOWN, reason);
         request.setAttribute(AdminAuditInterceptor.DETAIL_ATTRIBUTE, reason);
         request.setAttribute(AdminAuditInterceptor.EMAIL_SENT_ATTRIBUTE, sent);
+        request.setAttribute(AdminAuditInterceptor.STORE_NAME_ATTRIBUTE, store.getName());
+        request.setAttribute(AdminAuditInterceptor.TARGET_LABEL_ATTRIBUTE, result.getName());
         return result;
     }
 

@@ -34,6 +34,10 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
     public static final String DETAIL_ATTRIBUTE = "adminAuditDetail";
     /** Request attribute a handler may set (Boolean) to record whether an owner email was sent. */
     public static final String EMAIL_SENT_ATTRIBUTE = "adminAuditEmailSent";
+    /** Request attribute for a snapshot of the store name at the time. */
+    public static final String STORE_NAME_ATTRIBUTE = "adminAuditStoreName";
+    /** Request attribute for a snapshot of what the action touched (product name, discount code). */
+    public static final String TARGET_LABEL_ATTRIBUTE = "adminAuditTargetLabel";
 
     private final AdminAuditClassifier classifier;
     private final AdminAuditService auditService;
@@ -58,9 +62,13 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
                 User actor = currentUserService.require(auth);
                 Object detail = request.getAttribute(DETAIL_ATTRIBUTE);
                 Object sent = request.getAttribute(EMAIL_SENT_ATTRIBUTE);
+                Object storeName = request.getAttribute(STORE_NAME_ATTRIBUTE);
+                Object targetLabel = request.getAttribute(TARGET_LABEL_ATTRIBUTE);
                 auditService.record(actor, e.action(), e.targetType(), e.targetId(), e.merchantId(),
                         detail instanceof String s ? s : null,
-                        sent instanceof Boolean b ? b : null);
+                        sent instanceof Boolean b ? b : null,
+                        storeName instanceof String sn ? sn : null,
+                        targetLabel instanceof String tl ? tl : null);
             });
         } catch (Exception e) {
             // Auditing must never affect the response (already sent) or surface an error.

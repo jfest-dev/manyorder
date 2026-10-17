@@ -7,8 +7,35 @@ import { ADMIN_FONT } from './adminTokens';
 
 const PAGE_SIZE = 20;
 
-/** Global admin audit feed: newest first, filterable by store, 20 per page. */
-export function AdminActivity() {
+/** Readable names for the audit action codes. Unknown codes fall back to the raw code. */
+const ACTION_LABEL: Record<string, string> = {
+  SUSPEND_MERCHANT: 'Suspended store',
+  UNSUSPEND_MERCHANT: 'Reinstated store',
+  DEACTIVATE_PRODUCT: 'Hid product',
+  ACTIVATE_PRODUCT: 'Unhid product',
+  DEACTIVATE_DISCOUNT: 'Switched off discount',
+  ACTIVATE_DISCOUNT: 'Switched on discount',
+  CREATE_PRODUCT: 'Added product',
+  UPDATE_PRODUCT: 'Edited product',
+  DELETE_PRODUCT: 'Deleted product',
+  REORDER_PRODUCTS: 'Reordered products',
+  CREATE_CUSTOMER: 'Added customer',
+  UPDATE_CUSTOMER: 'Edited customer',
+  DELETE_CUSTOMER: 'Deleted customer',
+  CREATE_DISCOUNT: 'Created discount',
+  UPDATE_DISCOUNT: 'Edited discount',
+  DELETE_DISCOUNT: 'Deleted discount',
+  REORDER_DISCOUNTS: 'Reordered discounts',
+};
+const readableAction = (code: string) => ACTION_LABEL[code] ?? code;
+
+interface Props {
+  /** Open a store's drill-down from an Activity row. */
+  onOpenStore: (id: number) => void;
+}
+
+/** Global admin audit feed: newest first, filterable by store, 20 per page, readable. */
+export function AdminActivity({ onOpenStore }: Props) {
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [entries, setEntries] = useState<AdminAuditLogEntry[]>([]);
   const [stores, setStores] = useState<AdminMerchantSummary[]>([]);
@@ -51,6 +78,19 @@ export function AdminActivity() {
     ...stores.map((s) => ({ value: String(s.id), label: s.name })),
   ];
 
+  // Current store name by id, to fill in old rows that have no snapshot.
+  const storeNameById = useMemo(() => {
+    const m = new Map<number, string>();
+    stores.forEach((s) => m.set(s.id, s.name));
+    return m;
+  }, [stores]);
+
+  const storeNameFor = (a: AdminAuditLogEntry): string | null => {
+    if (a.storeName && a.storeName.trim() !== '') return a.storeName;
+    if (a.merchantId != null) return storeNameById.get(a.merchantId) ?? `Store #${a.merchantId}`;
+    return null;
+  };
+
   return (
     <div>
       <h2 style={{ fontSize: ADMIN_FONT.heading, fontWeight: 700, margin: '0 0 4px' }}>Activity</h2>
@@ -69,23 +109,36 @@ export function AdminActivity() {
       ) : (
         <>
           <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)' }}>
-            {pageItems.map((a) => (
+            {pageItems.map((a) => {
+              const storeName = storeNameFor(a);
+              return (
               <div key={a.id} style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row',
                 justifyContent: 'space-between', gap: isMobile ? 4 : 16, padding: '10px 14px', borderTop: '1px solid var(--border-subtle)' }}>
                 <div style={{ minWidth: 0 }}>
-                  <div className="text-small" style={{ fontWeight: 600 }}>{a.action}</div>
+                  <div className="text-small" style={{ fontWeight: 600 }}>
+                    {readableAction(a.action)}
+                    {a.targetLabel ? <span style={{ fontWeight: 400, color: 'var(--text-secondary)' }}> · {a.targetLabel}</span> : null}
+                  </div>
                   <div className="text-xs" style={{ color: 'var(--text-muted)', wordBreak: 'break-word' }}>
-                    {a.targetType ? `${a.targetType}${a.targetId != null ? ` #${a.targetId}` : ''}` : '-'}
-                    {a.merchantId != null ? ` · store #${a.merchantId}` : ''}
-                    {a.detail ? ` · ${a.detail}` : ''}
+                    {storeName && a.merchantId != null ? (
+                      <button type="button" onClick={() => onOpenStore(a.merchantId!)}
+                        style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, fontSize: 'inherit' }}>
+                        {storeName}
+                      </button>
+                    ) : (storeName ?? '-')}
+                    {a.detail ? <span> · {a.detail}</span> : null}
                   </div>
                 </div>
                 <div style={{ textAlign: isMobile ? 'left' : 'right', flexShrink: 0 }}>
                   <div className="text-xs" style={{ color: 'var(--text-secondary)', wordBreak: 'break-all' }}>{a.actorEmail}</div>
-                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDateTime(a.createdAt)}</div>
+                  <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {formatDateTime(a.createdAt)}
+                    {a.emailSent === true ? ' · emailed owner' : a.emailSent === false ? ' · no email' : ''}
+                  </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>

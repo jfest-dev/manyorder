@@ -25,13 +25,26 @@ public class AdminAuditService {
         return record(actor, action, targetType, targetId, merchantId, detail, null);
     }
 
-    /** As {@link #record}, also noting whether an owner email was sent (null = not applicable). */
     @Transactional
     public AdminAuditLog record(User actor, String action, String targetType,
                                 Long targetId, Long merchantId, String detail, Boolean emailSent) {
+        return record(actor, action, targetType, targetId, merchantId, detail, emailSent, null, null);
+    }
+
+    /**
+     * Fullest form: also records the email-sent flag and snapshots of the store
+     * name and the target label (product name, discount code) at the time, so the
+     * Activity feed still reads correctly if the store or item is later renamed
+     * or removed.
+     */
+    @Transactional
+    public AdminAuditLog record(User actor, String action, String targetType, Long targetId, Long merchantId,
+                                String detail, Boolean emailSent, String storeName, String targetLabel) {
         AdminAuditLog entry = new AdminAuditLog(
                 actor.getId(), actor.getEmail(), action, targetType, targetId, merchantId, detail);
         entry.setEmailSent(emailSent);
+        entry.setStoreName(storeName);
+        entry.setTargetLabel(targetLabel);
         return repository.save(entry);
     }
 }

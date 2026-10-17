@@ -32,7 +32,7 @@ beforeEach(() => {
 describe('AdminActivity', () => {
   it('pages the feed 20 at a time, newest first', async () => {
     const user = userEvent.setup();
-    render(<AdminActivity />);
+    render(<AdminActivity onOpenStore={vi.fn()} />);
 
     expect(await screen.findByText('Showing 1 to 20 of 25')).toBeTruthy();
     expect(screen.getByText('Page 1 of 2')).toBeTruthy();
@@ -47,9 +47,29 @@ describe('AdminActivity', () => {
   });
 
   it('shows a store filter and loads the global feed by default (no storeId)', async () => {
-    render(<AdminActivity />);
+    render(<AdminActivity onOpenStore={vi.fn()} />);
     await screen.findByText('Showing 1 to 20 of 25');
     expect(screen.getByLabelText('Filter by store')).toBeTruthy();
     expect(auditLog).toHaveBeenCalledWith(undefined); // default = all stores
+  });
+
+  it('renders readable actions, the target label, a store link and the email flag', async () => {
+    const user = userEvent.setup();
+    auditLog.mockResolvedValue([
+      { id: 1, actorEmail: 'admin@manyorder.app', action: 'DEACTIVATE_PRODUCT', targetType: 'PRODUCT',
+        targetId: 9, merchantId: 5, detail: 'Blurry photo', createdAt: '2026-10-02T09:00:00',
+        emailSent: true, storeName: 'Kiri Brew', targetLabel: 'Latte' },
+    ]);
+    const onOpenStore = vi.fn();
+    render(<AdminActivity onOpenStore={onOpenStore} />);
+
+    expect(await screen.findByText('Hid product', { exact: false })).toBeTruthy();
+    expect(screen.getByText('Latte', { exact: false })).toBeTruthy();       // target label
+    expect(screen.getByText('Blurry photo', { exact: false })).toBeTruthy(); // reason
+    expect(screen.getByText(/emailed owner/)).toBeTruthy();                   // email flag
+    await user.click(screen.getByRole('button', { name: 'Kiri Brew' }));     // store link
+    expect(onOpenStore).toHaveBeenCalledWith(5);
+    // The raw code is not shown.
+    expect(screen.queryByText('DEACTIVATE_PRODUCT')).toBeNull();
   });
 });

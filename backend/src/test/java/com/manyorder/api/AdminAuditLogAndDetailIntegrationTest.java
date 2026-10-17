@@ -46,6 +46,9 @@ class AdminAuditLogAndDetailIntegrationTest extends IntegrationTestBase {
                     && row.get("targetId").asLong() == productId) {
                 found = true;
                 assertEquals("Out of policy", row.get("detail").asText(), "reason saved on the audit row");
+                // Snapshots: store name and the target label (product name) for a readable feed.
+                assertEquals("Kiri Brew", row.get("storeName").asText(), "store-name snapshot saved");
+                assertTrue(row.get("targetLabel").asText().length() > 0, "target-label snapshot saved");
             }
         }
         assertTrue(found, "deactivate shows in the store-filtered audit log");

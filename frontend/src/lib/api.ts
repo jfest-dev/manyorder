@@ -1057,6 +1057,8 @@ export interface AdminAuditLogEntry {
   detail: string | null;
   createdAt: string;
   emailSent?: boolean | null;
+  storeName?: string | null;
+  targetLabel?: string | null;
 }
 
 export interface AdminStoreDetail {

@@ -60,6 +60,8 @@ public class AdminDiscountController {
         boolean sent = notify(store, MerchantActionMailer.Action.DISCOUNT_DISABLED, reason);
         request.setAttribute(AdminAuditInterceptor.DETAIL_ATTRIBUTE, reason);
         request.setAttribute(AdminAuditInterceptor.EMAIL_SENT_ATTRIBUTE, sent);
+        request.setAttribute(AdminAuditInterceptor.STORE_NAME_ATTRIBUTE, store.getName());
+        request.setAttribute(AdminAuditInterceptor.TARGET_LABEL_ATTRIBUTE, result.getCode());
         return result;
     }
 
@@ -75,6 +77,8 @@ public class AdminDiscountController {
         boolean sent = req.shouldEmail() && notify(store, MerchantActionMailer.Action.DISCOUNT_ENABLED, reason);
         request.setAttribute(AdminAuditInterceptor.DETAIL_ATTRIBUTE, reason);
         request.setAttribute(AdminAuditInterceptor.EMAIL_SENT_ATTRIBUTE, sent);
+        request.setAttribute(AdminAuditInterceptor.STORE_NAME_ATTRIBUTE, store.getName());
+        request.setAttribute(AdminAuditInterceptor.TARGET_LABEL_ATTRIBUTE, result.getCode());
         return result;
     }
 

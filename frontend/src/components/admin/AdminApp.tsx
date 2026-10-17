@@ -229,7 +229,7 @@ export function AdminApp() {
             />
           )}
 
-          {!loading && !error && !selected && section === 'activity' && <AdminActivity />}
+          {!loading && !error && !selected && section === 'activity' && <AdminActivity onOpenStore={openStore} />}
         </main>
       </div>
 
