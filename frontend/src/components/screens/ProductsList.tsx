@@ -225,14 +225,14 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
             title: `Unhide ${product.name}?`,
             message: 'The product becomes visible to customers again.',
             confirmLabel: 'Unhide',
-            reasonLabel: 'Reason (shown to the owner)',
+            reasonLabel: 'Reason',
             reasonOptional: true, emailOwnerDefault: true,
           }
         : {
             title: `Hide ${product.name}?`,
             message: 'The owner will be emailed with your reason. The product stays hidden until unhidden.',
             confirmLabel: 'Hide', tone: 'danger',
-            reasonLabel: 'Reason (shown to the owner)',
+            reasonLabel: 'Reason',
           });
       if (r == null) return; // cancelled: leave the switch as it was
       reason = r.reason;

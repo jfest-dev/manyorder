@@ -88,7 +88,7 @@ describe('AdminApp', () => {
     // Row action (accessible name includes the store); opens the reason dialog.
     await user.click(screen.getByRole('button', { name: 'Suspend Kiri Brew' }));
     // A reason is required before the Suspend button enables.
-    await user.type(await screen.findByLabelText('Reason (shown to the owner)'), 'Spam listings');
+    await user.type(await screen.findByLabelText('Reason'), 'Spam listings');
     await user.click(screen.getByRole('button', { name: 'Suspend' }));
 
     await waitFor(() => expect(suspendMock).toHaveBeenCalledWith(7, 'Spam listings'));

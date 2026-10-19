@@ -111,6 +111,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Also re-sync when the window regains focus, so confirming an email in another
+  // tab clears the verify banner here without a manual reload.
+  useEffect(() => {
+    const onFocus = () => { if (getToken()) void refreshUser(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshUser]);
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

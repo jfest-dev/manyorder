@@ -33,6 +33,7 @@ public class ResendOrderNotificationMailer implements OrderNotificationMailer {
     private final String apiKey;
     private final String fromAddress;
     private final String supportEmail;
+    private final String frontendBaseUrl;
     private final OrderItemRepository orderItemRepository;
     private final RestClient restClient = RestClient.create();
 
@@ -40,10 +41,14 @@ public class ResendOrderNotificationMailer implements OrderNotificationMailer {
             @Value("${app.resend.api-key:}") String apiKey,
             @Value("${app.mail.from:onboarding@resend.dev}") String fromAddress,
             @Value("${app.support.email:support@manyorder.app}") String supportEmail,
+            @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl,
             OrderItemRepository orderItemRepository) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.fromAddress = fromAddress;
         this.supportEmail = supportEmail;
+        this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
+                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
+                : frontendBaseUrl;
         this.orderItemRepository = orderItemRepository;
     }
 
@@ -107,13 +112,14 @@ public class ResendOrderNotificationMailer implements OrderNotificationMailer {
                   <tr><td style="padding:8px 0 0;border-top:1px solid #e5e7eb;font-weight:700;">Total</td>
                       <td style="padding:8px 0 0;border-top:1px solid #e5e7eb;text-align:right;font-weight:700;">%s</td></tr>
                 </table>
-                <p style="color:#6b7280;font-size:13px;margin-top:20px;">Open your ManyOrder dashboard to confirm and fulfil this order.</p>
+                <div style="margin-top:20px;">%s</div>
                 """.formatted(
                 escape(orderRef),
                 escape(primary.getContactName()),
                 primary.getOrderType().name().equals("DELIVERY") ? "Delivery" : "Pickup",
                 lines.toString(),
-                money(grandTotal, currency));
+                money(grandTotal, currency),
+                EmailLayout.button("View order", frontendBaseUrl + "/app?screen=orders-all"));
         return EmailLayout.shell("New order at " + merchant.getName(), inner, supportEmail);
     }
 

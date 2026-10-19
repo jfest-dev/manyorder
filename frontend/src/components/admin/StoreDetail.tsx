@@ -4,6 +4,7 @@ import { adminApi, AdminStoreDetail, AdminAuditLogEntry, ProductResponse, ApiErr
 import { formatMoney } from '../../lib/currency';
 import { formatDate, formatDateTime } from '../../lib/adminDatetime';
 import { ADMIN_FONT } from './adminTokens';
+import { VerifiedBadge } from '../VerifiedBadge';
 
 const EMPTY = '-';
 function text(v: string | null | undefined): string {
@@ -148,9 +149,7 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
           profile.email && profile.email.trim() !== '' ? (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <span>{profile.email}</span>
-              <span style={{ fontSize: ADMIN_FONT.caption, fontWeight: 600, color: profile.emailVerified ? '#16a34a' : '#B45309' }}>
-                {profile.emailVerified ? '✓ Verified' : 'Not verified'}
-              </span>
+              <VerifiedBadge verified={profile.emailVerified} style={{ fontSize: ADMIN_FONT.caption }} />
             </span>
           ) : EMPTY
         } />

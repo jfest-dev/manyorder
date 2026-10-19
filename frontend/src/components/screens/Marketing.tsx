@@ -368,14 +368,14 @@ export function Marketing({ storeId, currency = 'sgd', adminMerchantId, readOnly
             title: 'Switch this discount on?',
             message: 'Customers can use it again.',
             confirmLabel: 'Switch on',
-            reasonLabel: 'Reason (shown to the owner)',
+            reasonLabel: 'Reason',
             reasonOptional: true, emailOwnerDefault: true,
           }
         : {
             title: 'Switch off this discount?',
             message: 'Customers will no longer be able to use it. The owner will be emailed with your reason.',
             confirmLabel: 'Switch off', tone: 'danger',
-            reasonLabel: 'Reason (shown to the owner)',
+            reasonLabel: 'Reason',
           });
       if (r == null) return;
       reason = r.reason;

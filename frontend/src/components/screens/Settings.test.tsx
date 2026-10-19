@@ -74,7 +74,7 @@ describe('Settings store fields', () => {
     getStore.mockResolvedValue({ ...STORE, emailVerified: true });
     renderSettings();
     await screen.findByDisplayValue('Kiri Brew');
-    expect(screen.getByText('Verified')).toBeTruthy();
+    expect(screen.getByText('✓ Verified')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Send confirmation' })).toBeNull();
   });
 
@@ -93,7 +93,7 @@ describe('Settings store fields', () => {
     await user.click(save);
 
     await waitFor(() => expect(updateStore).toHaveBeenCalled());
-    expect(await screen.findByText('Verified')).toBeTruthy();
+    expect(await screen.findByText('✓ Verified')).toBeTruthy();
     expect(screen.queryByText(/Confirmation sent to/)).toBeNull();
   });
 

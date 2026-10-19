@@ -69,7 +69,7 @@ describe('Marketing admin read-only vs editable', () => {
     // Confirmation copy appears, with a required reason.
     expect(await screen.findByText('Switch off this discount?')).toBeTruthy();
 
-    await user.type(screen.getByLabelText('Reason (shown to the owner)'), 'Expired promo');
+    await user.type(screen.getByLabelText('Reason'), 'Expired promo');
     await user.click(screen.getByRole('button', { name: 'Switch off' }));
     await waitFor(() => expect(deactivateMock).toHaveBeenCalledWith(21, 'Expired promo'));
   });

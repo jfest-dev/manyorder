@@ -10,6 +10,7 @@ import { useConfirm } from '../ConfirmDialog';
 import { AccountSettings } from './AccountSettings';
 import { PhoneField } from '../PhoneField';
 import { Toast } from '../Toast';
+import { VerifiedBadge } from '../VerifiedBadge';
 import { businessTypeOptions, CURRENCIES, STORE_FIELD_TEXT } from '../../lib/storeFields';
 
 interface SettingsProps {
@@ -486,10 +487,10 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
                 return <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '-8px 0 0' }}>Add a store email for store notifications.</p>;
               }
               if (emailVerified && !changedUnsaved) {
-                return <span className="text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: SUCCESS_GREEN, fontWeight: 600, marginTop: '-8px' }}>Verified</span>;
+                return <VerifiedBadge verified className="text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: '-8px' }} />;
               }
               if (changedUnsaved) {
-                return <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '-8px 0 0' }}>Save your store to confirm this address.</p>;
+                return <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '-8px 0 0' }}>Save to confirm this address.</p>;
               }
               const justSent = sentTo === input;
               return (

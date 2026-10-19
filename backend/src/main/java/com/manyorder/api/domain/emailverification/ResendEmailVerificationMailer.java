@@ -67,7 +67,7 @@ public class ResendEmailVerificationMailer implements EmailVerificationMailer {
 
     private String buildHtml(String verifyUrl) {
         String inner = """
-                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;">Welcome to ManyOrder. Confirm this email address so we can send you order notifications and account updates. This link expires in 24 hours.</p>
+                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;">Welcome to ManyOrder. Confirm this email address so we can send you notifications and account updates. This link expires in 24 hours.</p>
                 %s
                 <p style="color:#6b7280;font-size:13px;">If you didn't create a ManyOrder account, you can safely ignore this email.</p>
                 <p style="color:#9ca3af;font-size:12px;word-break:break-all;">Or paste this link into your browser:<br>%s</p>

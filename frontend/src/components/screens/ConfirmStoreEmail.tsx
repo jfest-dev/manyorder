@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { AuthLayout, SecurityFooter } from '../auth/AuthLayout';
 import { Button } from '../Button';
-import { storesApi } from '../../lib/api';
+import { storesApi, getToken } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
 type Phase = 'confirming' | 'success' | 'error';
@@ -19,6 +19,10 @@ export function ConfirmStoreEmail() {
   const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const token = searchParams.get('token') || '';
+  // Whether THIS tab holds a session. With "Remember me" unticked the token lives
+  // in per-tab sessionStorage, so a link opened in a new tab has none even if the
+  // original tab is signed in. We route the success button accordingly.
+  const hasToken = getToken() != null;
 
   const [phase, setPhase] = useState<Phase>(token ? 'confirming' : 'error');
   const [storeName, setStoreName] = useState('');
@@ -44,11 +48,8 @@ export function ConfirmStoreEmail() {
   if (phase === 'confirming') {
     return (
       <AuthLayout title="Confirming your store email" footer={<SecurityFooter />}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
           <Loader2 size={36} color="var(--text-secondary)" style={{ animation: 'spin 1s linear infinite' }} />
-          <p className="text-small" style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
-            Just a moment while we confirm this address.
-          </p>
         </div>
       </AuthLayout>
     );
@@ -64,8 +65,8 @@ export function ConfirmStoreEmail() {
               ? `${confirmedEmail} will now receive notifications for ${storeName}.`
               : 'Your store email is confirmed.'}
           </p>
-          <Button variant="primary" fullWidth onClick={() => navigate('/app')}>
-            Go to dashboard
+          <Button variant="primary" fullWidth onClick={() => navigate(hasToken ? '/app' : '/signin')}>
+            {hasToken ? 'Go to dashboard' : 'Go to sign in'}
           </Button>
         </div>
       </AuthLayout>

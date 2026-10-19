@@ -58,7 +58,7 @@ describe('ProductsList admin read-only vs editable', () => {
     await user.click(screen.getAllByRole('switch', { name: 'Active' })[0]);
     expect(await screen.findByText('Hide Widget?')).toBeTruthy();
 
-    await user.type(screen.getByLabelText('Reason (shown to the owner)'), 'Misleading photo');
+    await user.type(screen.getByLabelText('Reason'), 'Misleading photo');
     await user.click(screen.getByRole('button', { name: 'Hide' }));
     await waitFor(() => expect(deactivateMock).toHaveBeenCalledWith(11, 'Misleading photo'));
   });

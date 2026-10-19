@@ -106,7 +106,7 @@ export function AdminApp() {
         : 'This restores their storefront and lets the owner sign in again.',
       confirmLabel: suspend ? 'Suspend' : 'Unsuspend',
       tone: suspend ? 'danger' : 'default',
-      reasonLabel: 'Reason (shown to the owner)',
+      reasonLabel: 'Reason',
       // Restricting action requires a reason; restoring makes it optional with an email checkbox.
       reasonOptional: !suspend,
       emailOwnerDefault: suspend ? undefined : true,
