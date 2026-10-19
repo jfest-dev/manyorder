@@ -46,14 +46,10 @@ public class ResendStoreEmailConfirmationMailer implements StoreEmailConfirmatio
             return;
         }
         String store = merchant.getName();
-        String inner = """
-                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;">You added this address as the contact email for %s on ManyOrder. Confirm it so order and low-stock alerts reach this inbox. This link expires in 24 hours.</p>
-                %s
-                """.formatted(EmailLayout.escape(store), EmailLayout.button("Confirm store email", confirmUrl));
         Map<String, Object> payload = ResendEmail.payload(
                 fromAddress, toEmail, supportEmail,
                 "Confirm the email for " + store,
-                EmailLayout.shell("Confirm your store email", inner, supportEmail));
+                buildHtml(store, confirmUrl, supportEmail));
         try {
             restClient.post()
                     .uri(ResendEmail.RESEND_EMAILS_URL)
@@ -65,5 +61,15 @@ public class ResendStoreEmailConfirmationMailer implements StoreEmailConfirmatio
         } catch (Exception e) {
             log.warn("Failed to send store-email confirmation for store {}", merchant.getId());
         }
+    }
+
+    /** Confirmation body on the shared shell. Package-private and primitive-typed so the
+     *  copy can be unit-tested without a store entity or a live Resend key. */
+    static String buildHtml(String storeName, String confirmUrl, String supportEmail) {
+        String inner = """
+                <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;">Please confirm that you want to receive notifications for %s at this address. This link expires in 24 hours. If you didn't add this address, you can ignore this email.</p>
+                %s
+                """.formatted(EmailLayout.escape(storeName), EmailLayout.button("Confirm email", confirmUrl));
+        return EmailLayout.shell("Confirm your store email", inner, supportEmail);
     }
 }

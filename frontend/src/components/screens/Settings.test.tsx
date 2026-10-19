@@ -56,31 +56,52 @@ describe('Settings store fields', () => {
     expect(screen.getByText('You can change this until your first order.')).toBeTruthy();
   });
 
-  it('store email: Not verified shows Send confirmation, which sends and toasts', async () => {
+  it('store email: not verified prompts to confirm, then shows sent copy with a resend countdown', async () => {
     const user = userEvent.setup();
     renderSettings();
     await screen.findByDisplayValue('Kiri Brew');
-    expect(screen.getByText('Not verified')).toBeTruthy();
-    expect(screen.getByText('Alerts go to your login email until this is verified.')).toBeTruthy();
+    expect(screen.getByText('Confirm this email to receive store notifications here.')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: 'Send confirmation' }));
     await waitFor(() => expect(sendConfirmation).toHaveBeenCalledWith(1));
-    expect(await screen.findByText('Confirmation sent.')).toBeTruthy();
+    expect(await screen.findByText('Confirmation sent to hi@kiri.test. Check your inbox.')).toBeTruthy();
+    // The resend button is disabled during the cooldown.
+    const resend = screen.getByRole('button', { name: /Resend in \d+s/ });
+    expect((resend as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('store email: shows Verified and no send button when verified', async () => {
     getStore.mockResolvedValue({ ...STORE, emailVerified: true });
     renderSettings();
     await screen.findByDisplayValue('Kiri Brew');
-    expect(screen.getByText('✓ Verified')).toBeTruthy();
+    expect(screen.getByText('Verified')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Send confirmation' })).toBeNull();
+  });
+
+  it('store email: saving an address that the backend reports verified shows Verified at once', async () => {
+    const user = userEvent.setup();
+    // Saved as not-verified, but the save response reports it verified (equals the
+    // verified login email), so the badge must flip without a refresh.
+    updateStore.mockResolvedValue({ ...STORE, email: 'owner@login.test', emailVerified: true });
+    renderSettings();
+    await screen.findByDisplayValue('Kiri Brew');
+
+    const email = screen.getByDisplayValue('hi@kiri.test');
+    await user.clear(email);
+    await user.type(email, 'owner@login.test');
+    const save = screen.getAllByRole('button', { name: 'Save' }).find((b) => !(b as HTMLButtonElement).disabled)!;
+    await user.click(save);
+
+    await waitFor(() => expect(updateStore).toHaveBeenCalled());
+    expect(await screen.findByText('Verified')).toBeTruthy();
+    expect(screen.queryByText(/Confirmation sent to/)).toBeNull();
   });
 
   it('store email: prompts to add one when blank', async () => {
     getStore.mockResolvedValue({ ...STORE, email: '', emailVerified: false });
     renderSettings();
     await screen.findByDisplayValue('Kiri Brew');
-    expect(screen.getByText('Add a store email so customers and alerts reach the right inbox.')).toBeTruthy();
+    expect(screen.getByText('Add a store email for store notifications.')).toBeTruthy();
   });
 
   it('locks currency read-only once the store has orders', async () => {

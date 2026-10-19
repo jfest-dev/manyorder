@@ -20,18 +20,19 @@ function renderAt(token: string) {
 beforeEach(() => { cleanup(); confirmEmail.mockReset(); });
 
 describe('ConfirmStoreEmail page', () => {
-  it('confirms a valid token and shows the store name', async () => {
-    confirmEmail.mockResolvedValue({ storeName: 'Kiri Brew' });
+  it('confirms a valid token and names the address and store', async () => {
+    confirmEmail.mockResolvedValue({ storeName: 'Kiri Brew', email: 'hi@kiri.test' });
     renderAt('good-token');
-    expect(await screen.findByText('Store email confirmed')).toBeTruthy();
-    expect(screen.getByText(/Kiri Brew/)).toBeTruthy();
+    expect(await screen.findByText('Email confirmed')).toBeTruthy();
+    expect(screen.getByText('hi@kiri.test will now receive notifications for Kiri Brew.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Go to dashboard' })).toBeTruthy();
     expect(confirmEmail).toHaveBeenCalledWith('good-token');
   });
 
-  it('shows a generic failure with a way to resend for a bad token', async () => {
+  it('shows a generic failure that points to Settings for a bad token', async () => {
     confirmEmail.mockRejectedValue(new Error('invalid'));
     renderAt('bad-token');
-    expect(await screen.findByText('Confirmation failed')).toBeTruthy();
-    expect(screen.getByText(/Send confirmation/)).toBeTruthy();
+    expect(await screen.findByText("This link didn't work")).toBeTruthy();
+    expect(screen.getByText(/Send a new confirmation from Settings/)).toBeTruthy();
   });
 });

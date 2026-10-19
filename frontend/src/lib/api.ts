@@ -461,9 +461,9 @@ export const storesApi = {
   /** Owner asks ManyOrder to email a confirmation link to the store's contact address. */
   sendEmailConfirmation: (storeId: number) =>
     request<void>(`/merchant/stores/${storeId}/email/confirmation`, { method: 'POST' }),
-  /** Public: confirm the store email from the link. Returns the store name. */
+  /** Public: confirm the store email from the link. Returns the store name and confirmed address. */
   confirmEmail: (token: string) =>
-    request<{ storeName: string }>('/public/store-email/confirm', { method: 'POST', body: { token }, auth: false }),
+    request<{ storeName: string; email: string }>('/public/store-email/confirm', { method: 'POST', body: { token }, auth: false }),
   create: (payload: CreateStorePayload) =>
     request<StoreResponse>('/merchant/stores', { method: 'POST', body: payload }),
   update: (storeId: number, payload: UpdateStorePayload) =>

@@ -47,7 +47,8 @@ public class StoreEmailVerificationController {
         if (request == null || request.token() == null || request.token().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This confirmation link is invalid or has expired.");
         }
-        return Map.of("storeName", service.confirm(request.token().trim()));
+        StoreEmailVerificationService.Confirmation result = service.confirm(request.token().trim());
+        return Map.of("storeName", result.storeName(), "email", result.email());
     }
 
     public record ConfirmStoreEmailRequest(String token) {}

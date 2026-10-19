@@ -24,6 +24,9 @@ const THEME_COLORS = ['#000000', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F
 /** No success token in the design system; matches the weight of --error-color. */
 const SUCCESS_GREEN = '#16a34a';
 
+/** How long the store-email "Resend" button stays disabled after a send. */
+const RESEND_COOLDOWN_SECONDS = 60;
+
 const sectionCard: React.CSSProperties = {
   background: 'var(--bg-card)',
   borderRadius: 'var(--radius-card)',
@@ -99,17 +102,29 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   // Store email verification: the saved address's verified state + the send button.
   const [emailVerified, setEmailVerified] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [confirmSent, setConfirmSent] = useState(false);
+  // The address a confirmation was last sent to (null = none sent this session),
+  // and a resend cooldown that ticks down to 0 before "Resend" re-enables.
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [resendIn, setResendIn] = useState(0);
   const [emailToast, setEmailToast] = useState<string | null>(null);
+
+  // Tick the resend cooldown down to zero.
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = window.setInterval(() => setResendIn((n) => (n <= 1 ? 0 : n - 1)), 1000);
+    return () => window.clearInterval(t);
+  }, [resendIn]);
+
+  // Mark a confirmation as just sent to `email` and start the cooldown.
+  const startCooldown = (email: string) => { setSentTo(email); setResendIn(RESEND_COOLDOWN_SECONDS); };
 
   const sendEmailConfirmation = async () => {
     setConfirming(true);
     try {
       await storesApi.sendEmailConfirmation(storeId);
-      setConfirmSent(true);
+      startCooldown((form.storeEmail || '').trim());
       setEmailToast('Confirmation sent.');
       window.setTimeout(() => setEmailToast(null), 2400);
-      window.setTimeout(() => setConfirmSent(false), 30000); // let them resend after a short wait
     } catch (e) {
       setEmailToast(e instanceof ApiError ? e.message : 'Could not send the confirmation.');
       window.setTimeout(() => setEmailToast(null), 3000);
@@ -180,14 +195,14 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
     setForm((prev) => ({ ...prev, [key]: value }));
 
   /** Save one card's slice via a partial PATCH, then flash an inline "Saved". */
-  const saveCard = async (key: string, payload: UpdateStorePayload, after?: () => void) => {
+  const saveCard = async (key: string, payload: UpdateStorePayload, after?: (result: StoreResponse) => void) => {
     setSavingKey(key);
     setErrorKey(null);
     setSavedKey((k) => (k === key ? null : k));
     try {
-      await storesApi.update(storeId, payload);
+      const result = await storesApi.update(storeId, payload);
       onSaved();
-      after?.();
+      after?.(result);
       // Advance the baseline so this card's button returns to disabled.
       setSavedForm((prev) => ({ ...prev, ...payload }));
       setSavedKey(key);
@@ -248,9 +263,18 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
       themeColor: form.themeColor,
       logoUrl,
       storeDescription: form.storeDescription,
-    }, () => {
-      // A changed store email is unverified until confirmed (a confirmation was auto-sent).
-      if (emailChanged) { setEmailVerified(false); setConfirmSent(true); window.setTimeout(() => setConfirmSent(false), 30000); }
+    }, (result) => {
+      // Reflect the real verified state from the save response, so an address that
+      // equals the already-verified login email shows "Verified" with no refresh.
+      setEmailVerified(result.emailVerified);
+      // A changed address that is not already verified had a confirmation auto-sent
+      // by the backend: show "Confirmation sent" with the resend cooldown running.
+      if (emailChanged && !result.emailVerified && (result.email ?? '').trim() !== '') {
+        startCooldown((result.email ?? '').trim());
+      } else if (emailChanged) {
+        setSentTo(null);
+        setResendIn(0);
+      }
       setSavedName(form.storeName?.trim() || '');
       setSavedCurrency(form.currency || '');
       setSlugTouchedFrom(normalizedSlug || '');
@@ -459,23 +483,34 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               const input = (form.storeEmail || '').trim();
               const changedUnsaved = norm(form.storeEmail) !== norm(savedForm.storeEmail);
               if (input === '') {
-                return <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '-8px 0 0' }}>Add a store email so customers and alerts reach the right inbox.</p>;
+                return <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '-8px 0 0' }}>Add a store email for store notifications.</p>;
               }
               if (emailVerified && !changedUnsaved) {
-                return <span className="text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#16a34a', fontWeight: 600, marginTop: '-8px' }}>✓ Verified</span>;
+                return <span className="text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: SUCCESS_GREEN, fontWeight: 600, marginTop: '-8px' }}>Verified</span>;
               }
+              if (changedUnsaved) {
+                return <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '-8px 0 0' }}>Save your store to confirm this address.</p>;
+              }
+              const justSent = sentTo === input;
               return (
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: '-8px' }}>
-                  <span className="text-xs" style={{ color: '#B45309', fontWeight: 600 }}>Not verified</span>
-                  {changedUnsaved ? (
-                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Save your store to confirm this address.</span>
+                  {justSent ? (
+                    <>
+                      <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Confirmation sent to {input}. Check your inbox.</span>
+                      <button type="button" onClick={sendEmailConfirmation} disabled={confirming || resendIn > 0}
+                        style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: confirming || resendIn > 0 ? 'default' : 'pointer', fontWeight: 600, fontSize: '12px', opacity: confirming || resendIn > 0 ? 0.6 : 1 }}>
+                        {confirming ? 'Sending…' : resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend'}
+                      </button>
+                    </>
                   ) : (
-                    <button type="button" onClick={sendEmailConfirmation} disabled={confirming || confirmSent}
-                      style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: confirming || confirmSent ? 'default' : 'pointer', fontWeight: 600, fontSize: '12px', opacity: confirming || confirmSent ? 0.6 : 1 }}>
-                      {confirming ? 'Sending…' : confirmSent ? 'Resend shortly' : 'Send confirmation'}
-                    </button>
+                    <>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Confirm this email to receive store notifications here.</span>
+                      <button type="button" onClick={sendEmailConfirmation} disabled={confirming}
+                        style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: confirming ? 'default' : 'pointer', fontWeight: 600, fontSize: '12px', opacity: confirming ? 0.6 : 1 }}>
+                        {confirming ? 'Sending…' : 'Send confirmation'}
+                      </button>
+                    </>
                   )}
-                  <span className="text-xs" style={{ color: 'var(--text-muted)', width: '100%' }}>Alerts go to your login email until this is verified.</span>
                 </div>
               );
             })()}

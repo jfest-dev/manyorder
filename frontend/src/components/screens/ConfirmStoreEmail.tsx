@@ -22,6 +22,7 @@ export function ConfirmStoreEmail() {
 
   const [phase, setPhase] = useState<Phase>(token ? 'confirming' : 'error');
   const [storeName, setStoreName] = useState('');
+  const [confirmedEmail, setConfirmedEmail] = useState('');
   const attempted = useRef<string | null>(null);
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export function ConfirmStoreEmail() {
       try {
         const res = await storesApi.confirmEmail(token);
         setStoreName(res.storeName);
+        setConfirmedEmail(res.email);
         setPhase('success');
       } catch {
         setPhase('error');
@@ -54,15 +56,16 @@ export function ConfirmStoreEmail() {
 
   if (phase === 'success') {
     return (
-      <AuthLayout title="Store email confirmed" footer={<SecurityFooter />}>
+      <AuthLayout title="Email confirmed" footer={<SecurityFooter />}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
           <CheckCircle2 size={40} color="var(--success-color, #16a34a)" />
           <p className="text-small" style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
-            {storeName ? `Thanks, the contact email for ${storeName} is confirmed. Order and low-stock alerts will reach this inbox.`
-              : 'Thanks, your store email is confirmed.'}
+            {confirmedEmail && storeName
+              ? `${confirmedEmail} will now receive notifications for ${storeName}.`
+              : 'Your store email is confirmed.'}
           </p>
-          <Button variant="primary" fullWidth onClick={() => navigate(isAuthenticated ? '/app' : '/signin')}>
-            {isAuthenticated ? 'Go to dashboard' : 'Go to sign in'}
+          <Button variant="primary" fullWidth onClick={() => navigate('/app')}>
+            Go to dashboard
           </Button>
         </div>
       </AuthLayout>
@@ -70,11 +73,11 @@ export function ConfirmStoreEmail() {
   }
 
   return (
-    <AuthLayout title="Confirmation failed" footer={<SecurityFooter />}>
+    <AuthLayout title="This link didn't work" footer={<SecurityFooter />}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
         <XCircle size={40} color="var(--error-color)" />
         <p className="text-small" style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
-          This confirmation link is invalid or has expired. Open your store Settings and use "Send confirmation" to get a fresh link.
+          It may have expired or already been used. Send a new confirmation from Settings.
         </p>
         <Button variant="primary" fullWidth onClick={() => navigate(isAuthenticated ? '/app' : '/signin')}>
           {isAuthenticated ? 'Go to settings' : 'Go to sign in'}

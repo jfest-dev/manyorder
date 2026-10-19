@@ -84,9 +84,12 @@ public class StoreEmailVerificationService {
         }
     }
 
+    /** The store name and the address that was just confirmed, for the confirmation page copy. */
+    public record Confirmation(String storeName, String email) {}
+
     /** Consume a token and mark the store email verified. Generic 400 for bad/expired/used tokens. */
     @Transactional
-    public String confirm(String rawToken) {
+    public Confirmation confirm(String rawToken) {
         StoreEmailVerificationToken token = tokenRepository.findByTokenHash(sha256Hex(rawToken))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, GENERIC_ERROR));
         if (token.isUsed() || token.isExpired()) {
@@ -97,7 +100,7 @@ public class StoreEmailVerificationService {
         merchantRepository.save(merchant);
         token.setUsedAt(LocalDateTime.now());
         tokenRepository.save(token);
-        return merchant.getName();
+        return new Confirmation(merchant.getName(), token.getEmail());
     }
 
     private String generateToken() {
