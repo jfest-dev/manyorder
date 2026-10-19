@@ -17,6 +17,18 @@ Ideas captured from recent planning, to pick up after applying. One line each.
 - Platform-wide vouchers: codes the platform admin can issue across stores, separate from a store's own discounts.
 - Privacy notice: a published privacy policy and the in-app links/consent needed before real merchants and customers.
 
+## Real token revocation (before real merchants)
+
+Today a lost token cannot be cancelled and a password change does not end old
+sessions (the JWT is stateless, nothing blocklists it, and the only lever is
+rotating JWT_SECRET, which signs everyone out). Before real merchants, add
+per-user token revocation: a `tokenVersion` integer on the user, embedded as a
+claim when a token is issued and checked on every authenticated request (reject
+when the claim does not match the current version). Bump the version on password
+change and from a "Sign out everywhere" button in the Account tab, so a single
+action invalidates all of that user's existing tokens without touching anyone
+else. Pairs well with the 30-day remember-me tokens.
+
 ## Deployment note: adding a value to a database-backed enum under ddl-auto
 
 This is a recurring migration gotcha, not a one-off. It applies to **any** future
