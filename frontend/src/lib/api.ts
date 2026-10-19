@@ -304,6 +304,7 @@ export interface StoreResponse {
   deliveryToBeConfirmedMessage: string | null;
   fulfilmentMode: FulfilmentMode;
   whatsappVerified: boolean;
+  emailVerified: boolean;
   streetAddress: string | null;
   city: string | null;
   postalCode: string | null;
@@ -457,6 +458,12 @@ export const accountApi = {
 export const storesApi = {
   list: () => request<StoreListResponse>('/merchant/stores'),
   get: (storeId: number) => request<StoreResponse>(`/merchant/stores/${storeId}`),
+  /** Owner asks ManyOrder to email a confirmation link to the store's contact address. */
+  sendEmailConfirmation: (storeId: number) =>
+    request<void>(`/merchant/stores/${storeId}/email/confirmation`, { method: 'POST' }),
+  /** Public: confirm the store email from the link. Returns the store name. */
+  confirmEmail: (token: string) =>
+    request<{ storeName: string }>('/public/store-email/confirm', { method: 'POST', body: { token }, auth: false }),
   create: (payload: CreateStorePayload) =>
     request<StoreResponse>('/merchant/stores', { method: 'POST', body: payload }),
   update: (storeId: number, payload: UpdateStorePayload) =>
@@ -1084,6 +1091,7 @@ export interface AdminStoreDetail {
     themeColor: string | null;
     logoUrl: string | null;
     whatsappVerified: boolean;
+    emailVerified: boolean;
     notifyNewOrderEmail: boolean;
     notifyLowStockEmail: boolean;
     notifyNewOrderWhatsapp: boolean;

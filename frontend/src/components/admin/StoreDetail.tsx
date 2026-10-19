@@ -144,7 +144,16 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
         <Row label="Status" value={detail.status} />
         <Row label="Slug" value={`/${detail.slug}`} />
         <Row label="Currency" value={detail.currency} />
-        <Row label="Contact email" value={text(profile.email)} />
+        <Row label="Contact email" value={
+          profile.email && profile.email.trim() !== '' ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <span>{profile.email}</span>
+              <span style={{ fontSize: ADMIN_FONT.caption, fontWeight: 600, color: profile.emailVerified ? '#16a34a' : '#B45309' }}>
+                {profile.emailVerified ? '✓ Verified' : 'Not verified'}
+              </span>
+            </span>
+          ) : EMPTY
+        } />
         <Row label="Phone" value={text(profile.phoneNumber)} />
         <Row label="Business type" value={text(profile.businessType)} />
         <Row label="Address" value={[profile.streetAddress, profile.city, profile.postalCode].filter((p) => p && p.trim() !== '').join(', ') || EMPTY} />

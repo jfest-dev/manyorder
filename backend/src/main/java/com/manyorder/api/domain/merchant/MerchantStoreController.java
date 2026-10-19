@@ -45,19 +45,22 @@ public class MerchantStoreController {
     private final PasswordEncoder passwordEncoder;
     private final StoreLimitService storeLimitService;
     private final CloudinaryImageService imageService;
+    private final com.manyorder.api.domain.storeemailverification.StoreEmailVerificationService storeEmailVerificationService;
 
     public MerchantStoreController(MerchantRepository merchantRepository,
                                    CurrentUserService currentUserService,
                                    StoreAccessService storeAccessService,
                                    PasswordEncoder passwordEncoder,
                                    StoreLimitService storeLimitService,
-                                   CloudinaryImageService imageService) {
+                                   CloudinaryImageService imageService,
+                                   com.manyorder.api.domain.storeemailverification.StoreEmailVerificationService storeEmailVerificationService) {
         this.merchantRepository = merchantRepository;
         this.currentUserService = currentUserService;
         this.storeAccessService = storeAccessService;
         this.passwordEncoder = passwordEncoder;
         this.storeLimitService = storeLimitService;
         this.imageService = imageService;
+        this.storeEmailVerificationService = storeEmailVerificationService;
     }
 
     /** Store management is owner-only; a STAFF account gets its store from the login response. */
@@ -101,6 +104,7 @@ public class MerchantStoreController {
         merchant.setFreeDeliveryThreshold(request.getFreeDeliveryThreshold());
 
         merchantRepository.save(merchant);
+        storeEmailVerificationService.autoSendIfNeeded(merchant); // confirm the new store email
         return new StoreResponse(merchant);
     }
 
@@ -111,6 +115,7 @@ public class MerchantStoreController {
                                      Authentication authentication) {
         User user = requireMerchant(authentication);
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
+        String emailBefore = com.manyorder.api.domain.storeemailverification.StoreEmail.normalize(merchant.getEmail());
 
         if (request.getStoreName() != null && !request.getStoreName().isBlank()) {
             merchant.setName(request.getStoreName().trim());
@@ -155,6 +160,12 @@ public class MerchantStoreController {
         if (request.getItemNotesEnabled() != null) merchant.setItemNotesEnabled(request.getItemNotesEnabled());
 
         merchantRepository.save(merchant);
+
+        // If the store email was set or changed to an unverified address, confirm it.
+        String emailAfter = com.manyorder.api.domain.storeemailverification.StoreEmail.normalize(merchant.getEmail());
+        if (emailAfter != null && !emailAfter.equals(emailBefore)) {
+            storeEmailVerificationService.autoSendIfNeeded(merchant);
+        }
 
         // Delete the replaced/removed logo only after the new state is committed,
         // so a failed save never strands us without the file we still reference.

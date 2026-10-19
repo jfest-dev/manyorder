@@ -41,6 +41,12 @@ public class Merchant {
     private String slug;
 
     private String email;
+
+    /** Normalized (trimmed, lowercase) store contact email the owner has confirmed.
+     *  The store email counts as verified when it equals this, or equals the owner's
+     *  verified login email. Nullable; changing the store email auto-unverifies by comparison. */
+    @Column(name = "verified_email")
+    private String verifiedEmail;
     private String phoneNumber;
 
     /** Label only for now (e.g. "Food & Beverage"). */
@@ -160,6 +166,8 @@ public class Merchant {
     public void setSlug(String slug) { this.slug = slug; }
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
+    public String getVerifiedEmail() { return verifiedEmail; }
+    public void setVerifiedEmail(String verifiedEmail) { this.verifiedEmail = verifiedEmail; }
     public String getPhoneNumber() { return phoneNumber; }
     public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
     public String getBusinessType() { return businessType; }

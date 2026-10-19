@@ -6,12 +6,18 @@ import userEvent from '@testing-library/user-event';
 const getStore = vi.fn();
 const updateStore = vi.fn();
 const listOrders = vi.fn();
+const sendConfirmation = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api')>();
   return {
     ...actual,
-    storesApi: { ...actual.storesApi, get: (id: number) => getStore(id), update: (id: number, p: unknown) => updateStore(id, p) },
+    storesApi: {
+      ...actual.storesApi,
+      get: (id: number) => getStore(id),
+      update: (id: number, p: unknown) => updateStore(id, p),
+      sendEmailConfirmation: (id: number) => sendConfirmation(id),
+    },
     ordersApi: { ...actual.ordersApi, list: (id: number) => listOrders(id) },
   };
 });
@@ -26,8 +32,8 @@ const STORE = {
   deliveryFee: null, freeDeliveryThreshold: null, deliveryToBeConfirmedMessage: null,
   fulfilmentMode: 'BOTH', whatsappVerified: false, streetAddress: '', city: '', postalCode: '',
   notifyNewOrderEmail: true, notifyLowStockEmail: false, notifyNewOrderWhatsapp: false,
-  notifyUrgentWhatsapp: false, itemNotesEnabled: false, createdAt: '2026-01-01T00:00:00Z',
-} as never;
+  notifyUrgentWhatsapp: false, itemNotesEnabled: false, emailVerified: false, createdAt: '2026-01-01T00:00:00Z',
+} as Record<string, unknown>;
 
 function renderSettings() {
   render(<ConfirmProvider><Settings storeId={1} onSaved={vi.fn()} onArchived={vi.fn()} /></ConfirmProvider>);
@@ -38,6 +44,7 @@ beforeEach(() => {
   getStore.mockReset().mockResolvedValue(STORE);
   updateStore.mockReset().mockResolvedValue(STORE);
   listOrders.mockReset().mockResolvedValue([]); // no orders by default
+  sendConfirmation.mockReset().mockResolvedValue(undefined);
 });
 
 describe('Settings store fields', () => {
@@ -47,6 +54,33 @@ describe('Settings store fields', () => {
     expect(screen.getByText('Retail')).toBeTruthy(); // legacy value shown, not dropped
     expect(screen.getByText('SGD - Singapore dollar')).toBeTruthy();
     expect(screen.getByText('You can change this until your first order.')).toBeTruthy();
+  });
+
+  it('store email: Not verified shows Send confirmation, which sends and toasts', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+    await screen.findByDisplayValue('Kiri Brew');
+    expect(screen.getByText('Not verified')).toBeTruthy();
+    expect(screen.getByText('Alerts go to your login email until this is verified.')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Send confirmation' }));
+    await waitFor(() => expect(sendConfirmation).toHaveBeenCalledWith(1));
+    expect(await screen.findByText('Confirmation sent.')).toBeTruthy();
+  });
+
+  it('store email: shows Verified and no send button when verified', async () => {
+    getStore.mockResolvedValue({ ...STORE, emailVerified: true });
+    renderSettings();
+    await screen.findByDisplayValue('Kiri Brew');
+    expect(screen.getByText('✓ Verified')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Send confirmation' })).toBeNull();
+  });
+
+  it('store email: prompts to add one when blank', async () => {
+    getStore.mockResolvedValue({ ...STORE, email: '', emailVerified: false });
+    renderSettings();
+    await screen.findByDisplayValue('Kiri Brew');
+    expect(screen.getByText('Add a store email so customers and alerts reach the right inbox.')).toBeTruthy();
   });
 
   it('locks currency read-only once the store has orders', async () => {

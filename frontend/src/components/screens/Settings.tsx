@@ -9,6 +9,7 @@ import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../
 import { useConfirm } from '../ConfirmDialog';
 import { AccountSettings } from './AccountSettings';
 import { PhoneField } from '../PhoneField';
+import { Toast } from '../Toast';
 import { businessTypeOptions, CURRENCIES, STORE_FIELD_TEXT } from '../../lib/storeFields';
 
 interface SettingsProps {
@@ -95,6 +96,27 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const [tab, setTab] = useState<'store' | 'account'>('store');
   // Whether the store has any orders yet: once it does, currency is locked.
   const [hasOrders, setHasOrders] = useState(false);
+  // Store email verification: the saved address's verified state + the send button.
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmSent, setConfirmSent] = useState(false);
+  const [emailToast, setEmailToast] = useState<string | null>(null);
+
+  const sendEmailConfirmation = async () => {
+    setConfirming(true);
+    try {
+      await storesApi.sendEmailConfirmation(storeId);
+      setConfirmSent(true);
+      setEmailToast('Confirmation sent.');
+      window.setTimeout(() => setEmailToast(null), 2400);
+      window.setTimeout(() => setConfirmSent(false), 30000); // let them resend after a short wait
+    } catch (e) {
+      setEmailToast(e instanceof ApiError ? e.message : 'Could not send the confirmation.');
+      window.setTimeout(() => setEmailToast(null), 3000);
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   // Store logo (Store Details card). A newly picked file is held locally and
   // previewed via an object URL; it's uploaded only when the card is saved, so a
@@ -139,6 +161,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
       setSlugTouchedFrom(s.slug);
       setSavedCurrency(s.currency);
       setSavedName(s.name);
+      setEmailVerified(s.emailVerified);
       // Currency locks once the store has taken any order.
       ordersApi.list(storeId).then((os) => setHasOrders(os.length > 0)).catch(() => { /* leave editable */ });
     } catch (e: any) {
@@ -214,6 +237,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
     }
 
     const normalizedSlug = form.slug?.trim().toLowerCase();
+    const emailChanged = norm(form.storeEmail) !== norm(savedForm.storeEmail);
     await saveCard('store', {
       storeName: form.storeName,
       slug: normalizedSlug,
@@ -225,6 +249,8 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
       logoUrl,
       storeDescription: form.storeDescription,
     }, () => {
+      // A changed store email is unverified until confirmed (a confirmation was auto-sent).
+      if (emailChanged) { setEmailVerified(false); setConfirmSent(true); window.setTimeout(() => setConfirmSent(false), 30000); }
       setSavedName(form.storeName?.trim() || '');
       setSavedCurrency(form.currency || '');
       setSlugTouchedFrom(normalizedSlug || '');
@@ -429,6 +455,30 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               onChange={(v) => set('storeEmail', v)}
               helperText="Customer support and notifications email"
             />
+            {(() => {
+              const input = (form.storeEmail || '').trim();
+              const changedUnsaved = norm(form.storeEmail) !== norm(savedForm.storeEmail);
+              if (input === '') {
+                return <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '-8px 0 0' }}>Add a store email so customers and alerts reach the right inbox.</p>;
+              }
+              if (emailVerified && !changedUnsaved) {
+                return <span className="text-xs" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#16a34a', fontWeight: 600, marginTop: '-8px' }}>✓ Verified</span>;
+              }
+              return (
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: '-8px' }}>
+                  <span className="text-xs" style={{ color: '#B45309', fontWeight: 600 }}>Not verified</span>
+                  {changedUnsaved ? (
+                    <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Save your store to confirm this address.</span>
+                  ) : (
+                    <button type="button" onClick={sendEmailConfirmation} disabled={confirming || confirmSent}
+                      style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: confirming || confirmSent ? 'default' : 'pointer', fontWeight: 600, fontSize: '12px', opacity: confirming || confirmSent ? 0.6 : 1 }}>
+                      {confirming ? 'Sending…' : confirmSent ? 'Resend shortly' : 'Send confirmation'}
+                    </button>
+                  )}
+                  <span className="text-xs" style={{ color: 'var(--text-muted)', width: '100%' }}>Alerts go to your login email until this is verified.</span>
+                </div>
+              );
+            })()}
             <PhoneField
               label={STORE_FIELD_TEXT.phoneLabel}
               helperText={STORE_FIELD_TEXT.phoneHelper}
@@ -657,6 +707,8 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
           </div>
         </div>
       )}
+
+      {emailToast && <Toast message={emailToast} />}
     </div>
   );
 }

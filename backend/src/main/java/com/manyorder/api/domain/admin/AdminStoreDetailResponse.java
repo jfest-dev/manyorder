@@ -25,6 +25,7 @@ public record AdminStoreDetailResponse(
     /** Stored store-profile fields. */
     public record Profile(
             String email,
+            boolean emailVerified,
             String phoneNumber,
             String businessType,
             String streetAddress,

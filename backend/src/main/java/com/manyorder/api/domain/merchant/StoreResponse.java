@@ -22,6 +22,7 @@ public class StoreResponse {
     private String deliveryToBeConfirmedMessage;
     private String fulfilmentMode;
     private boolean whatsappVerified;
+    private boolean emailVerified;
     private String streetAddress;
     private String city;
     private String postalCode;
@@ -50,6 +51,7 @@ public class StoreResponse {
         this.deliveryToBeConfirmedMessage = m.getDeliveryToBeConfirmedMessage();
         this.fulfilmentMode = m.getFulfilmentMode();
         this.whatsappVerified = m.isWhatsappVerified();
+        this.emailVerified = com.manyorder.api.domain.storeemailverification.StoreEmail.isVerified(m);
         this.streetAddress = m.getStreetAddress();
         this.city = m.getCity();
         this.postalCode = m.getPostalCode();
@@ -78,6 +80,7 @@ public class StoreResponse {
     public String getDeliveryToBeConfirmedMessage() { return deliveryToBeConfirmedMessage; }
     public String getFulfilmentMode() { return fulfilmentMode; }
     public boolean isWhatsappVerified() { return whatsappVerified; }
+    public boolean isEmailVerified() { return emailVerified; }
     public String getStreetAddress() { return streetAddress; }
     public String getCity() { return city; }
     public String getPostalCode() { return postalCode; }

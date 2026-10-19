@@ -25,6 +25,7 @@ import { CreateAccount } from './components/screens/CreateAccount';
 import { ForgotPassword } from './components/screens/ForgotPassword';
 import { ResetPassword } from './components/screens/ResetPassword';
 import { VerifyEmail } from './components/screens/VerifyEmail';
+import { ConfirmStoreEmail } from './components/screens/ConfirmStoreEmail';
 import { StorefrontApp } from './components/storefront/StorefrontApp';
 import { TrackOrderView } from './components/storefront/TrackOrderView';
 
@@ -819,6 +820,7 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/confirm-store-email" element={<ConfirmStoreEmail />} />
       <Route
         path="/app"
         element={

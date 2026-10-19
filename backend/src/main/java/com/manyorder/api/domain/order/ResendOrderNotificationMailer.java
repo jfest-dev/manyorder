@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.domain.storeemailverification.StoreEmail;
 import com.manyorder.api.email.EmailLayout;
 
 /**
@@ -45,14 +46,14 @@ public class ResendOrderNotificationMailer implements OrderNotificationMailer {
 
     @Override
     public void sendNewOrder(Merchant merchant, List<Order> orders) {
-        String to = merchant.getEmail();
-        if (to == null || to.isBlank()) {
-            log.info("Store {} has no contact email — skipping new-order notification", merchant.getId());
+        // Owner login email always, plus the store email only when verified, deduped.
+        List<String> to = StoreEmail.alertRecipients(merchant);
+        if (to.isEmpty()) {
+            log.info("Store {} has no alert recipients — skipping new-order notification", merchant.getId());
             return;
         }
         if (apiKey.isEmpty()) {
-            log.info("Resend API key not configured — skipping new-order email to {} (order {})",
-                    to, orders.isEmpty() ? "?" : orders.get(0).getId());
+            log.info("Resend API key not configured — skipping new-order email (store {})", merchant.getId());
             return;
         }
 

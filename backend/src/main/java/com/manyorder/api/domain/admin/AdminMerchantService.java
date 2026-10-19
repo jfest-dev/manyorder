@@ -207,7 +207,8 @@ public class AdminMerchantService {
                 owner.getFullName(), owner.getEmail(), owner.getPhone(), owner.isVerified(), owner.getCreatedAt());
 
         var profile = new AdminStoreDetailResponse.Profile(
-                m.getEmail(), m.getPhoneNumber(), m.getBusinessType(),
+                m.getEmail(), com.manyorder.api.domain.storeemailverification.StoreEmail.isVerified(m),
+                m.getPhoneNumber(), m.getBusinessType(),
                 m.getStreetAddress(), m.getCity(), m.getPostalCode(),
                 m.getStoreDescription(), m.getOperatingHours(), m.getPaymentInstruction(),
                 m.getFulfilmentMode(), m.getDeliveryFee(), m.getFreeDeliveryThreshold(),

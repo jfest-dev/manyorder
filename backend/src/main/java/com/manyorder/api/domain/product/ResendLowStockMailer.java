@@ -1,7 +1,9 @@
 package com.manyorder.api.domain.product;
 
+import java.util.List;
 import java.util.Map;
 
+import com.manyorder.api.domain.storeemailverification.StoreEmail;
 import com.manyorder.api.email.EmailLayout;
 
 import org.slf4j.Logger;
@@ -46,14 +48,15 @@ public class ResendLowStockMailer implements LowStockMailer {
 
     @Override
     public void sendLowStock(Merchant merchant, Product product, int stock) {
-        String to = merchant.getEmail();
-        if (to == null || to.isBlank()) {
-            log.info("Store {} has no contact email — skipping low-stock alert", merchant.getId());
+        // Owner login email always, plus the store email only when verified, deduped.
+        List<String> to = StoreEmail.alertRecipients(merchant);
+        if (to.isEmpty()) {
+            log.info("Store {} has no alert recipients — skipping low-stock alert", merchant.getId());
             return;
         }
         if (apiKey.isEmpty()) {
-            log.info("Resend API key not configured — skipping low-stock email to {} (product {}, stock {})",
-                    to, product.getId(), stock);
+            log.info("Resend API key not configured — skipping low-stock email (store {}, product {}, stock {})",
+                    merchant.getId(), product.getId(), stock);
             return;
         }
 
