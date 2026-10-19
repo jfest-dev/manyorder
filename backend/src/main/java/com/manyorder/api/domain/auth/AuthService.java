@@ -30,6 +30,7 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final EmailVerificationService emailVerificationService;
     private final String googleClientId;
+    private final String supportEmail;
     private final RestClient restClient = RestClient.create();
 
     public AuthService(UserRepository userRepository,
@@ -37,13 +38,15 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        JwtUtil jwtUtil,
                        EmailVerificationService emailVerificationService,
-                       @Value("${app.google.client-id:}") String googleClientId) {
+                       @Value("${app.google.client-id:}") String googleClientId,
+                       @Value("${app.support.email:support@manyorder.app}") String supportEmail) {
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
         this.emailVerificationService = emailVerificationService;
         this.googleClientId = googleClientId == null ? "" : googleClientId.trim();
+        this.supportEmail = supportEmail;
     }
 
     public String getGoogleClientId() {
@@ -74,7 +77,7 @@ public class AuthService {
         };
         if (suspended) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "This account has been suspended. Please contact support.");
+                    "This account has been suspended. Please contact support at " + supportEmail + ".");
         }
     }
 

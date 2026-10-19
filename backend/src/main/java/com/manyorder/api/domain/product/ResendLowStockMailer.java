@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.manyorder.api.domain.storeemailverification.StoreEmail;
 import com.manyorder.api.email.EmailLayout;
+import com.manyorder.api.email.ResendEmail;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,19 +29,21 @@ import com.manyorder.api.domain.merchant.Merchant;
 public class ResendLowStockMailer implements LowStockMailer {
 
     private static final Logger log = LoggerFactory.getLogger(ResendLowStockMailer.class);
-    private static final String RESEND_EMAILS_URL = "https://api.resend.com/emails";
 
     private final String apiKey;
     private final String fromAddress;
+    private final String supportEmail;
     private final String frontendBaseUrl;
     private final RestClient restClient = RestClient.create();
 
     public ResendLowStockMailer(
             @Value("${app.resend.api-key:}") String apiKey,
             @Value("${app.mail.from:onboarding@resend.dev}") String fromAddress,
+            @Value("${app.support.email:support@manyorder.app}") String supportEmail,
             @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.fromAddress = fromAddress;
+        this.supportEmail = supportEmail;
         this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
                 ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
                 : frontendBaseUrl;
@@ -60,15 +63,14 @@ public class ResendLowStockMailer implements LowStockMailer {
             return;
         }
 
-        Map<String, Object> payload = Map.of(
-                "from", fromAddress,
-                "to", to,
-                "subject", subjectFor(product.getName(), stock),
-                "html", buildHtml(merchant.getName(), product.getName(), stock, frontendBaseUrl + "/app"));
+        Map<String, Object> payload = ResendEmail.payload(
+                fromAddress, to, supportEmail,
+                subjectFor(product.getName(), stock),
+                buildHtml(merchant.getName(), product.getName(), stock, frontendBaseUrl + "/app", supportEmail));
 
         try {
             restClient.post()
-                    .uri(RESEND_EMAILS_URL)
+                    .uri(ResendEmail.RESEND_EMAILS_URL)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(payload)
@@ -92,7 +94,7 @@ public class ResendLowStockMailer implements LowStockMailer {
 
     /** Email body, with wording that reflects out-of-stock vs running-low, an
      *  "Open Products" button and the opt-out footer. */
-    static String buildHtml(String storeName, String productName, int stock, String productsUrl) {
+    static String buildHtml(String storeName, String productName, int stock, String productsUrl, String supportEmail) {
         boolean outOfStock = stock == 0;
         String heading = outOfStock
                 ? productName + " is out of stock"
@@ -104,6 +106,6 @@ public class ResendLowStockMailer implements LowStockMailer {
         String inner = "<p style=\"margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;\">" + body + "</p>"
                 + EmailLayout.button("Open Products", productsUrl)
                 + "<p style=\"color:#9ca3af;font-size:12px;\">Turn off low stock emails in Settings.</p>";
-        return EmailLayout.shell(heading, inner);
+        return EmailLayout.shell(heading, inner, supportEmail);
     }
 }

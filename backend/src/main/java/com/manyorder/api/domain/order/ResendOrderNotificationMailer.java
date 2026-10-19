@@ -15,6 +15,7 @@ import org.springframework.web.client.RestClient;
 import com.manyorder.api.domain.merchant.Merchant;
 import com.manyorder.api.domain.storeemailverification.StoreEmail;
 import com.manyorder.api.email.EmailLayout;
+import com.manyorder.api.email.ResendEmail;
 
 /**
  * Delivers "new order" notifications to merchants through Resend's REST API.
@@ -28,19 +29,21 @@ import com.manyorder.api.email.EmailLayout;
 public class ResendOrderNotificationMailer implements OrderNotificationMailer {
 
     private static final Logger log = LoggerFactory.getLogger(ResendOrderNotificationMailer.class);
-    private static final String RESEND_EMAILS_URL = "https://api.resend.com/emails";
 
     private final String apiKey;
     private final String fromAddress;
+    private final String supportEmail;
     private final OrderItemRepository orderItemRepository;
     private final RestClient restClient = RestClient.create();
 
     public ResendOrderNotificationMailer(
             @Value("${app.resend.api-key:}") String apiKey,
             @Value("${app.mail.from:onboarding@resend.dev}") String fromAddress,
+            @Value("${app.support.email:support@manyorder.app}") String supportEmail,
             OrderItemRepository orderItemRepository) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.fromAddress = fromAddress;
+        this.supportEmail = supportEmail;
         this.orderItemRepository = orderItemRepository;
     }
 
@@ -57,15 +60,13 @@ public class ResendOrderNotificationMailer implements OrderNotificationMailer {
             return;
         }
 
-        Map<String, Object> payload = Map.of(
-                "from", fromAddress,
-                "to", to,
-                "subject", "New order at " + merchant.getName(),
-                "html", buildHtml(merchant, orders));
+        Map<String, Object> payload = ResendEmail.payload(
+                fromAddress, to, supportEmail,
+                "New order at " + merchant.getName(), buildHtml(merchant, orders));
 
         try {
             restClient.post()
-                    .uri(RESEND_EMAILS_URL)
+                    .uri(ResendEmail.RESEND_EMAILS_URL)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(payload)
@@ -113,7 +114,7 @@ public class ResendOrderNotificationMailer implements OrderNotificationMailer {
                 primary.getOrderType().name().equals("DELIVERY") ? "Delivery" : "Pickup",
                 lines.toString(),
                 money(grandTotal, currency));
-        return EmailLayout.shell("New order at " + merchant.getName(), inner);
+        return EmailLayout.shell("New order at " + merchant.getName(), inner, supportEmail);
     }
 
     private static String money(BigDecimal amount, String currency) {

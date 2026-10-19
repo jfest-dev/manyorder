@@ -4,10 +4,12 @@ import java.util.List;
 
 /**
  * The one shared HTML shell for every platform email: a black header bar with
- * the ManyOrder wordmark, a title, the caller's body, a "Questions? Reply to
- * this email." line, and a quiet footer. {@link #shell} is the primitive every
- * email uses; {@link #render} is the convenience form for the admin notices
- * (intro + summary box + "Open your dashboard" button).
+ * the ManyOrder wordmark, a title, the caller's body, a "Questions? Contact
+ * support at ..." line (the address as a mailto link), and a quiet footer.
+ * {@link #shell} is the primitive every email uses; {@link #render} is the
+ * convenience form for the admin notices (intro + summary box + an optional
+ * "Open your dashboard" button). The sender stays no-reply; this support
+ * address is where owners are pointed instead.
  *
  * <p>All caller-supplied text must be escaped with {@link #escape}; the helpers
  * here ({@link #button}, {@link #summaryTable}) escape their own inputs.
@@ -18,8 +20,9 @@ public final class EmailLayout {
 
     private EmailLayout() {}
 
-    /** Header + title + the caller's inner body (already HTML) + reply line + footer. */
-    public static String shell(String title, String innerHtml) {
+    /** Header + title + the caller's inner body (already HTML) + support line + footer. */
+    public static String shell(String title, String innerHtml, String supportEmail) {
+        String safeEmail = escape(supportEmail);
         return """
                 <!doctype html>
                 <html>
@@ -31,7 +34,7 @@ public final class EmailLayout {
                       <div style="padding:24px;color:#111827;">
                         <h1 style="margin:0 0 12px;font-size:20px;font-weight:700;">%s</h1>
                         %s
-                        <p style="margin:16px 0 4px;color:#374151;font-size:14px;">Questions? Reply to this email.</p>
+                        <p style="margin:16px 0 4px;color:#374151;font-size:14px;">Questions? Contact support at <a href="mailto:%s" style="color:#374151;">%s</a></p>
                       </div>
                       <div style="padding:16px 24px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;">
                         ManyOrder. You're receiving this because you have a store on ManyOrder.
@@ -39,7 +42,7 @@ public final class EmailLayout {
                     </div>
                   </body>
                 </html>
-                """.formatted(escape(title), innerHtml);
+                """.formatted(escape(title), innerHtml, safeEmail, safeEmail);
     }
 
     /** A primary button (escaped label + url). */
@@ -73,12 +76,19 @@ public final class EmailLayout {
                 """.formatted(body.toString());
     }
 
-    /** Convenience for the admin owner notices: intro + summary box + dashboard button. */
-    public static String render(String title, String intro, List<Row> summary, String dashboardUrl) {
+    /**
+     * Convenience for the admin owner notices: intro + summary box + an optional
+     * "Open your dashboard" button. The button is omitted when {@code dashboardUrl}
+     * is null or blank, which is how the suspend notice drops it (a suspended owner
+     * cannot sign in).
+     */
+    public static String render(String title, String intro, List<Row> summary, String dashboardUrl, String supportEmail) {
         String introHtml = intro == null || intro.isBlank() ? ""
                 : "<p style=\"margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;\">" + escape(intro) + "</p>";
-        String inner = introHtml + summaryTable(summary) + button("Open your dashboard", dashboardUrl);
-        return shell(title, inner);
+        String buttonHtml = dashboardUrl == null || dashboardUrl.isBlank() ? ""
+                : button("Open your dashboard", dashboardUrl);
+        String inner = introHtml + summaryTable(summary) + buttonHtml;
+        return shell(title, inner, supportEmail);
     }
 
     /** Minimal HTML-escaping for all caller-supplied text. */

@@ -1,6 +1,7 @@
 package com.manyorder.api.domain.passwordreset;
 
 import com.manyorder.api.email.EmailLayout;
+import com.manyorder.api.email.ResendEmail;
 
 import java.util.Map;
 
@@ -23,17 +24,19 @@ import org.springframework.web.client.RestClient;
 public class ResendPasswordResetMailer implements PasswordResetMailer {
 
     private static final Logger log = LoggerFactory.getLogger(ResendPasswordResetMailer.class);
-    private static final String RESEND_EMAILS_URL = "https://api.resend.com/emails";
 
     private final String apiKey;
     private final String fromAddress;
+    private final String supportEmail;
     private final RestClient restClient = RestClient.create();
 
     public ResendPasswordResetMailer(
             @Value("${app.resend.api-key:}") String apiKey,
-            @Value("${app.mail.from:onboarding@resend.dev}") String fromAddress) {
+            @Value("${app.mail.from:onboarding@resend.dev}") String fromAddress,
+            @Value("${app.support.email:support@manyorder.app}") String supportEmail) {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.fromAddress = fromAddress;
+        this.supportEmail = supportEmail;
     }
 
     @Override
@@ -43,15 +46,13 @@ public class ResendPasswordResetMailer implements PasswordResetMailer {
             return;
         }
 
-        Map<String, Object> payload = Map.of(
-                "from", fromAddress,
-                "to", email,
-                "subject", "Reset your ManyOrder password",
-                "html", buildHtml(resetUrl));
+        Map<String, Object> payload = ResendEmail.payload(
+                fromAddress, email, supportEmail,
+                "Reset your ManyOrder password", buildHtml(resetUrl));
 
         try {
             restClient.post()
-                    .uri(RESEND_EMAILS_URL)
+                    .uri(ResendEmail.RESEND_EMAILS_URL)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(payload)
@@ -71,6 +72,6 @@ public class ResendPasswordResetMailer implements PasswordResetMailer {
                 <p style="color:#6b7280;font-size:13px;">If you didn't request this, you can safely ignore this email, your password won't change.</p>
                 <p style="color:#9ca3af;font-size:12px;word-break:break-all;">Or paste this link into your browser:<br>%s</p>
                 """.formatted(EmailLayout.button("Set a new password", resetUrl), EmailLayout.escape(resetUrl));
-        return EmailLayout.shell("Reset your password", inner);
+        return EmailLayout.shell("Reset your password", inner, supportEmail);
     }
 }

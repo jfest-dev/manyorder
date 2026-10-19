@@ -67,9 +67,25 @@ describe('AdminActivity', () => {
     expect(screen.getByText('Latte', { exact: false })).toBeTruthy();       // target label
     expect(screen.getByText('Blurry photo', { exact: false })).toBeTruthy(); // reason
     expect(screen.getByText(/emailed owner/)).toBeTruthy();                   // email flag
+    expect(screen.getByText('#5', { exact: false })).toBeTruthy();            // store id beside the name
     await user.click(screen.getByRole('button', { name: 'Kiri Brew' }));     // store link
     expect(onOpenStore).toHaveBeenCalledWith(5);
     // The raw code is not shown.
     expect(screen.queryByText('DEACTIVATE_PRODUCT')).toBeNull();
+  });
+
+  it('shows the slug in muted text when the store is in the current list', async () => {
+    auditLog.mockResolvedValue([
+      { id: 1, actorEmail: 'admin@manyorder.app', action: 'SUSPEND_MERCHANT', targetType: 'MERCHANT',
+        targetId: 5, merchantId: 5, detail: null, createdAt: '2026-10-02T09:00:00', storeName: 'Kiri Brew' },
+    ]);
+    listMerchants.mockResolvedValue([
+      { id: 5, name: 'Kiri Brew', slug: 'kiri-brew', ownerName: 'A', ownerEmail: 'a@x.com',
+        status: 'SUSPENDED', currency: 'SGD', createdAt: '2026-01-01T00:00:00Z',
+        productCount: 0, orderCount: 0, customerCount: 0 },
+    ]);
+    render(<AdminActivity onOpenStore={vi.fn()} />);
+    expect(await screen.findByText('/kiri-brew', { exact: false })).toBeTruthy();
+    expect(screen.getByText('#5', { exact: false })).toBeTruthy();
   });
 });

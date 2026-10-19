@@ -165,7 +165,11 @@ export function AdminApp() {
                 style={{ ...adminText.body, background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, padding: 0, marginBottom: 10 }}>
                 ← All merchants
               </button>
-              <h2 style={{ margin: '0 0 12px', ...adminText.title, lineHeight: 1.3 }}>{selected.name}</h2>
+              <h2 style={{ margin: '0 0 2px', ...adminText.title, lineHeight: 1.3 }}>
+                {selected.name}{' '}
+                <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>#{selected.id}</span>
+              </h2>
+              <p className="text-xs" style={{ margin: '0 0 12px', color: 'var(--text-muted)' }}>/{selected.slug}</p>
 
               <StoreHeader summary={selected} />
 

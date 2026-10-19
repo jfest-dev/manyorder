@@ -14,6 +14,28 @@ import { useAuth } from '../../context/AuthContext';
 // validation text (and never fire both at once).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Match an email inside a longer message so we can turn it into a mailto link.
+const EMAIL_IN_TEXT = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+
+/**
+ * Render an error message, turning any email address it contains into a mailto
+ * link. The suspended-account message carries the support address from the
+ * backend config, so the address is never hard-coded here.
+ */
+function renderError(message: string): React.ReactNode {
+  const match = EMAIL_IN_TEXT.exec(message);
+  if (!match) return message;
+  const email = match[0].replace(/[.,;:]+$/, ''); // drop trailing punctuation
+  const start = match.index;
+  return (
+    <>
+      {message.slice(0, start)}
+      <a href={`mailto:${email}`} style={{ color: 'inherit' }}>{email}</a>
+      {message.slice(start + email.length)}
+    </>
+  );
+}
+
 export function SignIn() {
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -81,7 +103,7 @@ export function SignIn() {
         </div>
 
         {error && (
-          <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>
+          <p className="text-small" style={{ color: 'var(--error-color)' }}>{renderError(error)}</p>
         )}
 
         <Button variant="primary" fullWidth onClick={submit} disabled={busy || !email || !password}>

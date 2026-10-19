@@ -11,6 +11,7 @@ import com.manyorder.api.domain.admin.AdminAuditLogRepository;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -53,7 +54,10 @@ class AdminSuspendIntegrationTest extends IntegrationTestBase {
         mockMvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 Map.of("email", "suspend-me@test.com", "password", "password123"))))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                // The message points the owner at the configured support address.
+                .andExpect(jsonPath("$.message").value(
+                        "This account has been suspended. Please contact support at support@manyorder.app."));
         getWithToken("/merchant/stores/" + storeId + "/products", merchant, 404);
 
         // Audit row recorded.

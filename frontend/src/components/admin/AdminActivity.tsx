@@ -85,6 +85,13 @@ export function AdminActivity({ onOpenStore }: Props) {
     return m;
   }, [stores]);
 
+  // Current slug by id, shown muted beside the store name when known.
+  const storeSlugById = useMemo(() => {
+    const m = new Map<number, string>();
+    stores.forEach((s) => m.set(s.id, s.slug));
+    return m;
+  }, [stores]);
+
   const storeNameFor = (a: AdminAuditLogEntry): string | null => {
     if (a.storeName && a.storeName.trim() !== '') return a.storeName;
     if (a.merchantId != null) return storeNameById.get(a.merchantId) ?? `Store #${a.merchantId}`;
@@ -121,10 +128,14 @@ export function AdminActivity({ onOpenStore }: Props) {
                   </div>
                   <div className="text-xs" style={{ color: 'var(--text-muted)', wordBreak: 'break-word' }}>
                     {storeName && a.merchantId != null ? (
-                      <button type="button" onClick={() => onOpenStore(a.merchantId!)}
-                        style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, fontSize: 'inherit' }}>
-                        {storeName}
-                      </button>
+                      <>
+                        <button type="button" onClick={() => onOpenStore(a.merchantId!)}
+                          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, fontSize: 'inherit' }}>
+                          {storeName}
+                        </button>
+                        <span> #{a.merchantId}</span>
+                        {storeSlugById.get(a.merchantId) ? <span> · /{storeSlugById.get(a.merchantId)}</span> : null}
+                      </>
                     ) : (storeName ?? '-')}
                     {a.detail ? <span> · {a.detail}</span> : null}
                   </div>
