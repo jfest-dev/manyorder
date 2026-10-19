@@ -556,3 +556,15 @@ public proxy URL so the service stays up. Then check, without changing anything 
 
 See the Part D notes for the full reasoning. The public proxy works (just slower), so
 this is a networking/resolution issue, not credentials.
+
+## Maintenance routine, before real merchants
+
+Set a monthly recurring check for security and dependency updates: run `npm audit` in
+frontend and the Maven dependency check (`./mvnw versions:display-dependency-updates`,
+plus `./mvnw org.owasp:dependency-check-maven:check` for known CVEs) in backend, and
+turn on GitHub Dependabot (a `.github/dependabot.yml` watching the npm and Maven
+ecosystems) so update PRs arrive automatically. We currently run Java 21, Spring Boot
+4.0.2, React 18.3 and TypeScript 5.9 (declared ^5.6). Upgrade one tool at a time, never
+several at once, running the full backend and frontend test suites plus a production
+build after each bump as the safety net, so when something breaks it is obvious which
+upgrade caused it and the change can be reverted on its own.
