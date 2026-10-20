@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { AuthLayout, SecurityFooter } from '../auth/AuthLayout';
 import { Button } from '../Button';
-import { storesApi, getToken } from '../../lib/api';
+import { storesApi } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
 type Phase = 'confirming' | 'success' | 'error';
@@ -17,12 +17,13 @@ type Phase = 'confirming' | 'success' | 'error';
 export function ConfirmStoreEmail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const token = searchParams.get('token') || '';
-  // Whether THIS tab holds a session. With "Remember me" unticked the token lives
-  // in per-tab sessionStorage, so a link opened in a new tab has none even if the
-  // original tab is signed in. We route the success button accordingly.
-  const hasToken = getToken() != null;
+  // The confirmed value is the store's contact email, which often differs from the
+  // owner's login email, so it can't reliably tell us whether the right person is
+  // signed in. We fall back to the session role: a store dashboard is only useful
+  // to a MERCHANT or STAFF session, never to a platform admin or a signed-out tab.
+  const canDashboard = user?.role === 'MERCHANT' || user?.role === 'STAFF';
 
   const [phase, setPhase] = useState<Phase>(token ? 'confirming' : 'error');
   const [storeName, setStoreName] = useState('');
@@ -65,8 +66,8 @@ export function ConfirmStoreEmail() {
               ? `${confirmedEmail} will now receive notifications for ${storeName}.`
               : 'Your store email is confirmed.'}
           </p>
-          <Button variant="primary" fullWidth onClick={() => navigate(hasToken ? '/app' : '/signin')}>
-            {hasToken ? 'Go to dashboard' : 'Go to sign in'}
+          <Button variant="primary" fullWidth onClick={() => navigate(canDashboard ? '/app' : '/signin')}>
+            {canDashboard ? 'Go to dashboard' : 'Go to sign in'}
           </Button>
         </div>
       </AuthLayout>
@@ -80,8 +81,8 @@ export function ConfirmStoreEmail() {
         <p className="text-small" style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
           It may have expired or already been used. Send a new confirmation from Settings.
         </p>
-        <Button variant="primary" fullWidth onClick={() => navigate(isAuthenticated ? '/app' : '/signin')}>
-          {isAuthenticated ? 'Go to settings' : 'Go to sign in'}
+        <Button variant="primary" fullWidth onClick={() => navigate(canDashboard ? '/app' : '/signin')}>
+          {canDashboard ? 'Go to settings' : 'Go to sign in'}
         </Button>
       </div>
     </AuthLayout>

@@ -86,9 +86,8 @@ public class AuthController {
      * success; 400 if the token is invalid, expired, or already used.
      */
     @PostMapping("/verify-email")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
-        emailVerificationService.verify(request.getToken());
+    public Map<String, String> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        return Map.of("email", emailVerificationService.verify(request.getToken()));
     }
 
     /**

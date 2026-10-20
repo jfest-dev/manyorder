@@ -99,7 +99,7 @@ public class EmailVerificationService {
      * is unknown, expired, or already used.
      */
     @Transactional
-    public void verify(String rawToken) {
+    public String verify(String rawToken) {
         EmailVerificationToken token = tokenRepository.findByTokenHash(sha256Hex(rawToken))
                 .filter(t -> !t.isUsed() && !t.isExpired())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_TOKEN_MESSAGE));
@@ -113,6 +113,9 @@ public class EmailVerificationService {
         tokenRepository.save(token);
         // Invalidate any other links already sitting in the user's inbox.
         tokenRepository.markAllUsedForUser(user, now);
+        // The confirmed address is the account's login email, so the confirmation
+        // page can tell whether it matches the session.
+        return user.getEmail();
     }
 
     private String generateToken() {

@@ -409,7 +409,7 @@ export const authApi = {
    * success; a 400 means the token is invalid, expired, or already used.
    */
   verifyEmail: (token: string) =>
-    request<void>('/auth/verify-email', {
+    request<{ email: string }>('/auth/verify-email', {
       method: 'POST',
       body: { token },
       auth: false,

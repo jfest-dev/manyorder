@@ -86,12 +86,17 @@ class EmailVerificationIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void verifyLink_marksAccountVerified() throws Exception {
+    void verifyLink_marksAccountVerified_andReturnsTheConfirmedEmail() throws Exception {
         String email = "ev-happy@test.com";
         String token = tokenFromRegistration(email);
         assertFalse(isVerified(email));
 
-        verifyEmail(token, 204);
+        // The response carries the confirmed address so the page can match it to the session.
+        mockMvc.perform(post("/auth/verify-email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("token", token))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email));
 
         assertTrue(isVerified(email));
     }
@@ -114,7 +119,7 @@ class EmailVerificationIntegrationTest extends IntegrationTestBase {
         String email = "ev-onetime@test.com";
         String token = tokenFromRegistration(email);
 
-        verifyEmail(token, 204); // first use verifies
+        verifyEmail(token, 200); // first use verifies
         verifyEmail(token, 400); // second use rejected
         assertTrue(isVerified(email)); // first verification stuck
     }
@@ -147,7 +152,7 @@ class EmailVerificationIntegrationTest extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.verified").value(false));
 
-        verifyEmail(token, 204);
+        verifyEmail(token, 200);
 
         mockMvc.perform(get("/auth/me").header("Authorization", "Bearer " + jwt))
                 .andExpect(status().isOk())
