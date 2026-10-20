@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const storeDetail = vi.fn();
 const auditLog = vi.fn();
 const productsList = vi.fn();
+const protectFn = vi.fn();
+const unprotectFn = vi.fn();
+const restoreFn = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api')>();
@@ -15,6 +19,9 @@ vi.mock('../../lib/api', async (importOriginal) => {
       storeDetail: () => storeDetail(),
       auditLog: () => auditLog(),
       productsFor: () => ({ list: () => productsList() }),
+      protect: (id: number) => protectFn(id),
+      unprotect: (id: number) => unprotectFn(id),
+      restore: (id: number, reason: string, emailOwner: boolean) => restoreFn(id, reason, emailOwner),
     },
   };
 });
@@ -37,7 +44,7 @@ const DETAIL = {
     fulfilmentMode: 'BOTH', deliveryFee: 3, freeDeliveryThreshold: 30,
     themeColor: null, logoUrl: null, whatsappVerified: true,
     notifyNewOrderEmail: true, notifyLowStockEmail: false, notifyNewOrderWhatsapp: true,
-    notifyUrgentWhatsapp: true, itemNotesEnabled: true,
+    notifyUrgentWhatsapp: true, itemNotesEnabled: true, protectedFromDeletion: false,
     createdAt: '2026-01-02T10:00:00', suspendedAt: null, archivedAt: null, lastOrdersViewedAt: null,
   },
   activity: {
@@ -56,6 +63,9 @@ beforeEach(() => {
   storeDetail.mockReset().mockResolvedValue(DETAIL);
   auditLog.mockReset().mockResolvedValue(ACTIONS);
   productsList.mockReset().mockResolvedValue(PRODUCTS);
+  protectFn.mockReset().mockResolvedValue(undefined);
+  unprotectFn.mockReset().mockResolvedValue(undefined);
+  restoreFn.mockReset().mockResolvedValue(undefined);
 });
 
 describe('StoreDetail', () => {
@@ -108,5 +118,34 @@ describe('StoreDetail', () => {
     expect(auditLog).toHaveBeenCalledTimes(1);
     expect(storeDetail).toHaveBeenCalledTimes(1);
     expect(productsList).toHaveBeenCalledTimes(1);
+  });
+
+  it('store administration: protect toggle calls the API; Delete now is disabled and not available yet', async () => {
+    const user = userEvent.setup();
+    render(<StoreDetail merchantId={5} />);
+    await screen.findByText('owner@kiri.test');
+
+    expect(screen.getByText('Store administration')).toBeTruthy();
+    // Delete now is present but disabled, labelled not available yet.
+    const deleteNow = screen.getByRole('button', { name: 'Delete now' });
+    expect((deleteNow as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Not available yet')).toBeTruthy();
+
+    // Toggling protection on calls protect().
+    await user.click(screen.getByLabelText('Protected from deletion'));
+    await waitFor(() => expect(protectFn).toHaveBeenCalledWith(5));
+  });
+
+  it('store administration: no Restore button for an active store', async () => {
+    render(<StoreDetail merchantId={5} />);
+    await screen.findByText('owner@kiri.test');
+    expect(screen.queryByRole('button', { name: 'Restore store' })).toBeNull();
+  });
+
+  it('store administration: Restore shows when the owner deleted the store', async () => {
+    storeDetail.mockResolvedValue({ ...DETAIL, status: 'ARCHIVED', profile: { ...DETAIL.profile, archivedAt: '2026-10-01T00:00:00' } });
+    render(<StoreDetail merchantId={5} />);
+    await screen.findByText('owner@kiri.test');
+    expect(screen.getByRole('button', { name: 'Restore store' })).toBeTruthy();
   });
 });

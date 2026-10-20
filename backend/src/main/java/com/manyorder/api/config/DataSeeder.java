@@ -339,6 +339,7 @@ public class DataSeeder implements CommandLineRunner {
         m.setOperatingHours(operatingHours);
         m.setStoreDescription(description);
         m.setPaymentInstruction(paymentInstruction);
+        m.setProtectedFromDeletion(true); // demo stores are shielded from admin delete + cleanup
         return merchantRepository.save(m);
     }
 

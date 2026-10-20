@@ -25,7 +25,9 @@ public interface MerchantActionMailer {
         DISCOUNT_DISABLED(true, "A discount on %s was switched off", "A discount was switched off",
                 "A discount in your store was switched off and can no longer be used."),
         DISCOUNT_ENABLED(false, "A discount on %s is active again", "A discount is active again",
-                "A discount in your store is active again.");
+                "A discount in your store is active again."),
+        STORE_RESTORED(false, "Your store %s has been restored", "Your store has been restored",
+                "Good news: your store has been restored and is available again.");
 
         private final boolean restricting;
         private final String subjectFormat;

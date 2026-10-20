@@ -147,6 +147,15 @@ public class Merchant {
      */
     private LocalDateTime suspendedAt;
 
+    /**
+     * When true, the store is shielded from deletion: a platform admin cannot
+     * "Delete now" and the retention cleanup job skips it. Nullable (treated as
+     * false) so the column adds cleanly to the existing merchants table; the demo
+     * stores are seeded protected.
+     */
+    @Column(name = "protected_from_deletion")
+    private Boolean protectedFromDeletion;
+
     protected Merchant() {}
 
     public Merchant(User owner, String name, String slug, String email, String phoneNumber) {
@@ -219,4 +228,6 @@ public class Merchant {
     public LocalDateTime getSuspendedAt() { return suspendedAt; }
     public void setSuspendedAt(LocalDateTime suspendedAt) { this.suspendedAt = suspendedAt; }
     public boolean isSuspended() { return suspendedAt != null; }
+    public boolean isProtectedFromDeletion() { return Boolean.TRUE.equals(protectedFromDeletion); }
+    public void setProtectedFromDeletion(boolean protectedFromDeletion) { this.protectedFromDeletion = protectedFromDeletion; }
 }

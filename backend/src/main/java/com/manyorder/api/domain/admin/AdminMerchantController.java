@@ -118,6 +118,52 @@ public class AdminMerchantController {
         }
     }
 
+    /** Protect a store from deletion (admin Delete-now and the cleanup job both skip it). Idempotent, audited. */
+    @PostMapping("/{merchantId}/protect")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    public void protect(@PathVariable Long merchantId, Authentication authentication) {
+        setProtection(merchantId, true, "PROTECT_STORE", authentication);
+    }
+
+    /** Remove deletion protection. Idempotent, audited. */
+    @PostMapping("/{merchantId}/unprotect")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    public void unprotect(@PathVariable Long merchantId, Authentication authentication) {
+        setProtection(merchantId, false, "UNPROTECT_STORE", authentication);
+    }
+
+    private void setProtection(Long merchantId, boolean value, String action, Authentication authentication) {
+        User admin = currentUserService.require(authentication);
+        Merchant merchant = requireMerchant(merchantId);
+        if (merchant.isProtectedFromDeletion() != value) {
+            merchant.setProtectedFromDeletion(value);
+            merchantRepository.save(merchant);
+            adminAuditService.record(admin, action, "MERCHANT", merchant.getId(), merchant.getId(),
+                    null, false, merchant.getName(), merchant.getName());
+        }
+    }
+
+    /** Restore a store the owner deleted (archived), until it is erased. Clears the deleted marker,
+     *  emails the owner by default, and is audited. Refused if the store is not owner-deleted. */
+    @PostMapping("/{merchantId}/restore")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    public void restore(@PathVariable Long merchantId, @RequestBody AdminReasonRequest body, Authentication authentication) {
+        String reason = body.optionalReason();
+        User admin = currentUserService.require(authentication);
+        Merchant merchant = requireMerchant(merchantId);
+        if (!merchant.isArchived()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This store has not been deleted by its owner.");
+        }
+        merchant.setArchivedAt(null);
+        merchantRepository.save(merchant);
+        boolean sent = body.shouldEmail() && notifyOwner(merchant, MerchantActionMailer.Action.STORE_RESTORED, reason);
+        adminAuditService.record(admin, "RESTORE_STORE", "MERCHANT", merchant.getId(), merchant.getId(),
+                reason, sent, merchant.getName(), merchant.getName());
+    }
+
     /** Email the owner, swallowing any failure: a failed notice must never undo the action. Returns whether sent. */
     private boolean notifyOwner(Merchant merchant, MerchantActionMailer.Action action, String reason) {
         try {

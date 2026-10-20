@@ -45,6 +45,7 @@ public record AdminStoreDetailResponse(
             boolean notifyNewOrderWhatsapp,
             boolean notifyUrgentWhatsapp,
             boolean itemNotesEnabled,
+            boolean protectedFromDeletion,
             LocalDateTime createdAt,
             LocalDateTime suspendedAt,
             LocalDateTime archivedAt,

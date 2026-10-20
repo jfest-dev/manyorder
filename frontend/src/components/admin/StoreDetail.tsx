@@ -5,6 +5,9 @@ import { formatMoney } from '../../lib/currency';
 import { formatDate, formatDateTime } from '../../lib/adminDatetime';
 import { ADMIN_FONT } from './adminTokens';
 import { VerifiedBadge } from '../VerifiedBadge';
+import { Checkbox } from '../Checkbox';
+import { Button } from '../Button';
+import { useConfirmReason } from '../ConfirmDialog';
 
 const EMPTY = '-';
 function text(v: string | null | undefined): string {
@@ -61,13 +64,19 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** Read-only Platform Admin store overview: activity first, then owner, profile and admin activity. */
-export function StoreDetail({ merchantId }: { merchantId: number }) {
+/** Read-only Platform Admin store overview: activity first, then owner, profile, admin
+ *  activity, and the admin store-administration panel (protect, restore). `onChanged`
+ *  lets the parent refresh the selected-store summary after an action. */
+export function StoreDetail({ merchantId, onChanged }: { merchantId: number; onChanged?: () => void }) {
+  const confirmReason = useConfirmReason();
   const [detail, setDetail] = useState<AdminStoreDetail | null>(null);
   const [actions, setActions] = useState<AdminAuditLogEntry[]>([]);
   const [products, setProducts] = useState<ProductResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +91,45 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
       .catch((e) => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load store detail'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [merchantId]);
+  }, [merchantId, reloadToken]);
+
+  const reload = () => setReloadToken((n) => n + 1);
+
+  const toggleProtect = async (next: boolean) => {
+    setBusy(true);
+    setAdminError(null);
+    try {
+      await (next ? adminApi.protect(merchantId) : adminApi.unprotect(merchantId));
+      reload();
+      onChanged?.();
+    } catch (e) {
+      setAdminError(e instanceof ApiError ? e.message : 'Could not update protection');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doRestore = async () => {
+    const result = await confirmReason({
+      title: `Restore ${detail?.name ?? 'this store'}?`,
+      message: 'This makes the store available to customers again and lets the owner use it.',
+      confirmLabel: 'Restore',
+      reasonOptional: true,
+      emailOwnerDefault: true,
+    });
+    if (result == null) return;
+    setBusy(true);
+    setAdminError(null);
+    try {
+      await adminApi.restore(merchantId, result.reason, result.emailOwner);
+      reload();
+      onChanged?.();
+    } catch (e) {
+      setAdminError(e instanceof ApiError ? e.message : 'Could not restore the store');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (loading) return <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading store detail…</p>;
   if (error) return <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>;
@@ -191,6 +238,40 @@ export function StoreDetail({ merchantId }: { merchantId: number }) {
             </div>
           ))
         )}
+      </div>
+
+      {/* Store administration (platform admin) */}
+      <div style={cardStyle}>
+        <p style={titleStyle}>Store administration</p>
+
+        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: busy ? 'default' : 'pointer', padding: '4px 0' }}>
+          <Checkbox checked={profile.protectedFromDeletion} onChange={toggleProtect} disabled={busy} ariaLabel="Protected from deletion" style={{ marginTop: 2 }} />
+          <span>
+            <span className="text-small" style={{ fontWeight: 600, display: 'block' }}>Protected from deletion</span>
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>A protected store can't be deleted by an admin or the cleanup job.</span>
+          </span>
+        </label>
+
+        {detail.status === 'ARCHIVED' && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+            <div className="text-small" style={{ fontWeight: 600, marginBottom: 2 }}>Deleted by owner</div>
+            <p className="text-xs" style={{ color: 'var(--text-secondary)', margin: '0 0 8px' }}>
+              Restore it to make the storefront available again and let the owner back in.
+            </p>
+            <Button variant="secondary" onClick={doRestore} disabled={busy}>Restore store</Button>
+          </div>
+        )}
+
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Button variant="secondary" disabled>
+              <span style={{ color: 'var(--error-color)', fontWeight: 600 }}>Delete now</span>
+            </Button>
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Not available yet</span>
+          </div>
+        </div>
+
+        {adminError && <p className="text-xs" style={{ color: 'var(--error-color)', marginTop: 10 }}>{adminError}</p>}
       </div>
     </div>
   );

@@ -1097,6 +1097,7 @@ export interface AdminStoreDetail {
     notifyNewOrderWhatsapp: boolean;
     notifyUrgentWhatsapp: boolean;
     itemNotesEnabled: boolean;
+    protectedFromDeletion: boolean;
     createdAt: string;
     suspendedAt: string | null;
     archivedAt: string | null;
@@ -1161,6 +1162,12 @@ export const adminApi = {
     request<void>(`/admin/merchants/${merchantId}/suspend`, { method: 'POST', body: { reason } }),
   unsuspend: (merchantId: number, reason: string, emailOwner: boolean) =>
     request<void>(`/admin/merchants/${merchantId}/unsuspend`, { method: 'POST', body: { reason, emailOwner } }),
+  protect: (merchantId: number) =>
+    request<void>(`/admin/merchants/${merchantId}/protect`, { method: 'POST' }),
+  unprotect: (merchantId: number) =>
+    request<void>(`/admin/merchants/${merchantId}/unprotect`, { method: 'POST' }),
+  restore: (merchantId: number, reason: string, emailOwner: boolean) =>
+    request<void>(`/admin/merchants/${merchantId}/restore`, { method: 'POST', body: { reason, emailOwner } }),
 
   /** Customer management scoped to one merchant — same shape as customersApi (minus storeId),
    *  so an admin can drive the shared Customers screen against /admin endpoints. */

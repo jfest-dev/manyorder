@@ -204,7 +204,16 @@ export function AdminApp() {
                 ))}
               </div>
 
-              {tab === 'overview' && <StoreDetail merchantId={selected.id} />}
+              {tab === 'overview' && (
+                <StoreDetail
+                  merchantId={selected.id}
+                  onChanged={() => {
+                    adminApi.getMerchant(selected.id).then(setSelected).catch(() => { /* keep the current summary */ });
+                    loadMetrics();
+                    setMerchantsReload((n) => n + 1);
+                  }}
+                />
+              )}
               {tab === 'dashboard' && (
                 <Dashboard
                   store={{ id: String(selected.id), name: selected.name, slug: selected.slug, color: '#000000', currency: selected.currency }}

@@ -215,7 +215,7 @@ public class AdminMerchantService {
                 m.getThemeColor(), m.getLogoUrl(), m.isWhatsappVerified(),
                 m.isNotifyNewOrderEmail(), m.isNotifyLowStockEmail(),
                 m.isNotifyNewOrderWhatsapp(), m.isNotifyUrgentWhatsapp(),
-                m.isItemNotesEnabled(), m.getCreatedAt(), m.getSuspendedAt(),
+                m.isItemNotesEnabled(), m.isProtectedFromDeletion(), m.getCreatedAt(), m.getSuspendedAt(),
                 m.getArchivedAt(), m.getLastOrdersViewedAt());
 
         var activity = new AdminStoreDetailResponse.Activity(
