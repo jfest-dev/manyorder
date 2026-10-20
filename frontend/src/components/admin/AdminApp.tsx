@@ -17,6 +17,7 @@ import { AdminActivity } from './AdminActivity';
 import { AdminOverview } from './AdminOverview';
 import { MerchantsList } from './MerchantsList';
 import { ADMIN_FONT, ADMIN_SIZE, adminText } from './adminTokens';
+import logoImage from '../../assets/manyorder-logo.png';
 
 type Section = 'overview' | 'merchants' | 'activity';
 const NAV: { key: Section; label: string }[] = [
@@ -24,6 +25,17 @@ const NAV: { key: Section; label: string }[] = [
   { key: 'merchants', label: 'Merchants' },
   { key: 'activity', label: 'Activity' },
 ];
+
+/** The sidebar/drawer brand block: "Platform Admin" at the top, mirroring where the
+ *  merchant sidebar shows its store switcher. */
+function SidebarBrand() {
+  return (
+    <div style={{ padding: '4px 8px 12px', marginBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ ...adminText.heading, fontWeight: 700, color: 'var(--text-primary)' }}>Platform Admin</div>
+      <div style={{ ...adminText.caption, color: 'var(--text-muted)', marginTop: 2 }}>Cross-store administration</div>
+    </div>
+  );
+}
 
 /** One left-nav / drawer entry. Shared so the sidebar and the mobile drawer match. */
 function navButton(n: { key: Section; label: string }, active: boolean, onClick: () => void) {
@@ -139,8 +151,12 @@ export function AdminApp() {
               <Menu size={22} />
             </button>
           )}
-          <strong style={{ ...adminText.heading }}>Platform Admin</strong>
-          {!isMobile && <span style={{ ...adminText.caption, color: 'var(--text-muted)' }}>Cross-store administration</span>}
+          {/* Brand in the navbar, mirroring the merchant top bar: logo mark always,
+              the wordmark alongside it on desktop. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flexShrink: 0 }}>
+            <img src={logoImage} alt="ManyOrder" style={{ width: 32, height: 32, borderRadius: 6, flexShrink: 0 }} />
+            {!isMobile && <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>ManyOrder</span>}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
           {!isMobile && <span style={{ ...adminText.caption, color: 'var(--text-secondary)' }}>{user?.email}</span>}
@@ -151,6 +167,7 @@ export function AdminApp() {
       <div style={{ display: 'flex', alignItems: 'flex-start', maxWidth: 1200, margin: '0 auto' }}>
         {!isMobile && (
           <nav aria-label="Admin sections" style={{ width: 180, flexShrink: 0, padding: '20px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <SidebarBrand />
             {NAV.map((n) => navButton(n, !selected && section === n.key, () => goSection(n.key)))}
           </nav>
         )}
@@ -250,6 +267,7 @@ export function AdminApp() {
                 <X size={20} />
               </button>
             </div>
+            <SidebarBrand />
             {NAV.map((n) => navButton(n, !selected && section === n.key, () => { goSection(n.key); setDrawerOpen(false); }))}
           </div>
         </div>
