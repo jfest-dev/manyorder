@@ -557,6 +557,15 @@ public proxy URL so the service stays up. Then check, without changing anything 
 See the Part D notes for the full reasoning. The public proxy works (just slower), so
 this is a networking/resolution issue, not credentials.
 
+## Web Analytics: privacy notice and per-store view counts
+
+We load Cloudflare Web Analytics (cookieless, no cross-site tracking) on the SPA when
+VITE_CF_ANALYTICS_TOKEN is set. Before real merchants, mention this in the privacy
+notice so visitors know traffic is measured. Later idea: surface per-store view counts
+to each merchant on their own dashboard (their storefront's visits over a period), either
+from the Cloudflare Analytics API or a lightweight first-party page-view counter, scoped
+so a merchant sees only their own store.
+
 ## Maintenance routine, before real merchants
 
 Set a monthly recurring check for security and dependency updates: run `npm audit` in
