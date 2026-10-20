@@ -134,6 +134,10 @@ describe('StoreDetail', () => {
     // Toggling protection on calls protect().
     await user.click(screen.getByLabelText('Protected from deletion'));
     await waitFor(() => expect(protectFn).toHaveBeenCalledWith(5));
+    // It updates in place: the detail is not refetched and the loading state never
+    // returns, so the page never collapses and the scroll position is kept.
+    expect(storeDetail).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Loading store detail/)).toBeNull();
   });
 
   it('store administration: no Restore button for an active store', async () => {

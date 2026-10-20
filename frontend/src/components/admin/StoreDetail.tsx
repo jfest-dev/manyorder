@@ -74,7 +74,6 @@ export function StoreDetail({ merchantId, onChanged }: { merchantId: number; onC
   const [products, setProducts] = useState<ProductResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
   const [busy, setBusy] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
 
@@ -91,18 +90,37 @@ export function StoreDetail({ merchantId, onChanged }: { merchantId: number; onC
       .catch((e) => { if (!cancelled) setError(e instanceof ApiError ? e.message : 'Could not load store detail'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [merchantId, reloadToken]);
+  }, [merchantId]);
 
-  const reload = () => setReloadToken((n) => n + 1);
+  // Refresh the already-loaded detail without flipping `loading`, so the card stays
+  // on screen and the page keeps its scroll position (reloading via `loading` would
+  // collapse the whole view to a one-line spinner and bounce the window to the top).
+  const refreshQuietly = async () => {
+    try {
+      const [d, log, prods] = await Promise.all([
+        adminApi.storeDetail(merchantId),
+        adminApi.auditLog(merchantId),
+        adminApi.productsFor(merchantId).list(),
+      ]);
+      setDetail(d);
+      setActions(log);
+      setProducts(prods);
+    } catch {
+      /* keep the current view; the next load will reconcile */
+    }
+  };
 
   const toggleProtect = async (next: boolean) => {
+    const previous = detail;
+    // Optimistic in-place update so the switch responds without a refetch.
+    setDetail((d) => (d ? { ...d, profile: { ...d.profile, protectedFromDeletion: next } } : d));
     setBusy(true);
     setAdminError(null);
     try {
       await (next ? adminApi.protect(merchantId) : adminApi.unprotect(merchantId));
-      reload();
       onChanged?.();
     } catch (e) {
+      setDetail(previous); // revert so the switch never lies
       setAdminError(e instanceof ApiError ? e.message : 'Could not update protection');
     } finally {
       setBusy(false);
@@ -122,7 +140,7 @@ export function StoreDetail({ merchantId, onChanged }: { merchantId: number; onC
     setAdminError(null);
     try {
       await adminApi.restore(merchantId, result.reason, result.emailOwner);
-      reload();
+      await refreshQuietly(); // picks up the new status + audit row, keeping scroll
       onChanged?.();
     } catch (e) {
       setAdminError(e instanceof ApiError ? e.message : 'Could not restore the store');

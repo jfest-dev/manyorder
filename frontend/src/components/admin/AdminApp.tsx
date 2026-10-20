@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { adminApi, AdminMetrics, AdminMerchantSummary, ApiError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -77,6 +77,8 @@ export function AdminApp() {
   const [merchantsReload, setMerchantsReload] = useState(0);
   const isMobile = useMediaQuery('(max-width: 767px)');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const tabStripRef = useRef<HTMLDivElement>(null);
+  const activeTabRef = useRef<HTMLButtonElement>(null);
 
   const loadMetrics = () =>
     adminApi.metrics()
@@ -98,6 +100,20 @@ export function AdminApp() {
     window.addEventListener('focus', refresh);
     return () => { window.clearInterval(id); window.removeEventListener('focus', refresh); };
   }, []);
+
+  // Keep the active store tab visible in its horizontal strip, but ONLY when the tab
+  // changes and ONLY along the horizontal axis. (A render-time scrollIntoView with
+  // block:'nearest' also moved the whole page vertically, so any re-render while the
+  // user was scrolled down, e.g. after toggling Protect, bounced the page upward.)
+  useEffect(() => {
+    const strip = tabStripRef.current;
+    const btn = activeTabRef.current;
+    if (!strip || !btn) return;
+    const left = btn.offsetLeft;
+    const right = left + btn.offsetWidth;
+    if (left < strip.scrollLeft) strip.scrollLeft = left;
+    else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right - strip.clientWidth;
+  }, [tab, selected]);
 
   const showNotice = (msg: string) => { setNotice(msg); window.setTimeout(() => setNotice(null), 2400); };
   const goSection = (s: Section) => { setSelected(null); setSection(s); };
@@ -190,11 +206,11 @@ export function AdminApp() {
 
               <StoreHeader summary={selected} />
 
-              <div style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 20,
+              <div ref={tabStripRef} style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 20,
                 overflowX: 'auto', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch' }}>
                 {(['overview', 'dashboard', 'customers', 'products', 'orders', 'marketing'] as const).map((t) => (
                   <button key={t} type="button" onClick={() => setTab(t)}
-                    ref={tab === t ? (el) => { try { el?.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch { /* jsdom: no-op */ } } : undefined}
+                    ref={tab === t ? activeTabRef : undefined}
                     style={{ padding: '10px 14px', minHeight: ADMIN_SIZE.tapTarget, flexShrink: 0, whiteSpace: 'nowrap', background: 'none', border: 'none',
                       cursor: 'pointer', fontSize: ADMIN_FONT.body, fontWeight: 600, textTransform: 'capitalize',
                       color: tab === t ? 'var(--text-primary)' : 'var(--text-secondary)',
