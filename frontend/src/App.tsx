@@ -1,33 +1,39 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell';
-import { AdminApp } from './components/admin/AdminApp';
 import { Toast } from './components/Toast';
-import { Dashboard } from './components/screens/Dashboard';
-import { Orders } from './components/screens/Orders';
-import { AddOrder } from './components/screens/AddOrder';
-import { EditOrder } from './components/screens/EditOrder';
-import { AllStores } from './components/screens/AllStores';
-import { CreateStore } from './components/screens/CreateStore';
-import { ProductsList } from './components/screens/ProductsList';
-import { AddProducts } from './components/screens/AddProducts';
-import { EditProduct } from './components/screens/EditProduct';
-import { Categories } from './components/screens/Categories';
-import { Customers } from './components/screens/Customers';
-import { Marketing } from './components/screens/Marketing';
-import { Delivery } from './components/screens/Delivery';
-import { Settings } from './components/screens/Settings';
-import { OnboardingStep1 } from './components/screens/OnboardingStep1';
-import { OnboardingStep2 } from './components/screens/OnboardingStep2';
+// Small, common entry pages stay eager so /signin and the token links paint at once.
 import { SignIn } from './components/screens/SignIn';
 import { CreateAccount } from './components/screens/CreateAccount';
 import { ForgotPassword } from './components/screens/ForgotPassword';
 import { ResetPassword } from './components/screens/ResetPassword';
 import { VerifyEmail } from './components/screens/VerifyEmail';
 import { ConfirmStoreEmail } from './components/screens/ConfirmStoreEmail';
-import { StorefrontApp } from './components/storefront/StorefrontApp';
-import { TrackOrderView } from './components/storefront/TrackOrderView';
+
+// Code-split the heavy areas so a storefront visitor never downloads admin, the
+// merchant dashboard screens, or onboarding, and vice versa. React.lazy wrappers
+// for named exports; each is rendered inside a <Suspense> with an app-styled fallback.
+const named = <T,>(p: Promise<Record<string, T>>, name: string) => p.then((m) => ({ default: m[name] as T }));
+const AdminApp = lazy(() => named(import('./components/admin/AdminApp'), 'AdminApp'));
+const Dashboard = lazy(() => named(import('./components/screens/Dashboard'), 'Dashboard'));
+const Orders = lazy(() => named(import('./components/screens/Orders'), 'Orders'));
+const AddOrder = lazy(() => named(import('./components/screens/AddOrder'), 'AddOrder'));
+const EditOrder = lazy(() => named(import('./components/screens/EditOrder'), 'EditOrder'));
+const AllStores = lazy(() => named(import('./components/screens/AllStores'), 'AllStores'));
+const CreateStore = lazy(() => named(import('./components/screens/CreateStore'), 'CreateStore'));
+const ProductsList = lazy(() => named(import('./components/screens/ProductsList'), 'ProductsList'));
+const AddProducts = lazy(() => named(import('./components/screens/AddProducts'), 'AddProducts'));
+const EditProduct = lazy(() => named(import('./components/screens/EditProduct'), 'EditProduct'));
+const Categories = lazy(() => named(import('./components/screens/Categories'), 'Categories'));
+const Customers = lazy(() => named(import('./components/screens/Customers'), 'Customers'));
+const Marketing = lazy(() => named(import('./components/screens/Marketing'), 'Marketing'));
+const Delivery = lazy(() => named(import('./components/screens/Delivery'), 'Delivery'));
+const Settings = lazy(() => named(import('./components/screens/Settings'), 'Settings'));
+const OnboardingStep1 = lazy(() => named(import('./components/screens/OnboardingStep1'), 'OnboardingStep1'));
+const OnboardingStep2 = lazy(() => named(import('./components/screens/OnboardingStep2'), 'OnboardingStep2'));
+const StorefrontApp = lazy(() => named(import('./components/storefront/StorefrontApp'), 'StorefrontApp'));
+const TrackOrderView = lazy(() => named(import('./components/storefront/TrackOrderView'), 'TrackOrderView'));
 
 import { useAuth } from './context/AuthContext';
 import { ApiError, storesApi, uploadsApi, ordersApi, StoreResponse } from './lib/api';
@@ -172,6 +178,16 @@ function toStore(s: StoreResponse): Store {
     phone: s.phone,
     suspended: s.suspended,
   };
+}
+
+/** App-styled fallback for lazy chunks: full-screen on a route boundary, or a
+ *  content-area placeholder inside the merchant shell. Matches the "Loading…" style. */
+function AppLoading({ full = false }: { full?: boolean }) {
+  return (
+    <div style={{ minHeight: full ? '100vh' : '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: full ? 'var(--bg-app)' : undefined }}>
+      <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading…</p>
+    </div>
+  );
 }
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -793,7 +809,7 @@ function MerchantApp() {
   const content = renderScreen();
 
   const isOnboarding = activeScreen === 'onboarding-1' || activeScreen === 'onboarding-2';
-  if (isOnboarding) return content;
+  if (isOnboarding) return <Suspense fallback={<AppLoading full />}>{content}</Suspense>;
 
   return (
     <>
@@ -805,7 +821,7 @@ function MerchantApp() {
         onStoreChange={handleStoreChange}
         unseenCounts={unseenCounts}
       >
-        {content}
+        <Suspense fallback={<AppLoading />}>{content}</Suspense>
       </AppShell>
 
       {storeSwitchNotice && <Toast message={`Switched to ${storeSwitchNotice}`} />}
@@ -818,7 +834,7 @@ function MerchantApp() {
  *  enforces this — /admin/** is PLATFORM_ADMIN-only and /merchant/** is not. */
 function AuthedApp() {
   const { user, logout } = useAuth();
-  if (user?.role === 'PLATFORM_ADMIN') return <AdminApp />;
+  if (user?.role === 'PLATFORM_ADMIN') return <Suspense fallback={<AppLoading full />}><AdminApp /></Suspense>;
   if (user?.role === 'MERCHANT' || user?.role === 'STAFF') return <MerchantApp />;
   // Authenticated but the role is missing/unrecognised: never strand the user in
   // an empty merchant shell — show a clear message with a way out.
@@ -842,6 +858,7 @@ function AuthedApp() {
 
 export default function App() {
   return (
+    <Suspense fallback={<AppLoading full />}>
     <Routes>
       <Route
         path="/signin"
@@ -876,5 +893,6 @@ export default function App() {
       <Route path="/:slug/*" element={<StorefrontApp />} />
       <Route path="*" element={<Navigate to="/app" replace />} />
     </Routes>
+    </Suspense>
   );
 }
