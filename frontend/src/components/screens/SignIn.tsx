@@ -7,6 +7,7 @@ import { GoogleSignInButton } from '../auth/GoogleSignInButton';
 import { FieldInput } from '../Field';
 import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
+import { takeAuthNotice } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 
 // Simple, permissive email shape check - enough to catch obviously invalid
@@ -37,7 +38,7 @@ function renderError(message: string): React.ReactNode {
 }
 
 export function SignIn() {
-  const { login, loginWithGoogle } = useAuth();
+  const { user, login, loginWithGoogle, logout } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -45,6 +46,22 @@ export function SignIn() {
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // A one-time message left by an involuntary sign-out (expired token, or a
+  // token/stored-user role disagreement). Read once on mount so it shows just here.
+  const [notice] = useState<string | null>(() => takeAuthNotice());
+
+  // Already signed in: don't silently bounce to the app. Offer to continue or to
+  // sign out, so a stale or wrong-account session is visible and escapable.
+  if (user) {
+    return (
+      <AuthLayout title="You're already signed in" subtitle={`You're signed in as ${user.email}`}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <Button variant="primary" fullWidth onClick={() => navigate('/app')}>Continue</Button>
+          <Button variant="secondary" fullWidth onClick={logout}>Log out</Button>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   const submit = async () => {
     setError(null);
@@ -70,6 +87,12 @@ export function SignIn() {
       subtitle="Create your online order page in minutes"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {notice && (
+          <p role="status" className="text-small"
+            style={{ background: '#FEF3C7', border: '1px solid #FCD34D', color: '#92400E', borderRadius: '10px', padding: '10px 12px', margin: 0 }}>
+            {notice}
+          </p>
+        )}
         <FieldInput
           label="Email Address"
           type="email"

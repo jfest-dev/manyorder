@@ -5,9 +5,11 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 const login = vi.fn();
+const logout = vi.fn();
+let authUser: { email: string } | null = null;
 
 vi.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ login, loginWithGoogle: vi.fn() }),
+  useAuth: () => ({ user: authUser, login, loginWithGoogle: vi.fn(), logout }),
 }));
 // The Google button fetches /auth/config on mount; report no client id so it renders nothing.
 vi.mock('../../lib/api', async (importOriginal) => {
@@ -16,13 +18,13 @@ vi.mock('../../lib/api', async (importOriginal) => {
 });
 
 import { SignIn } from './SignIn';
-import { ApiError } from '../../lib/api';
+import { ApiError, setAuthNotice } from '../../lib/api';
 
 function renderSignIn() {
   render(<MemoryRouter><SignIn /></MemoryRouter>);
 }
 
-beforeEach(() => { cleanup(); login.mockReset(); });
+beforeEach(() => { cleanup(); login.mockReset(); logout.mockReset(); authUser = null; sessionStorage.clear(); });
 
 describe('SignIn', () => {
   it('renders a suspended-account message with the support address as a mailto link', async () => {
@@ -53,5 +55,27 @@ describe('SignIn', () => {
 
     expect(await screen.findByText('Invalid email or password')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('shows "You are already signed in" with Continue and Log out when a session exists', async () => {
+    const user = userEvent.setup();
+    authUser = { email: 'owner@store.test' };
+    renderSignIn();
+
+    expect(screen.getByText("You're signed in as owner@store.test")).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeTruthy();
+    // The sign-in form is not shown.
+    expect(screen.queryByPlaceholderText('you@example.com')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Log out' }));
+    expect(logout).toHaveBeenCalled();
+  });
+
+  it('shows the one-time sign-out notice left by an involuntary sign-out', async () => {
+    setAuthNotice('You were signed out because your session changed. Please sign in again.');
+    renderSignIn();
+    expect(screen.getByText('You were signed out because your session changed. Please sign in again.')).toBeTruthy();
+    // Shown in the signed-out form (fields present).
+    expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy();
   });
 });

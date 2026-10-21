@@ -803,11 +803,7 @@ export default function App() {
     <Routes>
       <Route
         path="/signin"
-        element={
-          <RedirectIfAuthed>
-            <SignIn />
-          </RedirectIfAuthed>
-        }
+        element={<SignIn />}
       />
       <Route
         path="/register"

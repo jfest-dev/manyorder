@@ -25,6 +25,25 @@ export function clearToken() {
 // session is rejected, so a stale user object can't keep the app "logged in".
 const USER_KEY = 'manyorder_user';
 
+// A one-time message to show on the sign-in screen after an involuntary sign-out
+// (expired token, or a token/stored-user role disagreement). Read-and-clear so it
+// appears once. Stored in sessionStorage so it survives the redirect but not longer.
+const AUTH_NOTICE_KEY = 'manyorder_auth_notice';
+
+export function setAuthNotice(message: string) {
+  try { sessionStorage.setItem(AUTH_NOTICE_KEY, message); } catch { /* storage unavailable */ }
+}
+
+export function takeAuthNotice(): string | null {
+  try {
+    const m = sessionStorage.getItem(AUTH_NOTICE_KEY);
+    if (m) sessionStorage.removeItem(AUTH_NOTICE_KEY);
+    return m;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * An authenticated request came back 401 → the stored session is invalid
  * (expired/revoked token, or a rotated signing secret). Clear it and bounce to
@@ -39,6 +58,7 @@ function handleInvalidSession() {
   } catch {
     /* storage unavailable - nothing to clear */
   }
+  setAuthNotice('Your session has expired. Please sign in again.');
   if (typeof window !== 'undefined' && window.location.pathname !== '/signin') {
     window.location.href = '/signin';
   }

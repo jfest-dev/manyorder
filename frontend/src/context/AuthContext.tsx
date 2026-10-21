@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { authApi, clearToken, getToken, setToken, LoginResponse } from '../lib/api';
+import { authApi, clearToken, getToken, setToken, setAuthNotice, LoginResponse } from '../lib/api';
 
 export interface AuthUser {
   userId: number;
@@ -61,25 +61,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return nextUser;
   }, []);
 
-  // Pull the latest account state from the server (e.g. after the user clicks
-  // their verification link in another tab or device). Writes back to whichever
-  // storage currently holds the session so the flag survives a reload. Silent on
-  // failure - a transient /auth/me error should never disturb the session.
+  // Clear the session and bounce to /signin, leaving a one-time message to show
+  // there. Used when the stored session can no longer be trusted.
+  const signOutWithReason = useCallback((reason: string) => {
+    setAuthNotice(reason);
+    clearToken();
+    localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(USER_KEY);
+    setUser(null);
+    if (window.location.pathname !== '/signin') window.location.href = '/signin';
+  }, []);
+
+  // Rebuild the signed-in user from /auth/me using the token, so the role is always
+  // the server's, never a stale stored value. If the token is missing we do nothing
+  // (not signed in); if it is invalid the API layer clears the session and redirects
+  // with "Your session has expired."; if /auth/me reports a DIFFERENT role than the
+  // stored user, the token and the stored user disagree, so we sign out rather than
+  // keep a mismatched session. A transient network error leaves the session alone.
   const refreshUser = useCallback(async () => {
     if (!getToken()) return;
+    let me: LoginResponse;
     try {
-      const me = await authApi.me();
-      setUser((prev) => {
-        if (!prev) return prev;
-        const merged: AuthUser = { ...prev, verified: me.verified, fullName: me.fullName };
-        const store = localStorage.getItem(USER_KEY) !== null ? localStorage : sessionStorage;
-        store.setItem(USER_KEY, JSON.stringify(merged));
-        return merged;
-      });
-    } catch {
-      // ignore - keep the cached user
+      me = await authApi.me();
+    } catch (e) {
+      // 401 is already handled by the API layer (clears + redirects + notice);
+      // anything else is transient, so keep the cached user.
+      void e;
+      return;
     }
-  }, []);
+    const rebuilt: AuthUser = {
+      userId: me.userId,
+      fullName: me.fullName,
+      email: me.email,
+      role: me.role,
+      staffStoreId: me.staffStoreId,
+      verified: me.verified,
+    };
+    const stored = readStoredUser();
+    if (stored && stored.role !== rebuilt.role) {
+      signOutWithReason('You were signed out because your session changed. Please sign in again.');
+      return;
+    }
+    // Persist the rebuilt user to whichever storage currently holds the session.
+    const store = localStorage.getItem(USER_KEY) !== null ? localStorage : sessionStorage;
+    try { store.setItem(USER_KEY, JSON.stringify(rebuilt)); } catch { /* storage unavailable */ }
+    setUser(rebuilt);
+  }, [signOutWithReason]);
 
   const logout = useCallback(() => {
     clearToken();
@@ -103,16 +130,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user, applySession, refreshUser, logout],
   );
 
-  // On load, reconcile the cached verified flag with the server once, so a user
-  // who verified elsewhere sees the banner clear on their next dashboard visit.
+  // On load, rebuild the user (including the role) from the token, so a stored user
+  // that disagrees with the token is caught immediately and a verified-elsewhere
+  // flag is picked up.
   useEffect(() => {
     if (getToken()) void refreshUser();
     // Run once on mount; refreshUser is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Also re-sync when the window regains focus, so confirming an email in another
-  // tab clears the verify banner here without a manual reload.
+  // Rebuild again whenever the window regains focus, so a role change or a sign-in
+  // as a different account in another tab is reconciled without a manual reload.
   useEffect(() => {
     const onFocus = () => { if (getToken()) void refreshUser(); };
     window.addEventListener('focus', onFocus);
