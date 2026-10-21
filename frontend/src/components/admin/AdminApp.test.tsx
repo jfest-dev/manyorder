@@ -71,6 +71,8 @@ describe('AdminApp', () => {
     renderAdmin();
     // Overview is the landing section.
     expect(screen.getByText('Platform Admin')).toBeTruthy();
+    // The "Cross-store administration" tagline was removed; the brand stands alone.
+    expect(screen.queryByText('Cross-store administration')).toBeNull();
     expect(await screen.findByText('New (30d)')).toBeTruthy(); // a metrics tile
 
     await user.click(screen.getByRole('button', { name: 'Merchants' }));

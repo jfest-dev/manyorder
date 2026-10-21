@@ -32,7 +32,6 @@ function SidebarBrand() {
   return (
     <div style={{ padding: '4px 8px 12px', marginBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
       <div style={{ ...adminText.heading, fontWeight: 700, color: 'var(--text-primary)' }}>Platform Admin</div>
-      <div style={{ ...adminText.caption, color: 'var(--text-muted)', marginTop: 2 }}>Cross-store administration</div>
     </div>
   );
 }
