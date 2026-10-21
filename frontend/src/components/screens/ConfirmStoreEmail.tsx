@@ -79,7 +79,7 @@ export function ConfirmStoreEmail() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
         <XCircle size={40} color="var(--error-color)" />
         <p className="text-small" style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
-          It may have expired or already been used. Send a new confirmation from Settings.
+          It may have expired, or you may have already confirmed this email. If not, send a new confirmation from Settings.
         </p>
         <Button variant="primary" fullWidth onClick={() => navigate(canDashboard ? '/app' : '/signin')}>
           {canDashboard ? 'Go to settings' : 'Go to sign in'}

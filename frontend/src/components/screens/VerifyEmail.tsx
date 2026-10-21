@@ -83,12 +83,11 @@ export function VerifyEmail() {
 
   // error (bad/expired/used token, or no token at all)
   return (
-    <AuthLayout title="Verification failed" footer={<SecurityFooter />}>
+    <AuthLayout title="This link didn't work" footer={<SecurityFooter />}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
         <XCircle size={40} color="var(--error-color)" />
         <p className="text-small" style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>
-          This verification link is invalid or has expired. Sign in and use the
-          banner at the top of your dashboard to send a fresh link.
+          It may have expired, or you may have already confirmed this email. If not, send a new confirmation from Settings.
         </p>
         <Button variant="primary" fullWidth onClick={() => navigate(user ? '/app' : '/signin')}>
           {user ? 'Go to dashboard' : 'Go to sign in'}

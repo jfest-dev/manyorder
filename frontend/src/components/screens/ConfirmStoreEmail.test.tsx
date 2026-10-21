@@ -66,6 +66,6 @@ describe('ConfirmStoreEmail page', () => {
     confirmEmail.mockReset().mockRejectedValue(new Error('invalid'));
     renderAt('bad-token');
     expect(await screen.findByText("This link didn't work")).toBeTruthy();
-    expect(screen.getByText(/Send a new confirmation from Settings/)).toBeTruthy();
+    expect(screen.getByText('It may have expired, or you may have already confirmed this email. If not, send a new confirmation from Settings.')).toBeTruthy();
   });
 });

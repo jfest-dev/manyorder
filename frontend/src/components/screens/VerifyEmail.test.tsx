@@ -60,4 +60,11 @@ describe('VerifyEmail page', () => {
     expect(screen.getByRole('button', { name: 'Go to sign in' })).toBeTruthy();
     expect(screen.queryByText(/different account/)).toBeNull();
   });
+
+  it('shows the shared failure copy for a bad token', async () => {
+    verifyEmail.mockRejectedValue(new Error('invalid'));
+    renderAt('bad');
+    expect(await screen.findByText("This link didn't work")).toBeTruthy();
+    expect(screen.getByText('It may have expired, or you may have already confirmed this email. If not, send a new confirmation from Settings.')).toBeTruthy();
+  });
 });
