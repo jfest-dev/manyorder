@@ -154,17 +154,34 @@ public class AuthService {
         String email = String.valueOf(claims.get("email"));
         String name = claims.get("name") != null ? String.valueOf(claims.get("name")) : email;
 
-        User user = userRepository.findByEmail(email).orElseGet(() -> {
-            String randomPassword = passwordEncoder.encode(UUID.randomUUID().toString());
-            User created = new User(name, email, randomPassword, UserRole.MERCHANT);
+        User user = resolveGoogleUser(email, name);
+        requireNotSuspended(user);
+        return toLoginResponse(user);
+    }
+
+    /**
+     * Resolve the account for a Google-verified email. A verified account links as-is.
+     * An UNVERIFIED existing account is taken over: Google has proven ownership of the
+     * address, so its password is rotated to a random value (locking out whoever
+     * registered it but never confirmed it, e.g. a squatter) and it is marked verified.
+     * With no account, a verified MERCHANT is created. Package-private so the takeover
+     * logic can be tested without a live Google token.
+     */
+    User resolveGoogleUser(String email, String name) {
+        return userRepository.findByEmail(email).map(existing -> {
+            if (!existing.isVerified()) {
+                existing.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+                existing.setVerified(true);
+                userRepository.save(existing);
+            }
+            return existing;
+        }).orElseGet(() -> {
             // Google already confirmed this address (email_verified checked above),
             // so the account starts verified and needs no confirmation email.
+            User created = new User(name, email, passwordEncoder.encode(UUID.randomUUID().toString()), UserRole.MERCHANT);
             created.setVerified(true);
             return userRepository.save(created);
         });
-
-        requireNotSuspended(user);
-        return toLoginResponse(user);
     }
 
     private UserRole parseSelfServiceRole(String raw) {
