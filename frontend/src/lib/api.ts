@@ -333,6 +333,7 @@ export interface StoreResponse {
   notifyNewOrderWhatsapp: boolean;
   notifyUrgentWhatsapp: boolean;
   itemNotesEnabled: boolean;
+  suspended: boolean;
   createdAt: string;
 }
 
@@ -340,6 +341,7 @@ export interface StoreListResponse {
   stores: StoreResponse[];
   count: number;
   limit: number;
+  supportEmail: string;
 }
 
 export interface CreateStorePayload {

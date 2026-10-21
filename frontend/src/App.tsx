@@ -62,6 +62,7 @@ export interface Store {
   businessType?: string | null;
   contactEmail?: string | null;
   phone?: string | null;
+  suspended?: boolean;
 }
 
 type DraftStore = {
@@ -169,6 +170,7 @@ function toStore(s: StoreResponse): Store {
     businessType: s.businessType,
     contactEmail: s.email,
     phone: s.phone,
+    suspended: s.suspended,
   };
 }
 
@@ -206,6 +208,9 @@ function MerchantApp() {
 
   const [stores, setStores] = useState<Store[]>([]);
   const [storeLimit, setStoreLimit] = useState(3);
+  // Support address for the suspended-store message; the list endpoint reports it
+  // from backend config, with a safe default until the first load returns.
+  const [supportEmail, setSupportEmail] = useState('support@manyorder.app');
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
   // Unseen new-order count per store id (drives the sidebar badge). Best-effort:
   // fetch failures leave the last known counts rather than surfacing an error.
@@ -326,6 +331,7 @@ function MerchantApp() {
         const response = await storesApi.list();
         mapped = response.stores.map(toStore);
         setStoreLimit(response.limit);
+        if (response.supportEmail) setSupportEmail(response.supportEmail);
       }
 
       setStores(mapped);
@@ -594,6 +600,25 @@ function MerchantApp() {
         {signOutButton}
       </div>
     );
+
+    // A suspended active store: the owner cannot manage it (and reached this signed
+    // in only because the store was suspended mid-session). Explain why, with a way
+    // out, on every screen, instead of the store dashboard or "No store selected".
+    if (activeStore?.suspended) {
+      return (
+        <div style={{ minHeight: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '16px', padding: '24px' }}>
+          <div>
+            <h2>Store suspended</h2>
+            <p className="text-small" style={{ color: 'var(--text-secondary)', maxWidth: '420px' }}>
+              Your store has been suspended. Please contact support at{' '}
+              <a href={`mailto:${supportEmail}`} style={{ color: 'inherit' }}>{supportEmail}</a>.
+            </p>
+          </div>
+          {signOutButton}
+        </div>
+      );
+    }
+
     const dashboardScreen = activeStore
       ? <Dashboard store={activeStore} onNavigate={navigateScreen} />
       : noStoreFallback;

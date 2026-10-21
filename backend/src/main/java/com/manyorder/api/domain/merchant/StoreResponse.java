@@ -31,6 +31,7 @@ public class StoreResponse {
     private boolean notifyNewOrderWhatsapp;
     private boolean notifyUrgentWhatsapp;
     private boolean itemNotesEnabled;
+    private boolean suspended;
     private LocalDateTime createdAt;
 
     public StoreResponse(Merchant m) {
@@ -60,6 +61,7 @@ public class StoreResponse {
         this.notifyNewOrderWhatsapp = m.isNotifyNewOrderWhatsapp();
         this.notifyUrgentWhatsapp = m.isNotifyUrgentWhatsapp();
         this.itemNotesEnabled = m.isItemNotesEnabled();
+        this.suspended = m.isSuspended();
         this.createdAt = m.getCreatedAt();
     }
 
@@ -81,6 +83,7 @@ public class StoreResponse {
     public String getFulfilmentMode() { return fulfilmentMode; }
     public boolean isWhatsappVerified() { return whatsappVerified; }
     public boolean isEmailVerified() { return emailVerified; }
+    public boolean isSuspended() { return suspended; }
     public String getStreetAddress() { return streetAddress; }
     public String getCity() { return city; }
     public String getPostalCode() { return postalCode; }

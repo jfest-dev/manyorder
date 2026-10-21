@@ -46,6 +46,7 @@ public class MerchantStoreController {
     private final StoreLimitService storeLimitService;
     private final CloudinaryImageService imageService;
     private final com.manyorder.api.domain.storeemailverification.StoreEmailVerificationService storeEmailVerificationService;
+    private final String supportEmail;
 
     public MerchantStoreController(MerchantRepository merchantRepository,
                                    CurrentUserService currentUserService,
@@ -53,7 +54,8 @@ public class MerchantStoreController {
                                    PasswordEncoder passwordEncoder,
                                    StoreLimitService storeLimitService,
                                    CloudinaryImageService imageService,
-                                   com.manyorder.api.domain.storeemailverification.StoreEmailVerificationService storeEmailVerificationService) {
+                                   com.manyorder.api.domain.storeemailverification.StoreEmailVerificationService storeEmailVerificationService,
+                                   @org.springframework.beans.factory.annotation.Value("${app.support.email:support@manyorder.app}") String supportEmail) {
         this.merchantRepository = merchantRepository;
         this.currentUserService = currentUserService;
         this.storeAccessService = storeAccessService;
@@ -61,6 +63,7 @@ public class MerchantStoreController {
         this.storeLimitService = storeLimitService;
         this.imageService = imageService;
         this.storeEmailVerificationService = storeEmailVerificationService;
+        this.supportEmail = supportEmail;
     }
 
     /** Store management is owner-only; a STAFF account gets its store from the login response. */
@@ -71,7 +74,7 @@ public class MerchantStoreController {
                 .stream()
                 .map(StoreResponse::new)
                 .toList();
-        return new StoreListResponse(stores, Merchant.MAX_STORES_PER_OWNER);
+        return new StoreListResponse(stores, Merchant.MAX_STORES_PER_OWNER, supportEmail);
     }
 
     @PostMapping

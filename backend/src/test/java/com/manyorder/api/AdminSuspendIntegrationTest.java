@@ -87,4 +87,21 @@ class AdminSuspendIntegrationTest extends IntegrationTestBase {
         suspend(storeId, otherMerchant, 403);
         suspend(storeId, owner, 403);
     }
+
+    @Test
+    void suspendedStore_ownerStoreListReportsSuspended_withSupportEmail() throws Exception {
+        String admin = adminToken();
+        String merchant = registerAndGetToken("suspend-list@test.com", "MERCHANT", null);
+        long storeId = createStore(merchant, "Suspend List", "suspend-list-store");
+
+        suspend(storeId, admin, 204);
+
+        // The owner's pre-suspension token still lists the store, now flagged suspended,
+        // and the list reports the support address from config, so the app can show the
+        // "your store has been suspended" message instead of "No store selected".
+        mockMvc.perform(get("/merchant/stores").header("Authorization", "Bearer " + merchant))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supportEmail").value("support@manyorder.app"))
+                .andExpect(jsonPath("$.stores[0].suspended").value(true));
+    }
 }
