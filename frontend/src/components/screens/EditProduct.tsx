@@ -9,6 +9,7 @@ import { Card } from '../Card';
 import { CategorySelect } from '../CategorySelect';
 import { ModifierGroupsEditor } from '../ModifierGroupsEditor';
 import { formatMoney, priceLimits } from '../../lib/currency';
+import { cloudinaryImage } from '../../lib/cloudinary';
 import { formatPreorderReady } from '../../lib/datetime';
 import { ToggleSwitch } from '../ToggleSwitch';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
@@ -341,7 +342,7 @@ export function EditProduct({
                 >
                   {shownPhoto ? (
                     <>
-                      <img src={shownPhoto} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={cloudinaryImage(shownPhoto, 400)} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       <button
                         onClick={(e) => { e.stopPropagation(); removePhoto(); }}
                         style={{ position: 'absolute', top: '8px', right: '8px', padding: '6px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer', display: 'inline-flex' }}
@@ -462,7 +463,7 @@ export function EditProduct({
               </div>
               <div style={{ flex: 1, background: 'white', padding: '12px', overflowY: 'auto' }}>
                 <div style={{ padding: '10px', background: '#F9FAFB', borderRadius: '6px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  {shownPhoto && <img src={shownPhoto} alt={name} style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+                  {shownPhoto && <img src={cloudinaryImage(shownPhoto, 120)} alt={name} style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827', marginBottom: '2px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{name || 'Product Name'}</div>
                     <div style={{ fontSize: '10px', color: '#6B7280', marginBottom: '4px' }}>{description || 'No description'}</div>

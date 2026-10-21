@@ -5,6 +5,7 @@ import { FieldInput, FieldSelect } from '../Field';
 import { Checkbox } from '../Checkbox';
 import { PasswordField } from '../PasswordField';
 import { storesApi, uploadsApi, ordersApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
+import { cloudinaryImage } from '../../lib/cloudinary';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { useConfirm } from '../ConfirmDialog';
 import { AccountSettings } from './AccountSettings';
@@ -420,7 +421,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               }}
             >
               {logoPreview || form.logoUrl ? (
-                <img src={logoPreview || form.logoUrl} alt="Store logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={cloudinaryImage(logoPreview || form.logoUrl || '', 144)} alt="Store logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 initials
               )}

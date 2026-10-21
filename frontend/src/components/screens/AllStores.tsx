@@ -1,4 +1,5 @@
 import { Button } from '../Button';
+import { cloudinaryImage } from '../../lib/cloudinary';
 import { Plus, ExternalLink, Check } from 'lucide-react';
 
 interface Store {
@@ -102,7 +103,7 @@ export function AllStores({ stores, activeStoreId, onStoreChange, onNavigate, st
             >
               {store.logo ? (
                 <img
-                  src={store.logo}
+                  src={cloudinaryImage(store.logo, 96)}
                   alt={store.name}
                   style={{
                     width: '100%',

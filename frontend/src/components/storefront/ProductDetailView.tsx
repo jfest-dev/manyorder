@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Package, ArrowLeft } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
+import { cloudinaryImage } from '../../lib/cloudinary';
 import { formatPreorderReady } from '../../lib/datetime';
 import type { ProductResponse, ModifierGroupView } from '../../lib/api';
 import { isOrderable, maxOrderQuantity, lowStockRemaining } from './storefrontTypes';
@@ -136,7 +137,7 @@ export function ProductDetailView({
       {/* Photo */}
       <div style={{ width: '100%', aspectRatio: '1 / 1', maxHeight: '360px', background: '#E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         {product.photoUrl
-          ? <img src={product.photoUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ? <img src={cloudinaryImage(product.photoUrl, 800)} alt={product.name} decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : <Package size={40} style={{ color: '#9CA3AF' }} />}
       </div>
 

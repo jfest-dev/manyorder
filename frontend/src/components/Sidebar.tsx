@@ -1,6 +1,7 @@
 import { Store, Package, LayoutDashboard, Settings, ShoppingCart, Users, ChevronDown, LogOut, Megaphone, Crown, Check, Truck } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { NavItem } from './NavItem';
+import { cloudinaryImage } from '../lib/cloudinary';
 import { useConfirm } from './ConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import logoImage from 'figma:asset/656d97789c4d3f72628639902518b8fbf366d5ba.png';
@@ -164,7 +165,7 @@ export function Sidebar({
               >
                 {activeStore.logo ? (
                   <img
-                    src={activeStore.logo}
+                    src={cloudinaryImage(activeStore.logo, 72)}
                     alt={activeStore.name}
                     style={{
                       width: '100%',
@@ -281,7 +282,7 @@ export function Sidebar({
                       >
                         {store.logo ? (
                           <img
-                            src={store.logo}
+                            src={cloudinaryImage(store.logo, 56)}
                             alt={store.name}
                             style={{
                               width: '100%',

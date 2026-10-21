@@ -1,5 +1,6 @@
 import { Package, Trash2, ArrowLeft, Pencil } from 'lucide-react';
 import { formatMoney } from '../../lib/currency';
+import { cloudinaryImage } from '../../lib/cloudinary';
 import { type CartLine, maxOrderQuantity } from './storefrontTypes';
 import type { StockAdjustment } from '../../lib/cart';
 import { QuantityStepper } from './QuantityStepper';
@@ -65,7 +66,7 @@ export function CartView({ items, currency, onQtyChange, onRemove, onEditLine, o
             <div key={l.signature} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', background: 'white', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '10px' }}>
               <div onClick={editLine} style={{ width: '56px', height: '56px', borderRadius: '8px', overflow: 'hidden', background: '#E5E7EB', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: editLine ? 'pointer' : 'default' }}>
                 {l.product.photoUrl
-                  ? <img src={l.product.photoUrl} alt={l.product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img src={cloudinaryImage(l.product.photoUrl, 120)} alt={l.product.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : <Package size={20} style={{ color: '#9CA3AF' }} />}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
