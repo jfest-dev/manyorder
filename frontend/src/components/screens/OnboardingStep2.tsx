@@ -5,18 +5,25 @@ export function OnboardingStep2({
   children,
   onSkip,
   onBack,
+  onSignOut,
 }: {
   children: ReactNode;
   onSkip: () => void;
   onBack: () => void;
+  onSignOut?: () => void;
 }) {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-app)', padding: '24px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ marginBottom: 12 }}>
+        <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Button variant="ghost" onClick={onBack}>
             ← Back
           </Button>
+          {onSignOut && (
+            <Button variant="ghost" onClick={onSignOut}>
+              Log out
+            </Button>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>

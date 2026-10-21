@@ -554,14 +554,28 @@ function MerchantApp() {
       );
     }
 
+    // A Log out affordance for the placeholder states that render without the
+    // sidebar store switcher (which is where the only other merchant Log out lives),
+    // so a signed-in user is never stranded with no way out.
+    const signOutButton = (
+      <button type="button" onClick={handleSignOut}
+        style={{ height: 40, padding: '0 18px', borderRadius: 8, border: '1px solid var(--border-strong)',
+          background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+        Log out
+      </button>
+    );
+
     if (isStaff && storeUnavailable) {
       return (
-        <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '8px', padding: '24px' }}>
-          <h2>This store is no longer available</h2>
-          <p className="text-small" style={{ color: 'var(--text-secondary)', maxWidth: '420px' }}>
-            The store you're assigned to has been closed by its owner. Please contact them if you
-            think this is a mistake.
-          </p>
+        <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '16px', padding: '24px' }}>
+          <div>
+            <h2>This store is no longer available</h2>
+            <p className="text-small" style={{ color: 'var(--text-secondary)', maxWidth: '420px' }}>
+              The store you're assigned to has been closed by its owner. Please contact them if you
+              think this is a mistake.
+            </p>
+          </div>
+          {signOutButton}
         </div>
       );
     }
@@ -570,11 +584,14 @@ function MerchantApp() {
     // edge, since a merchant with no stores is routed to onboarding) show a
     // neutral placeholder instead of a store-scoped screen.
     const noStoreFallback = (
-      <div style={{ minHeight: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '8px', padding: '24px' }}>
-        <h2>No store selected</h2>
-        <p className="text-small" style={{ color: 'var(--text-secondary)', maxWidth: '420px' }}>
-          Pick or create a store to see its dashboard.
-        </p>
+      <div style={{ minHeight: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '16px', padding: '24px' }}>
+        <div>
+          <h2>No store selected</h2>
+          <p className="text-small" style={{ color: 'var(--text-secondary)', maxWidth: '420px' }}>
+            Pick or create a store to see its dashboard.
+          </p>
+        </div>
+        {signOutButton}
       </div>
     );
     const dashboardScreen = activeStore
@@ -600,7 +617,7 @@ function MerchantApp() {
 
       case 'onboarding-2':
         return activeStore ? (
-          <OnboardingStep2 onSkip={finalizeOnboarding} onBack={() => setActiveScreen('onboarding-1')}>
+          <OnboardingStep2 onSkip={finalizeOnboarding} onBack={() => setActiveScreen('onboarding-1')} onSignOut={handleSignOut}>
             <AddProducts
               storeId={Number(activeStore.id)}
               storeName={activeStore.name}
