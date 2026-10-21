@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { authApi, clearToken, getToken, setToken, setAuthNotice, LoginResponse } from '../lib/api';
+import { authApi, clearSession, getToken, getStoredUserJson, persistSession, updateStoredUser, setAuthNotice, LoginResponse } from '../lib/api';
 
 export interface AuthUser {
   userId: number;
@@ -9,8 +9,6 @@ export interface AuthUser {
   staffStoreId: number | null;
   verified: boolean;
 }
-
-const USER_KEY = 'manyorder_user';
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -32,9 +30,10 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function readStoredUser(): AuthUser | null {
-  if (!getToken()) return null;
+  // Paired read: the user comes from the same storage as the token (session first),
+  // so a tab can never mix one tab's token with another tab's stored user.
   try {
-    const raw = localStorage.getItem(USER_KEY) ?? sessionStorage.getItem(USER_KEY);
+    const raw = getStoredUserJson();
     return raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
     return null;
@@ -53,10 +52,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       staffStoreId: response.staffStoreId,
       verified: response.verified,
     };
-    setToken(response.token, remember);
-    localStorage.removeItem(USER_KEY);
-    sessionStorage.removeItem(USER_KEY);
-    (remember ? localStorage : sessionStorage).setItem(USER_KEY, JSON.stringify(nextUser));
+    // A platform admin is NEVER remembered to the shared localStorage, whatever the
+    // checkbox says, so an admin session can't leak into other tabs.
+    const toLocal = remember && response.role !== 'PLATFORM_ADMIN';
+    persistSession(response.token, JSON.stringify(nextUser), toLocal);
     setUser(nextUser);
     return nextUser;
   }, []);
@@ -65,9 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // there. Used when the stored session can no longer be trusted.
   const signOutWithReason = useCallback((reason: string) => {
     setAuthNotice(reason);
-    clearToken();
-    localStorage.removeItem(USER_KEY);
-    sessionStorage.removeItem(USER_KEY);
+    clearSession();
     setUser(null);
     if (window.location.pathname !== '/signin') window.location.href = '/signin';
   }, []);
@@ -102,16 +99,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOutWithReason('You were signed out because your session changed. Please sign in again.');
       return;
     }
-    // Persist the rebuilt user to whichever storage currently holds the session.
-    const store = localStorage.getItem(USER_KEY) !== null ? localStorage : sessionStorage;
-    try { store.setItem(USER_KEY, JSON.stringify(rebuilt)); } catch { /* storage unavailable */ }
+    // Persist the rebuilt user to whichever storage currently holds this tab's token.
+    updateStoredUser(JSON.stringify(rebuilt));
     setUser(rebuilt);
   }, [signOutWithReason]);
 
   const logout = useCallback(() => {
-    clearToken();
-    localStorage.removeItem(USER_KEY);
-    sessionStorage.removeItem(USER_KEY);
+    clearSession();
     setUser(null);
     // Screens live under /app; a hard redirect keeps legacy screens simple.
     window.location.href = '/signin';

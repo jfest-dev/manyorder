@@ -6,24 +6,75 @@ export const API_BASE: string =
   (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8080';
 
 const TOKEN_KEY = 'manyorder_token';
+// Kept in sync with AuthContext's USER_KEY - the token and the user are always
+// written to, and read from, the SAME storage so they can never disagree.
+const USER_KEY = 'manyorder_user';
+
+/**
+ * The storage that holds THIS tab's session, checked sessionStorage FIRST so a
+ * tab's own session-only login always wins over a remembered (localStorage) login
+ * that another tab may have left in the shared localStorage. Returns null when the
+ * tab has no session.
+ */
+function tokenStorage(): Storage | null {
+  try {
+    if (sessionStorage.getItem(TOKEN_KEY)) return sessionStorage;
+    if (localStorage.getItem(TOKEN_KEY)) return localStorage;
+  } catch { /* storage unavailable */ }
+  return null;
+}
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
+  const s = tokenStorage();
+  return s ? s.getItem(TOKEN_KEY) : null;
 }
 
-export function setToken(token: string, remember: boolean) {
-  clearToken();
-  (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token);
+/** The stored user JSON from the SAME storage as the token (paired read). */
+export function getStoredUserJson(): string | null {
+  const s = tokenStorage();
+  return s ? s.getItem(USER_KEY) : null;
 }
 
-export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
+/**
+ * Write the token and user together to one storage. Remembered logins go to the
+ * shared localStorage; session-only logins (and ALL platform-admin logins) go to
+ * this tab's sessionStorage. A session-only login never clears localStorage, so it
+ * can't log another tab's remembered login out; a remembered login clears this
+ * tab's sessionStorage so it becomes the one source of truth here.
+ */
+export function persistSession(token: string, userJson: string, toLocal: boolean) {
+  try {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+    if (toLocal) {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(USER_KEY, userJson);
+    } else {
+      sessionStorage.setItem(TOKEN_KEY, token);
+      sessionStorage.setItem(USER_KEY, userJson);
+    }
+  } catch { /* storage unavailable */ }
 }
 
-// Kept in sync with AuthContext's USER_KEY - cleared alongside the token when a
-// session is rejected, so a stale user object can't keep the app "logged in".
-const USER_KEY = 'manyorder_user';
+/** Update just the stored user, in whichever storage currently holds this tab's token. */
+export function updateStoredUser(userJson: string) {
+  const s = tokenStorage();
+  if (s) try { s.setItem(USER_KEY, userJson); } catch { /* storage unavailable */ }
+}
+
+/**
+ * Clear only the storage this tab is actually using (session first), so logging out
+ * of, or losing, a session-only tab never disturbs another tab's remembered login.
+ */
+export function clearSession() {
+  const s = tokenStorage();
+  try {
+    if (s) { s.removeItem(TOKEN_KEY); s.removeItem(USER_KEY); }
+    // Defensive: never leave a session copy behind in this tab.
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+  } catch { /* storage unavailable */ }
+}
 
 // A one-time message to show on the sign-in screen after an involuntary sign-out
 // (expired token, or a token/stored-user role disagreement). Read-and-clear so it
@@ -51,13 +102,7 @@ export function takeAuthNotice(): string | null {
  * Guarded against a redirect loop when already on /signin.
  */
 function handleInvalidSession() {
-  clearToken();
-  try {
-    localStorage.removeItem(USER_KEY);
-    sessionStorage.removeItem(USER_KEY);
-  } catch {
-    /* storage unavailable - nothing to clear */
-  }
+  clearSession();
   setAuthNotice('Your session has expired. Please sign in again.');
   if (typeof window !== 'undefined' && window.location.pathname !== '/signin') {
     window.location.href = '/signin';
