@@ -1,90 +1,44 @@
 # ManyOrder
 
-Multi-store ordering platform for small F&B and retail businesses. A merchant
-creates a store, shares one link, and manages products, orders, and customers
-from a dashboard; customers order from a public storefront.
+Multi-store online ordering for small F&B and retail: a merchant creates a store, shares one link, and runs products, orders, and customers from a dashboard, while customers order from a public storefront.
 
-**Stack:** Java 21, Spring Boot 4, PostgreSQL, React 18, Vite, TypeScript. Auth is JWT.
+**Live shop (no login needed):** https://manyorder.app/kirikiri-brew
 
-`backend/` is the REST API; `frontend/` is the dashboard + storefront SPA.
+The full merchant and admin experience is shown in the screenshots below, and a guided demo is available on request.
 
-## Running it
+## Tech stack
 
-You need JDK 21, Node 18+, and Docker (or any PostgreSQL).
+- Backend: Java 21, Spring Boot 4, PostgreSQL, JPA/Hibernate, JWT auth
+- Frontend: React 18, TypeScript, Vite
+- Infrastructure: Railway (API + managed Postgres), Cloudflare (domain, DNS, cookieless analytics), Cloudinary (images), Resend (email)
 
-### 1. PostgreSQL
+**Tests:** 367 backend and 276 frontend automated tests.
 
-```bash
-docker run --name manyorder-db \
-  -e POSTGRES_USER=manyorder \
-  -e POSTGRES_PASSWORD=manyorder \
-  -e POSTGRES_DB=manyorder \
-  -p 5432:5432 -d postgres:16
-```
+## Highlights
 
-The username, password, and database name must match `SPRING_DATASOURCE_*` in the
-backend `.env`.
+- **Concurrency-safe stock decrement** - atomic inventory updates that prevent overselling when customers check out at the same time.
+- **N+1 query fix** - storefront product list cut from 23 to 6 database queries, and about 70% faster in production measurements.
+- **Discount engine** - percentage and fixed codes with order, product, and delivery scopes, plus validation and stacking rules.
+- **Role-based access** - Merchant, Staff, and Platform Admin, with an admin who is read-only apart from suspending stores, hiding products and switching off discounts, and every action written to an audit log.
+- **Private order tracking** - unguessable per-order tracking tokens, with rate limiting on public endpoints.
+- **Production deployment** - live on Railway with managed Postgres, Cloudinary image delivery, and transactional email.
 
-### 2. Backend
+## Screenshots
 
-```bash
-cd backend
-cp .env.example .env          # set the DB url/username/password and a JWT_SECRET
-set -a; source ./.env; set +a
-./mvnw spring-boot:run        # http://localhost:8080
-```
+![Shop](docs/screenshots/shop.png)
+*Public storefront a customer orders from.*
 
-Cloudinary (product/store photos) and Google sign-in are optional; leave their
-`.env` values blank to disable.
+![Checkout](docs/screenshots/checkout.png)
+*Cart and checkout.*
 
-### 3. Frontend
+![Merchant dashboard](docs/screenshots/merchant-dashboard.png)
+*Merchant dashboard overview.*
 
-```bash
-cd frontend
-cp .env.example .env          # defaults to http://localhost:8080
-npm install
-npm run dev                   # http://localhost:3000
-```
+![Merchant orders](docs/screenshots/merchant-orders.png)
+*Order management for a store.*
 
-## Demo data
+![Admin overview](docs/screenshots/admin-overview.png)
+*Platform admin cross-store overview.*
 
-On an empty database the seeder creates three stores, all owned by the merchant
-account:
-
-| Store | Type | Storefront |
-|---|---|---|
-| Kiri Brew | Coffee | http://localhost:3000/kirikiri-brew |
-| Seoul & Sakura | Japanese/Korean | http://localhost:3000/seoul-sakura |
-| PixelForge | Gaming/tech | http://localhost:3000/pixelforge |
-
-Each store has categories, products (photos, descriptions, add-on modifiers, and
-a mix of in-stock, sold-out, and pre-order items), and a few sample orders.
-
-It also seeds three sign-in accounts that together demonstrate the app's
-role-based access control. Passwords are provisioned per environment (see
-[`docs/deployment-notes.md`](docs/deployment-notes.md)), not committed:
-
-| Account | What it can do | Email |
-|---|---|---|
-| Merchant | Owns and fully manages all three stores | manyorder.app@gmail.com |
-| Staff | Works a single store's orders, without owner-level settings | staff@manyorder.com |
-| Platform admin | Cross-store administration | admin@manyorder.app |
-
-Sign in to the dashboard at http://localhost:3000.
-
-## Tests
-
-```bash
-cd backend && ./mvnw test     # runs on in-memory H2, not your Postgres
-cd frontend && npm test
-```
-
-## Notes
-
-Configuration and secrets are read from a `.env` file in each of `backend/` and
-`frontend/`. Copy the committed `.env.example` templates and fill in your own
-values; the real `.env` files stay out of version control.
-
-The platform-admin role cannot be created through sign-up. If you need to grant
-it, or you are deploying against a database that already holds data, see
-[`docs/deployment-notes.md`](docs/deployment-notes.md).
+![Admin activity](docs/screenshots/admin-activity.png)
+*Admin audit log of actions across stores.*
