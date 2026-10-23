@@ -153,6 +153,20 @@ async function request<T>(
   return (await response.json()) as T;
 }
 
+/**
+ * Public, side-effect-free store-slug availability. Returns false for taken,
+ * reserved and invalid names alike (the server answers neutrally), so callers
+ * must not infer a reason from a false result. No auth, so it never trips the
+ * session handler.
+ */
+export async function checkStoreSlugAvailable(slug: string): Promise<boolean> {
+  const res = await request<{ available: boolean }>(
+    `/public/store-slug-available?slug=${encodeURIComponent(slug)}`,
+    { auth: false },
+  );
+  return res.available;
+}
+
 // ---------- Types mirrored from the backend ----------
 
 export interface LoginResponse {

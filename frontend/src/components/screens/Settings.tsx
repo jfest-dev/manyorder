@@ -13,6 +13,7 @@ import { PhoneField } from '../PhoneField';
 import { Toast } from '../Toast';
 import { VerifiedBadge } from '../VerifiedBadge';
 import { businessTypeOptions, CURRENCIES, STORE_FIELD_TEXT } from '../../lib/storeFields';
+import { useSlugAvailability } from '../../lib/useSlugAvailability';
 
 interface SettingsProps {
   storeId: number;
@@ -377,6 +378,8 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
     .split(' ').filter(Boolean).map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 
   const slugChanged = (form.slug || '').trim().toLowerCase() !== slugTouchedFrom;
+  // Advisory availability; ignore the store's own current slug so an unchanged link isn't flagged.
+  const slugAvailability = useSlugAvailability(form.slug || '', slugTouchedFrom);
 
   if (loading) {
     return <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading settings…</p>;
@@ -532,6 +535,33 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
                   : `manyorder.app/${form.slug || 'your-store'} · the link you share with customers`
               }
             />
+            {slugAvailability.status === 'available' && (
+              <p className="text-xs" style={{ color: 'var(--success-color, #10B981)', marginTop: '-8px' }}>
+                {slugAvailability.message}
+              </p>
+            )}
+            {slugAvailability.status === 'unavailable' && (
+              <div style={{ marginTop: '-8px' }}>
+                <p className="text-xs" style={{ color: 'var(--error-color)' }}>{slugAvailability.message}</p>
+                {slugAvailability.suggestions.length > 0 && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                    {slugAvailability.suggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => set('slug', s)}
+                        style={{
+                          fontSize: '12px', padding: '2px 8px', borderRadius: 'var(--radius-field)',
+                          border: '1px solid var(--border-strong)', background: 'var(--bg-card)', cursor: 'pointer',
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {hasOrders ? (
               <div>
                 <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>

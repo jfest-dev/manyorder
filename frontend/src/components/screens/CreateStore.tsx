@@ -7,6 +7,7 @@ import { storeInitials } from '../../lib/initials';
 import { PhoneField } from '../PhoneField';
 import { BUSINESS_TYPES, CURRENCIES, STORE_FIELD_TEXT } from '../../lib/storeFields';
 import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
+import { useSlugAvailability } from '../../lib/useSlugAvailability';
 
 interface CreateStoreProps {
   // Keep your UI fields, but App.tsx can still ignore the extra fields safely
@@ -92,6 +93,9 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
   const [city, setCity] = useState(initialData?.city || '');
   const [postalCode, setPostalCode] = useState(initialData?.postalCode || '');
   const [operatingHours, setOperatingHours] = useState(initialData?.operatingHours || '');
+
+  // Debounced, advisory availability of the chosen store link.
+  const slugAvailability = useSlugAvailability(storeLink);
 
   // Logo: held locally as a File and previewed via an object URL. Nothing is
   // uploaded here - the caller uploads it only when the store is created, so a
@@ -346,6 +350,35 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                 <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px' }}>
                   This is the link you share with customers.
                 </p>
+                {slugAvailability.status === 'available' && (
+                  <p className="text-xs" style={{ color: 'var(--success-color, #10B981)', marginTop: '4px' }}>
+                    {slugAvailability.message}
+                  </p>
+                )}
+                {slugAvailability.status === 'unavailable' && (
+                  <div style={{ marginTop: '4px' }}>
+                    <p className="text-xs" style={{ color: 'var(--error-color)' }}>
+                      {slugAvailability.message}
+                    </p>
+                    {slugAvailability.suggestions.length > 0 && (
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                        {slugAvailability.suggestions.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => { setStoreLink(s); setStoreLinkTouched(true); }}
+                            style={{
+                              fontSize: '12px', padding: '2px 8px', borderRadius: 'var(--radius-field)',
+                              border: '1px solid var(--border-strong)', background: 'var(--bg-card)', cursor: 'pointer',
+                            }}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <FieldSelect
