@@ -62,6 +62,23 @@ public class User {
 
     private LocalDateTime createdAt;
 
+    /**
+     * Consecutive failed sign-in attempts since the last success. Nullable (treated
+     * as zero when null) so the column can be added to a table that already has
+     * rows. Only counted for existing accounts; reset on a successful sign-in or a
+     * successful password reset.
+     */
+    @Column(nullable = true)
+    private Integer failedLoginAttempts;
+
+    /**
+     * When set and in the future, sign-in is refused regardless of the password.
+     * Nullable (no lock when null). Cleared on a successful sign-in or password
+     * reset, and lazily when an expired lock is seen on the next failed attempt.
+     */
+    @Column(nullable = true)
+    private LocalDateTime lockedUntil;
+
     protected User() {
         // JPA only
     }
@@ -89,4 +106,8 @@ public class User {
     public Merchant getStaffStore() { return staffStore; }
     public void setStaffStore(Merchant staffStore) { this.staffStore = staffStore; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
+    public void setFailedLoginAttempts(Integer failedLoginAttempts) { this.failedLoginAttempts = failedLoginAttempts; }
+    public LocalDateTime getLockedUntil() { return lockedUntil; }
+    public void setLockedUntil(LocalDateTime lockedUntil) { this.lockedUntil = lockedUntil; }
 }

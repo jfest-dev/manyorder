@@ -1,5 +1,7 @@
 package com.manyorder.api.domain.auth;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
@@ -31,7 +33,23 @@ public class AuthService {
     private final EmailVerificationService emailVerificationService;
     private final String googleClientId;
     private final String supportEmail;
+    private final Clock clock;
     private final RestClient restClient = RestClient.create();
+
+    /** Lock an account after this many consecutive wrong passwords. Platform admin
+     *  gets the higher threshold. */
+    private static final int MAX_FAILED_ATTEMPTS = 5;
+    private static final int MAX_FAILED_ATTEMPTS_ADMIN = 10;
+    /** How long an account stays locked once the threshold is crossed. */
+    private static final int LOCK_MINUTES = 15;
+    /** One message and status for wrong password, locked account, and unknown email,
+     *  so none of them can be told apart from the response. */
+    private static final String SIGN_IN_FAILED_MESSAGE =
+            "Invalid email or password, or too many attempts. Try again in a few minutes.";
+
+    /** A valid hash to compare against when the email is unknown, so an unknown
+     *  email costs about the same time as a wrong password (no timing oracle). */
+    private final String dummyHash;
 
     public AuthService(UserRepository userRepository,
                        MerchantRepository merchantRepository,
@@ -39,7 +57,8 @@ public class AuthService {
                        JwtUtil jwtUtil,
                        EmailVerificationService emailVerificationService,
                        @Value("${app.google.client-id:}") String googleClientId,
-                       @Value("${app.support.email:support@manyorder.app}") String supportEmail) {
+                       @Value("${app.support.email:support@manyorder.app}") String supportEmail,
+                       Clock clock) {
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
         this.passwordEncoder = passwordEncoder;
@@ -47,6 +66,8 @@ public class AuthService {
         this.emailVerificationService = emailVerificationService;
         this.googleClientId = googleClientId == null ? "" : googleClientId.trim();
         this.supportEmail = supportEmail;
+        this.clock = clock;
+        this.dummyHash = passwordEncoder.encode("sign-in-timing-equalizer");
     }
 
     public String getGoogleClientId() {
@@ -54,17 +75,67 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(this::badCredentials);
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+        if (user == null) {
+            // Unknown email: do a throwaway hash comparison so the timing matches a
+            // wrong password, then fail with the same message. No counter is kept
+            // for a non-existent account.
+            passwordEncoder.matches(request.getPassword().trim(), dummyHash);
+            throw signInFailed();
+        }
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        // A locked account is refused before the password is even checked, so a
+        // correct password during a lock is still rejected and the lock is not
+        // revealed (same message as a wrong password).
+        if (isLocked(user, now)) {
+            throw signInFailed();
+        }
 
         if (!passwordEncoder.matches(request.getPassword().trim(), user.getPasswordHash())) {
-            throw badCredentials();
+            registerFailedAttempt(user, now);
+            throw signInFailed();
         }
+
+        // Correct password: clear any failure state before anything else can throw.
+        clearFailedAttempts(user);
         requireNotSuspended(user);
         // Remember me extends the session to the longer lifetime, except a platform
         // admin always gets the standard (short) lifetime whatever the box says.
         boolean longLived = request.isRemember() && user.getRole() != UserRole.PLATFORM_ADMIN;
         return toLoginResponse(user, longLived);
+    }
+
+    private boolean isLocked(User user, LocalDateTime now) {
+        return user.getLockedUntil() != null && now.isBefore(user.getLockedUntil());
+    }
+
+    private int failedAttemptThreshold(User user) {
+        return user.getRole() == UserRole.PLATFORM_ADMIN ? MAX_FAILED_ATTEMPTS_ADMIN : MAX_FAILED_ATTEMPTS;
+    }
+
+    /** Count a wrong password for an existing account and lock it once the threshold
+     *  is crossed. An already-expired lock starts a fresh count. */
+    private void registerFailedAttempt(User user, LocalDateTime now) {
+        int attempts = user.getFailedLoginAttempts() == null ? 0 : user.getFailedLoginAttempts();
+        if (user.getLockedUntil() != null && !now.isBefore(user.getLockedUntil())) {
+            attempts = 0; // previous lock has expired
+            user.setLockedUntil(null);
+        }
+        attempts++;
+        user.setFailedLoginAttempts(attempts);
+        if (attempts >= failedAttemptThreshold(user)) {
+            user.setLockedUntil(now.plusMinutes(LOCK_MINUTES));
+        }
+        userRepository.save(user);
+    }
+
+    private void clearFailedAttempts(User user) {
+        if (user.getFailedLoginAttempts() != null || user.getLockedUntil() != null) {
+            user.setFailedLoginAttempts(null);
+            user.setLockedUntil(null);
+            userRepository.save(user);
+        }
     }
 
     /** Block sign-in for an admin-suspended account: a MERCHANT with any suspended
@@ -207,7 +278,7 @@ public class AuthService {
                 user.getRole(), staffStoreId, user.isVerified(), token);
     }
 
-    private ResponseStatusException badCredentials() {
-        return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+    private ResponseStatusException signInFailed() {
+        return new ResponseStatusException(HttpStatus.UNAUTHORIZED, SIGN_IN_FAILED_MESSAGE);
     }
 }

@@ -115,6 +115,10 @@ public class PasswordResetService {
 
         User user = token.getUser();
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        // A successful reset also clears any sign-in lockout, so the owner can log
+        // in immediately with the new password.
+        user.setFailedLoginAttempts(null);
+        user.setLockedUntil(null);
         userRepository.save(user);
 
         LocalDateTime now = LocalDateTime.now();
