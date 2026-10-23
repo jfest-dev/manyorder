@@ -30,7 +30,14 @@ public class SlugService {
             "public", "merchant", "orders", "marketing", "settings", "dashboard", "products",
             "customers", "static", "assets", "favicon.ico", "robots.txt", "sitemap.xml",
             "well-known", "health", "actuator", "v3", "swagger", "www", "support", "help",
-            "try", "demo", "status", "privacy", "terms");
+            "try", "demo", "status", "privacy", "terms",
+            // Marketing site, product surfaces, brand and placeholder names.
+            "pricing", "blog", "about", "contact", "features", "pos", "docs", "shops",
+            "explore", "discover", "marketplace", "store", "stores", "cart", "checkout",
+            "order", "pay", "payments", "billing", "legal", "security", "careers", "press",
+            "partners", "developers", "download", "qr", "manyorder", "many-order", "official",
+            "team", "test", "sandbox", "null", "undefined", "alternatives", "policy",
+            "platform", "cdn");
 
     private final MerchantRepository merchantRepository;
 
