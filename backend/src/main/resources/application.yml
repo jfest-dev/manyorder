@@ -80,6 +80,11 @@ app:
   frontend:
     # Base URL the emailed reset link points back to.
     base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
+  docs:
+    # Public API docs (Swagger UI + /v3/api-docs). OFF by default; set
+    # APP_DOCS_ENABLED=true only locally or in non-prod. This gates the springdoc
+    # endpoints themselves (below), so when off the paths 404 and never leak.
+    enabled: ${APP_DOCS_ENABLED:false}
   cloudinary:
     # Server-side image hosting for store logos. Leave any value unset to
     # disable uploads (the endpoint then returns 503 instead of failing oddly).
@@ -91,5 +96,10 @@ app:
     root-folder: ${CLOUDINARY_ROOT_FOLDER:manyorder}
 
 springdoc:
+  # Gated on app.docs.enabled: when false the OpenAPI JSON and Swagger UI endpoints
+  # are not registered, so they 404 in production rather than being merely secured.
+  api-docs:
+    enabled: ${app.docs.enabled}
   swagger-ui:
+    enabled: ${app.docs.enabled}
     path: /swagger-ui.html
