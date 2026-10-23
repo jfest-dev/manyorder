@@ -13,6 +13,7 @@ public class UpdateStoreRequest {
 
     @Pattern(regexp = "^$|^[a-z0-9]+(-[a-z0-9]+)*$",
              message = "may only contain lowercase letters, numbers and hyphens")
+    @Size(max = 50, message = "Store link must be 50 characters or fewer")
     private String slug;
 
     private String storeEmail;

@@ -30,15 +30,6 @@ import jakarta.validation.Valid;
 @RequestMapping("/merchant/stores")
 public class MerchantStoreController {
 
-    /**
-     * Slugs that would shadow an app route (the storefront lives at the root path
-     * {@code manyorder.app/{slug}}). Reserved so a store link can never collide
-     * with a real page. Existing store slugs were checked and none collide.
-     */
-    private static final java.util.Set<String> RESERVED_SLUGS = java.util.Set.of(
-            "signin", "register", "login", "logout", "forgot-password", "reset-password",
-            "app", "admin", "api", "public", "storefront", "assets", "static");
-
     private final MerchantRepository merchantRepository;
     private final CurrentUserService currentUserService;
     private final StoreAccessService storeAccessService;
@@ -46,6 +37,7 @@ public class MerchantStoreController {
     private final StoreLimitService storeLimitService;
     private final CloudinaryImageService imageService;
     private final com.manyorder.api.domain.storeemailverification.StoreEmailVerificationService storeEmailVerificationService;
+    private final SlugService slugService;
     private final String supportEmail;
 
     public MerchantStoreController(MerchantRepository merchantRepository,
@@ -55,6 +47,7 @@ public class MerchantStoreController {
                                    StoreLimitService storeLimitService,
                                    CloudinaryImageService imageService,
                                    com.manyorder.api.domain.storeemailverification.StoreEmailVerificationService storeEmailVerificationService,
+                                   SlugService slugService,
                                    @org.springframework.beans.factory.annotation.Value("${app.support.email:support@manyorder.app}") String supportEmail) {
         this.merchantRepository = merchantRepository;
         this.currentUserService = currentUserService;
@@ -63,6 +56,7 @@ public class MerchantStoreController {
         this.storeLimitService = storeLimitService;
         this.imageService = imageService;
         this.storeEmailVerificationService = storeEmailVerificationService;
+        this.slugService = slugService;
         this.supportEmail = supportEmail;
     }
 
@@ -124,9 +118,9 @@ public class MerchantStoreController {
             merchant.setName(request.getStoreName().trim());
         }
         if (request.getSlug() != null && !request.getSlug().isBlank()) {
-            String slug = request.getSlug().trim().toLowerCase();
-            ensureSlugAllowed(slug);
-            if (!slug.equals(merchant.getSlug()) && merchantRepository.existsBySlug(slug)) {
+            String slug = slugService.normalize(request.getSlug());
+            slugService.requireAssignableFormat(slug);
+            if (!slug.equals(merchant.getSlug()) && slugService.isTaken(slug)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Store link already taken. Please choose another.");
             }
@@ -248,35 +242,28 @@ public class MerchantStoreController {
     }
 
     private String resolveSlug(String requested, String storeName) {
-        String base = requested != null && !requested.isBlank()
-                ? requested.trim().toLowerCase()
-                : slugify(storeName);
-        if (base.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Store link cannot be empty");
-        }
         if (requested != null && !requested.isBlank()) {
-            ensureSlugAllowed(base);
-            if (merchantRepository.existsBySlug(base)) {
+            // Explicit slug: must be well-formed, within length, not reserved, not taken.
+            String base = slugService.normalize(requested);
+            slugService.requireAssignableFormat(base);
+            if (slugService.isTaken(base)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Store link already taken. Please choose another.");
             }
             return base;
         }
-        // Auto-derived from the name: skip reserved words too, and de-dupe.
+        // Auto-derived from the name: cap length, skip reserved words, and de-dupe.
+        String base = slugService.capBase(slugify(storeName), 0);
+        if (base.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Store link cannot be empty");
+        }
         String candidate = base;
         int suffix = 2;
-        while (merchantRepository.existsBySlug(candidate) || RESERVED_SLUGS.contains(candidate)) {
-            candidate = base + "-" + suffix++;
+        while (slugService.isTaken(candidate) || slugService.isReserved(candidate)) {
+            String suf = "-" + suffix++;
+            candidate = slugService.capBase(base, suf.length()) + suf;
         }
         return candidate;
-    }
-
-    /** Reject a slug that would shadow an app route (see {@link #RESERVED_SLUGS}). */
-    private void ensureSlugAllowed(String slug) {
-        if (RESERVED_SLUGS.contains(slug)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "That store link is reserved. Please choose another.");
-        }
     }
 
     private String normalizeCurrency(String raw) {
