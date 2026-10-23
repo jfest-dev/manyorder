@@ -5,7 +5,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.manyorder.api.domain.user.User;
@@ -25,7 +25,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 class PasswordLengthIntegrationTest extends IntegrationTestBase {
 
     @Autowired private UserRepository userRepository;
-    @Autowired private PasswordEncoder passwordEncoder;
 
     // "A" is one byte; a password of (72 "a" + "1") is 73 bytes.
     private static final String OVER_72_ASCII = "a".repeat(72) + "1";
@@ -89,10 +88,11 @@ class PasswordLengthIntegrationTest extends IntegrationTestBase {
 
     @Test
     void login_withLongerExistingPassword_doesNotError() throws Exception {
-        // An account whose stored hash was made from a 72-byte password: signing in
-        // with a 100-byte password must not 500 (bcrypt truncates to 72 and matches).
+        // A legacy bcrypt account (as all current production rows are) whose stored
+        // hash was made from a 72-byte password: signing in with a 100-byte password
+        // must not 500. bcrypt truncates both to 72 bytes, so it still matches.
         User u = new User("Legacy", "pwlen-login@test.com",
-                passwordEncoder.encode("a".repeat(72)), UserRole.MERCHANT);
+                new BCryptPasswordEncoder().encode("a".repeat(72)), UserRole.MERCHANT);
         userRepository.save(u);
 
         mockMvc.perform(post("/auth/login")

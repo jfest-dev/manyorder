@@ -9,7 +9,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
@@ -44,9 +46,28 @@ public class SecurityConfig {
                 .toList();
     }
 
+    /**
+     * Password hashing. New hashes use Argon2id (memory 19 MiB, 2 iterations,
+     * parallelism 1); the prefix {@code {argon2}} records the scheme. Existing
+     * stored hashes are bare bcrypt with no prefix, so bcrypt is set as the default
+     * encoder for matching, and AuthService re-encodes each one to Argon2id on the
+     * owner's next successful sign-in (upgrade-on-login).
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        String idForEncode = "argon2";
+        // (saltLength, hashLength, parallelism, memoryInKiB, iterations)
+        Argon2PasswordEncoder argon2 = new Argon2PasswordEncoder(16, 32, 1, 19 * 1024, 2);
+        BCryptPasswordEncoder bcrypt = new BCryptPasswordEncoder();
+
+        java.util.Map<String, PasswordEncoder> encoders = new java.util.HashMap<>();
+        encoders.put(idForEncode, argon2);
+        encoders.put("bcrypt", bcrypt);
+
+        DelegatingPasswordEncoder delegating = new DelegatingPasswordEncoder(idForEncode, encoders);
+        // Unprefixed legacy hashes are bcrypt; match them so old users can still sign in.
+        delegating.setDefaultPasswordEncoderForMatches(bcrypt);
+        return delegating;
     }
 
     @Bean

@@ -130,6 +130,15 @@
             <artifactId>caffeine</artifactId>
         </dependency>
 
+        <!-- Argon2id password hashing. Spring Security's Argon2PasswordEncoder uses
+             Bouncy Castle's Argon2 implementation, which is not pulled in transitively,
+             so it is declared explicitly here. -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.78.1</version>
+        </dependency>
+
     </dependencies>
 
     <build>

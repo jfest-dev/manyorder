@@ -99,6 +99,13 @@ public class AuthService {
 
         // Correct password: clear any failure state before anything else can throw.
         clearFailedAttempts(user);
+        // Upgrade-on-login: migrate an older hash (bare bcrypt) to the current
+        // default (Argon2id) using the password we just verified. The plaintext is
+        // only re-encoded, never logged or stored.
+        if (passwordEncoder.upgradeEncoding(user.getPasswordHash())) {
+            user.setPasswordHash(passwordEncoder.encode(request.getPassword().trim()));
+            userRepository.save(user);
+        }
         requireNotSuspended(user);
         // Remember me extends the session to the longer lifetime, except a platform
         // admin always gets the standard (short) lifetime whatever the box says.
