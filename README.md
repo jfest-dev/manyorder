@@ -12,7 +12,7 @@ The full merchant and admin experience is shown in the screenshots below, and a 
 - Frontend: React 18, TypeScript, Vite
 - Infrastructure: Railway (API + managed Postgres), Cloudflare (domain, DNS, cookieless analytics), Cloudinary (images), Resend (email)
 
-**Tests:** 367 backend and 276 frontend automated tests.
+**Tests:** 410 backend and 291 frontend automated tests.
 
 ## Highlights
 
