@@ -109,6 +109,7 @@ public class PasswordResetService {
     @Transactional
     public void resetPassword(String rawToken, String newPassword) {
         com.manyorder.api.common.Passwords.requireNoWhitespace(newPassword);
+        com.manyorder.api.common.Passwords.requireWithinMaxLength(newPassword);
         PasswordResetToken token = tokenRepository.findByTokenHash(sha256Hex(rawToken))
                 .filter(t -> !t.isUsed() && !t.isExpired())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_TOKEN_MESSAGE));

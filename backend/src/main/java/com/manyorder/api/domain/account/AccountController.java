@@ -78,6 +78,7 @@ public class AccountController {
                                Authentication authentication) {
         User user = currentUserService.require(authentication);
         com.manyorder.api.common.Passwords.requireNoWhitespace(request.getNewPassword());
+        com.manyorder.api.common.Passwords.requireWithinMaxLength(request.getNewPassword());
 
         if (!passwordEncoder.matches(request.getCurrentPassword().trim(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Incorrect password");

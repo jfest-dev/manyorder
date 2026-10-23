@@ -13,10 +13,30 @@ public final class Passwords {
     /** Minimum length for a bootstrap secret (ADMIN_PASSWORD / DEMO_PASSWORD). */
     public static final int MIN_SECRET_LENGTH = 12;
 
+    /**
+     * bcrypt only considers the first 72 bytes of a password, so anything longer is
+     * silently truncated (and some encoder versions reject it outright). Cap new
+     * passwords at this size so what the user types is what is actually hashed.
+     */
+    public static final int MAX_PASSWORD_BYTES = 72;
+
     /** Reject a new password containing any whitespace (space, tab, newline). */
     public static void requireNoWhitespace(String raw) {
         if (raw != null && raw.chars().anyMatch(Character::isWhitespace)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password can't contain spaces.");
+        }
+    }
+
+    /**
+     * Reject a new password longer than {@value #MAX_PASSWORD_BYTES} bytes in UTF-8
+     * (so multi-byte characters count by their byte size). Applied at every
+     * set-password point; login never checks length, so an existing longer password
+     * still verifies (bcrypt compares only the first 72 bytes).
+     */
+    public static void requireWithinMaxLength(String raw) {
+        if (raw != null && raw.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_PASSWORD_BYTES) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Password must be " + MAX_PASSWORD_BYTES + " bytes or fewer.");
         }
     }
 

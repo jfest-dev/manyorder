@@ -174,6 +174,7 @@ public class AuthService {
         // Passwords may not contain whitespace at all (login still trims, so a
         // pasted trailing space there is harmless). Reject rather than silently strip.
         Passwords.requireNoWhitespace(request.getPassword());
+        Passwords.requireWithinMaxLength(request.getPassword());
         String hashed = passwordEncoder.encode(request.getPassword());
         User user = new User(request.getFullName(), request.getEmail(), hashed, role);
         user.setStaffStore(staffStore);
