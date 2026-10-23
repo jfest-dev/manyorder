@@ -1,10 +1,18 @@
 package com.manyorder.api.config;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -30,20 +38,49 @@ import jakarta.servlet.http.HttpServletResponse;
  * scaled horizontally, swap the bucket store for a distributed one (bucket4j-redis).
  *
  * <p>Each request draws from two buckets: the endpoint's tier bucket (the tighter,
- * specific limit) and a per-IP global backstop across all public endpoints. Client
- * IP comes from {@code getRemoteAddr()} — with {@code server.forward-headers-strategy:
- * framework} that reflects the real client behind a trusted proxy.
+ * specific limit) and a per-key global backstop across all public endpoints. The
+ * client key is derived by {@link #clientKey(HttpServletRequest)} (X-Real-IP, then
+ * the leftmost X-Forwarded-For, then the socket address); see the trust note there.
  */
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
+
     private enum Tier { STRICT, STANDARD, READS }
+
+    // IPv4 dotted quad, each octet 0-255.
+    private static final Pattern IPV4 = Pattern.compile(
+            "^(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)(\\.(25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)){3}$");
+    // Full IPv6, including :: compression and an optional embedded IPv4 tail.
+    private static final Pattern IPV6 = Pattern.compile(
+            "^(" +
+            "([0-9A-Fa-f]{1,4}:){7}[0-9A-Fa-f]{1,4}|" +
+            "([0-9A-Fa-f]{1,4}:){1,7}:|" +
+            "([0-9A-Fa-f]{1,4}:){1,6}:[0-9A-Fa-f]{1,4}|" +
+            "([0-9A-Fa-f]{1,4}:){1,5}(:[0-9A-Fa-f]{1,4}){1,2}|" +
+            "([0-9A-Fa-f]{1,4}:){1,4}(:[0-9A-Fa-f]{1,4}){1,3}|" +
+            "([0-9A-Fa-f]{1,4}:){1,3}(:[0-9A-Fa-f]{1,4}){1,4}|" +
+            "([0-9A-Fa-f]{1,4}:){1,2}(:[0-9A-Fa-f]{1,4}){1,5}|" +
+            "[0-9A-Fa-f]{1,4}:(:[0-9A-Fa-f]{1,4}){1,6}|" +
+            ":((:[0-9A-Fa-f]{1,4}){1,7}|:)|" +
+            "::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])|" +
+            "([0-9A-Fa-f]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])" +
+            ")$");
 
     private final boolean enabled;
     private final int strictPerMinute;
     private final int standardPerMinute;
     private final int readsPerMinute;
     private final int globalPerMinute;
+
+    // When on (off by default), log a short hash of the derived key so a live run
+    // can confirm the key is stable per client, without ever logging the address.
+    private final boolean logKeyHash;
+    // A random value made once at process startup: never persisted, never a secret
+    // from config, so the logged hash cannot be reversed to an address or correlated
+    // across restarts.
+    private final byte[] keyHashSalt = newSalt();
 
     // One bucket per "TIER:ip" and "GLOBAL:ip". expireAfterAccess evicts IPs that
     // stop calling, keeping memory bounded; the cap is a hard safety ceiling.
@@ -57,12 +94,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
             @Value("${app.ratelimit.strict-per-minute:5}") int strictPerMinute,
             @Value("${app.ratelimit.standard-per-minute:10}") int standardPerMinute,
             @Value("${app.ratelimit.reads-per-minute:60}") int readsPerMinute,
-            @Value("${app.ratelimit.global-per-minute:120}") int globalPerMinute) {
+            @Value("${app.ratelimit.global-per-minute:120}") int globalPerMinute,
+            @Value("${app.ratelimit.log-key-hash:false}") boolean logKeyHash) {
         this.enabled = enabled;
         this.strictPerMinute = strictPerMinute;
         this.standardPerMinute = standardPerMinute;
         this.readsPerMinute = readsPerMinute;
         this.globalPerMinute = globalPerMinute;
+        this.logKeyHash = logKeyHash;
+    }
+
+    private static byte[] newSalt() {
+        byte[] salt = new byte[16];
+        new SecureRandom().nextBytes(salt);
+        return salt;
     }
 
     @Override
@@ -73,7 +118,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
             return;
         }
-        String ip = clientIp(request);
+        String ip = clientKey(request);
+        if (logKeyHash) {
+            // INFO so the line is visible during a live check without changing log
+            // levels; the flag is the gate and defaults to off.
+            log.info("ratelimit key hash={}", keyHashPrefix(ip));
+        }
         Tier tier = resolveTier(request.getMethod(), path);
 
         // Endpoint tier first (usually the binding limit), then the global backstop.
@@ -128,11 +178,73 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return Tier.STANDARD;
     }
 
-    /** With server.forward-headers-strategy=framework this is the real client IP
-     *  behind a trusted proxy; otherwise the direct socket address. */
-    private static String clientIp(HttpServletRequest request) {
-        String ip = request.getRemoteAddr();
-        return (ip == null || ip.isBlank()) ? "unknown" : ip;
+    /**
+     * The key a client is rate-limited under. Precedence:
+     * <ol>
+     *   <li>{@code X-Real-IP}, when present and a valid IP literal.</li>
+     *   <li>the leftmost {@code X-Forwarded-For} entry, when valid.</li>
+     *   <li>the socket address, {@code getRemoteAddr()}.</li>
+     * </ol>
+     * Malformed values are ignored and fall through to the next source.
+     *
+     * <p><b>Trust assumption.</b> {@code X-Real-IP} and {@code X-Forwarded-For} are
+     * set by the client, so keying on them is safe ONLY because the Railway edge
+     * overwrites both on every inbound request ({@code X-Real-IP} is its documented
+     * client address, and the leftmost {@code X-Forwarded-For} is the client).
+     * Without an edge that overwrites them a client could forge these headers to
+     * rotate its key and evade the per-key limit (see docs/deployment-notes.md).
+     * Locally no such headers are sent, so this falls back to {@code getRemoteAddr()}
+     * and local development keeps working. With {@code forward-headers-strategy:
+     * framework}, {@code getRemoteAddr()} itself already reflects the leftmost
+     * forwarded value, so the fallback and step 2 agree.
+     */
+    static String clientKey(HttpServletRequest request) {
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && isValidIp(realIp.trim())) {
+            return realIp.trim();
+        }
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            String leftmost = xff.split(",", 2)[0].trim();
+            if (isValidIp(leftmost)) {
+                return leftmost;
+            }
+        }
+        String remote = request.getRemoteAddr();
+        return (remote == null || remote.isBlank()) ? "unknown" : remote;
+    }
+
+    /** True for a well-formed IPv4 or IPv6 literal (an optional IPv6 zone id is
+     *  tolerated). Anything else is treated as malformed and ignored. */
+    static boolean isValidIp(String value) {
+        if (value == null) {
+            return false;
+        }
+        String s = value.trim();
+        if (s.isEmpty() || s.length() > 45) {
+            return false;
+        }
+        if (s.indexOf(':') >= 0) {
+            int zone = s.indexOf('%');
+            if (zone >= 0) {
+                s = s.substring(0, zone);
+            }
+            return IPV6.matcher(s).matches();
+        }
+        return IPV4.matcher(s).matches();
+    }
+
+    /** First 8 hex chars of SHA-256(startup-salt || key). Not reversible to the
+     *  address and not stable across restarts; for the debug log line only. */
+    private String keyHashPrefix(String key) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(keyHashSalt);
+            md.update(key.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(md.digest()).substring(0, 8);
+        } catch (NoSuchAlgorithmException e) {
+            return "nohash";
+        }
     }
 
     private void reject(HttpServletRequest request, HttpServletResponse response, ConsumptionProbe probe)

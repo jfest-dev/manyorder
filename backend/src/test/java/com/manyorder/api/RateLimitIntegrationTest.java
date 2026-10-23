@@ -93,4 +93,21 @@ class RateLimitIntegrationTest extends IntegrationTestBase {
         assertEquals(TOO_MANY, postValidate("10.0.1.1"), "IP a is now blocked");
         assertNotEquals(TOO_MANY, postValidate("10.0.1.2"), "a different IP is independent");
     }
+
+    private int postValidateRealIp(String socketAddr, String realIp) throws Exception {
+        return mockMvc.perform(post("/public/discounts/validate").with(ip(socketAddr))
+                        .header("X-Real-IP", realIp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"merchantId\":1,\"code\":\"NOPE\",\"items\":[]}"))
+                .andReturn().getResponse().getStatus();
+    }
+
+    @Test
+    void keysOnXRealIp_notTheSocketAddress() throws Exception {
+        // Same socket address, different X-Real-IP: the limit follows X-Real-IP, so
+        // one real client is throttled while another (behind the same proxy) is not.
+        for (int i = 0; i < 3; i++) postValidateRealIp("10.9.9.9", "203.0.113.1");
+        assertEquals(TOO_MANY, postValidateRealIp("10.9.9.9", "203.0.113.1"), "real client 1 is blocked");
+        assertNotEquals(TOO_MANY, postValidateRealIp("10.9.9.9", "203.0.113.2"), "a different real client is independent");
+    }
 }
