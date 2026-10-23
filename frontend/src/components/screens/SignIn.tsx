@@ -9,6 +9,7 @@ import { PasswordField } from '../PasswordField';
 import { Button } from '../Button';
 import { takeAuthNotice } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { useNoindex } from '../../lib/useNoindex';
 
 // Simple, permissive email shape check - enough to catch obviously invalid
 // input client-side so we show one friendly message instead of the backend's
@@ -40,6 +41,7 @@ function renderError(message: string): React.ReactNode {
 export function SignIn() {
   const { user, login, loginWithGoogle, logout } = useAuth();
   const navigate = useNavigate();
+  useNoindex(); // the sign-in page must not be indexed
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

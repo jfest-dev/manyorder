@@ -66,6 +66,13 @@ export function StorefrontApp() {
     return () => { cancelled = true; };
   }, [slug]);
 
+  // Per-shop page title (visible in the tab and to JS-running search engines);
+  // restored to the app default when leaving the storefront.
+  useEffect(() => {
+    if (store?.name) document.title = `${store.name} · ManyOrder`;
+    return () => { document.title = 'ManyOrder'; };
+  }, [store?.name]);
+
   useEffect(() => {
     if (!cartKey) return;
     setCart(parseCart(localStorage.getItem(cartKey)));

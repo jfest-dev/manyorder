@@ -27,6 +27,12 @@ function renderSignIn() {
 beforeEach(() => { cleanup(); login.mockReset(); logout.mockReset(); authUser = null; sessionStorage.clear(); });
 
 describe('SignIn', () => {
+  it('marks the sign-in page noindex', () => {
+    renderSignIn();
+    const robots = document.querySelector('meta[name="robots"]');
+    expect(robots?.getAttribute('content')).toContain('noindex');
+  });
+
   it('renders a suspended-account message with the support address as a mailto link', async () => {
     const user = userEvent.setup();
     // The backend 403 message carries the support address from its config.

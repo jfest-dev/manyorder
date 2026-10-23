@@ -37,6 +37,7 @@ const TrackOrderView = lazy(() => named(import('./components/storefront/TrackOrd
 
 import { useAuth } from './context/AuthContext';
 import { ApiError, storesApi, uploadsApi, ordersApi, StoreResponse } from './lib/api';
+import { useNoindex } from './lib/useNoindex';
 
 type Screen =
   | 'dashboard'
@@ -834,6 +835,7 @@ function MerchantApp() {
  *  enforces this — /admin/** is PLATFORM_ADMIN-only and /merchant/** is not. */
 function AuthedApp() {
   const { user, logout } = useAuth();
+  useNoindex(); // the signed-in app must not be indexed
   if (user?.role === 'PLATFORM_ADMIN') return <Suspense fallback={<AppLoading full />}><AdminApp /></Suspense>;
   if (user?.role === 'MERCHANT' || user?.role === 'STAFF') return <MerchantApp />;
   // Authenticated but the role is missing/unrecognised: never strand the user in
