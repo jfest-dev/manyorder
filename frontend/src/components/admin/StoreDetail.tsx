@@ -266,7 +266,7 @@ export function StoreDetail({ merchantId, onChanged }: { merchantId: number; onC
           <Checkbox checked={profile.protectedFromDeletion} onChange={toggleProtect} disabled={busy} ariaLabel="Protected from deletion" style={{ marginTop: 2 }} />
           <span>
             <span className="text-small" style={{ fontWeight: 600, display: 'block' }}>Protected from deletion</span>
-            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>A protected store can't be deleted by an admin or the cleanup job.</span>
+            <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Locked. This store can't be deleted until you unlock it.</span>
           </span>
         </label>
 

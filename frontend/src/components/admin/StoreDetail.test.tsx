@@ -126,6 +126,8 @@ describe('StoreDetail', () => {
     await screen.findByText('owner@kiri.test');
 
     expect(screen.getByText('Store administration')).toBeTruthy();
+    // The protect note uses the "Locked ... until you unlock it" wording.
+    expect(screen.getByText("Locked. This store can't be deleted until you unlock it.")).toBeTruthy();
     // Delete now is present but disabled, labelled not available yet.
     const deleteNow = screen.getByRole('button', { name: 'Delete now' });
     expect((deleteNow as HTMLButtonElement).disabled).toBe(true);
