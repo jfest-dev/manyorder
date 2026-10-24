@@ -4,7 +4,7 @@ Multi-store online ordering for small F&B and retail: a merchant creates a store
 
 **Live shop (no login needed):** https://manyorder.app/kirikiri-brew
 
-The full merchant and admin experience is shown in the screenshots below, and a guided demo is available on request.
+A guided demo is available on request.
 
 ## Tech stack
 
@@ -22,23 +22,3 @@ The full merchant and admin experience is shown in the screenshots below, and a 
 - **Role-based access** - Merchant, Staff, and Platform Admin, with an admin who is read-only apart from suspending stores, hiding products and switching off discounts, and every action written to an audit log.
 - **Private order tracking** - unguessable per-order tracking tokens, with rate limiting on public endpoints.
 - **Production deployment** - live on Railway with managed Postgres, Cloudinary image delivery, and transactional email.
-
-## Screenshots
-
-![Shop](docs/screenshots/shop.png)
-*Public storefront a customer orders from.*
-
-![Checkout](docs/screenshots/checkout.png)
-*Cart and checkout.*
-
-![Merchant dashboard](docs/screenshots/merchant-dashboard.png)
-*Merchant dashboard overview.*
-
-![Merchant orders](docs/screenshots/merchant-orders.png)
-*Order management for a store.*
-
-![Admin overview](docs/screenshots/admin-overview.png)
-*Platform admin cross-store overview.*
-
-![Admin activity](docs/screenshots/admin-activity.png)
-*Admin audit log of actions across stores.*
