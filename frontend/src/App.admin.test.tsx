@@ -23,6 +23,16 @@ vi.mock('./lib/api', async (importOriginal) => {
         totalOrders: 0, totalCustomers: 0, newMerchantsLast30Days: 0,
       }),
       listMerchants: () => Promise.resolve([]),
+      // Mock the overview so the admin view never makes a real network call (which
+      // otherwise races the chrome assertion under parallel test load).
+      overview: () => Promise.resolve({
+        valueLast30Days: [], valueAllTime: [], ordersPerDay: [], topStores: [],
+        needsAttention: {
+          unverifiedOwners: { count: 0, items: [] }, noProducts: { count: 0, items: [] },
+          noOrders30Days: { count: 0, items: [] }, suspended: { count: 0, items: [] },
+        },
+        newestStores: [], recentActions: [],
+      }),
     },
   };
 });
@@ -46,8 +56,9 @@ describe('App routing — PLATFORM_ADMIN at /app', () => {
         <ConfirmProvider><App /></ConfirmProvider>
       </MemoryRouter>,
     );
-    // Admin console chrome is present...
-    expect(await screen.findByText('Platform Admin')).toBeTruthy();
+    // Admin console chrome is present (AdminApp is lazy-loaded, so allow time for
+    // the chunk to resolve under parallel test load)...
+    expect(await screen.findByText('Platform Admin', {}, { timeout: 5000 })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Log out' })).toBeTruthy();
     // ...and the merchant "no store" shell is not.
     expect(screen.queryByText(/No store selected/i)).toBeNull();

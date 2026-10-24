@@ -24,7 +24,7 @@ const DATA = {
     suspended: { count: 0, items: [] },
   },
   newestStores: [{ id: 8, name: 'Fresh Store', slug: 'fresh', ownerName: 'Pat Owner', createdAt: '2026-10-01T10:00:00' }],
-  recentActions: [{ id: 1, actorEmail: 'admin@manyorder.app', action: 'SUSPEND_MERCHANT', targetType: 'MERCHANT', targetId: 5, merchantId: 5, detail: null, createdAt: '2026-10-02T09:00:00' }],
+  recentActions: [{ id: 1, actorEmail: 'admin@manyorder.app', action: 'SUSPEND_MERCHANT', targetType: 'MERCHANT', targetId: 5, merchantId: 5, detail: null, createdAt: '2026-10-02T09:00:00', storeName: 'Kiri Brew' }],
 };
 
 beforeEach(() => {
@@ -45,7 +45,11 @@ describe('AdminOverview', () => {
     expect(screen.getByText('7 orders - SGD')).toBeTruthy();
     expect(screen.getByText('Fresh Store')).toBeTruthy();
     expect(screen.getByText('Pat Owner')).toBeTruthy();
-    expect(screen.getByText('SUSPEND_MERCHANT')).toBeTruthy();
+    // Recent actions show the readable name (shared with Activity), not the raw code,
+    // and the store name beside its id.
+    expect(screen.getByText('Suspended store')).toBeTruthy();
+    expect(screen.queryByText('SUSPEND_MERCHANT')).toBeNull();
+    expect(screen.getByText(/Kiri Brew #5/)).toBeTruthy();
   });
 
   it('links a store so clicking opens its drill-down', async () => {

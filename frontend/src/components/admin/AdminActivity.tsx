@@ -4,30 +4,9 @@ import { formatDateTime } from '../../lib/adminDatetime';
 import { Select } from '../Select';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ADMIN_FONT } from './adminTokens';
+import { readableAction } from './adminActions';
 
 const PAGE_SIZE = 20;
-
-/** Readable names for the audit action codes. Unknown codes fall back to the raw code. */
-const ACTION_LABEL: Record<string, string> = {
-  SUSPEND_MERCHANT: 'Suspended store',
-  UNSUSPEND_MERCHANT: 'Reinstated store',
-  DEACTIVATE_PRODUCT: 'Hid product',
-  ACTIVATE_PRODUCT: 'Unhid product',
-  DEACTIVATE_DISCOUNT: 'Switched off discount',
-  ACTIVATE_DISCOUNT: 'Switched on discount',
-  CREATE_PRODUCT: 'Added product',
-  UPDATE_PRODUCT: 'Edited product',
-  DELETE_PRODUCT: 'Deleted product',
-  REORDER_PRODUCTS: 'Reordered products',
-  CREATE_CUSTOMER: 'Added customer',
-  UPDATE_CUSTOMER: 'Edited customer',
-  DELETE_CUSTOMER: 'Deleted customer',
-  CREATE_DISCOUNT: 'Created discount',
-  UPDATE_DISCOUNT: 'Edited discount',
-  DELETE_DISCOUNT: 'Deleted discount',
-  REORDER_DISCOUNTS: 'Reordered discounts',
-};
-const readableAction = (code: string) => ACTION_LABEL[code] ?? code;
 
 interface Props {
   /** Open a store's drill-down from an Activity row. */

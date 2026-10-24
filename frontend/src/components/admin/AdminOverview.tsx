@@ -5,6 +5,7 @@ import {
 } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { ADMIN_FONT } from './adminTokens';
+import { readableAction } from './adminActions';
 import { formatDate, formatDateTime, formatShortDate } from '../../lib/adminDatetime';
 
 interface Props {
@@ -202,20 +203,28 @@ function RecentActions({ actions }: { actions: AdminOverviewData['recentActions'
   return (
     <Panel title="Recent admin actions">
       {actions.length === 0 ? (
-        <div className="text-small" style={{ color: 'var(--text-muted)' }}>No admin activity yet.</div>
+        <div style={{ fontSize: ADMIN_FONT.small, color: 'var(--text-muted)' }}>No admin activity yet.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {actions.map((a) => (
+          {actions.map((a) => {
+            // Readable action name (shared with the Activity page), and the store's
+            // name beside its id. Body text stays normal weight and sentence case.
+            const storeName = a.storeName && a.storeName.trim() !== '' ? a.storeName : 'Store';
+            return (
             <div key={a.id} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
               <div style={{ minWidth: 0 }}>
-                <div className="text-small" style={{ fontWeight: 600 }}>{a.action}</div>
-                <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {a.actorEmail}{a.merchantId != null ? ` · store #${a.merchantId}` : ''}
+                <div style={{ fontSize: ADMIN_FONT.body }}>
+                  {readableAction(a.action)}
+                  {a.targetLabel ? <span style={{ color: 'var(--text-secondary)' }}> · {a.targetLabel}</span> : null}
+                </div>
+                <div style={{ fontSize: ADMIN_FONT.caption, color: 'var(--text-muted)' }}>
+                  {a.actorEmail}{a.merchantId != null ? ` · ${storeName} #${a.merchantId}` : ''}
                 </div>
               </div>
-              <span className="text-xs" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatDateTime(a.createdAt)}</span>
+              <span style={{ fontSize: ADMIN_FONT.caption, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatDateTime(a.createdAt)}</span>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </Panel>
