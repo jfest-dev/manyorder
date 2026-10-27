@@ -35,6 +35,7 @@ public class AuthService {
     private final String supportEmail;
     private final Clock clock;
     private final AccountSecurityMailer accountSecurityMailer;
+    private final SignInAttemptTracker attemptTracker;
     private final RestClient restClient = RestClient.create();
 
     /** Lock an account after this many consecutive wrong passwords. Platform admin
@@ -43,10 +44,13 @@ public class AuthService {
     private static final int MAX_FAILED_ATTEMPTS_ADMIN = 10;
     /** How long an account stays locked once the threshold is crossed. */
     private static final int LOCK_MINUTES = 15;
-    /** One message and status for wrong password, locked account, and unknown email,
-     *  so none of them can be told apart from the response. */
-    private static final String SIGN_IN_FAILED_MESSAGE =
-            "Invalid email or password. If you've tried several times, wait 15 minutes or reset your password.";
+    /** Shown for a wrong password or an unknown email (below the threshold), so the
+     *  two cannot be told apart from the response. */
+    private static final String SIGN_IN_FAILED_MESSAGE = "Invalid email or password.";
+    /** Shown once an email is throttled (threshold crossed) or an account is locked,
+     *  identical for existing and unknown emails. */
+    private static final String TOO_MANY_ATTEMPTS_MESSAGE =
+            "Too many attempts. Try again in 15 minutes, or reset your password.";
     /** Cap the "account locked" email to one per account per hour. */
     private static final int LOCK_EMAIL_MIN_GAP_MINUTES = 60;
 
@@ -62,7 +66,8 @@ public class AuthService {
                        @Value("${app.google.client-id:}") String googleClientId,
                        @Value("${app.support.email:support@manyorder.app}") String supportEmail,
                        Clock clock,
-                       AccountSecurityMailer accountSecurityMailer) {
+                       AccountSecurityMailer accountSecurityMailer,
+                       SignInAttemptTracker attemptTracker) {
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
         this.passwordEncoder = passwordEncoder;
@@ -72,6 +77,7 @@ public class AuthService {
         this.supportEmail = supportEmail;
         this.clock = clock;
         this.accountSecurityMailer = accountSecurityMailer;
+        this.attemptTracker = attemptTracker;
         this.dummyHash = passwordEncoder.encode("sign-in-timing-equalizer");
     }
 
@@ -80,29 +86,48 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
-        if (user == null) {
-            // Unknown email: do a throwaway hash comparison so the timing matches a
-            // wrong password, then fail with the same message. No counter is kept
-            // for a non-existent account.
-            passwordEncoder.matches(request.getPassword().trim(), dummyHash);
-            throw signInFailed();
-        }
-
         LocalDateTime now = LocalDateTime.now(clock);
-        // A locked account is refused before the password is even checked, so a
-        // correct password during a lock is still rejected and the lock is not
-        // revealed (same message as a wrong password).
-        if (isLocked(user, now)) {
+        String email = request.getEmail();
+        User user = userRepository.findByEmail(email).orElse(null);
+        int threshold = (user != null && user.getRole() == UserRole.PLATFORM_ADMIN)
+                ? MAX_FAILED_ATTEMPTS_ADMIN : MAX_FAILED_ATTEMPTS;
+
+        // Already over the per-email failure threshold: refuse with 429 on the same
+        // path for an existing and an unknown email, so the response can't reveal
+        // which. This is checked before anything else, including a correct password.
+        if (attemptTracker.isThrottled(email, threshold, now)) {
+            throw tooManyAttempts(attemptTracker.retryAfterSeconds(email, now));
+        }
+        // An existing account under a database lock is refused the same way. This is
+        // the durable, cross-restart guard; a correct password during the lock is
+        // still rejected with the identical 429 response.
+        if (user != null && isLocked(user, now)) {
+            throw tooManyAttempts(secondsUntil(user.getLockedUntil(), now));
+        }
+
+        boolean passwordOk = user != null
+                && passwordEncoder.matches(request.getPassword().trim(), user.getPasswordHash());
+        if (user == null) {
+            // Unknown email: throwaway hash comparison so the timing matches a wrong
+            // password and no timing oracle reveals that the account is missing.
+            passwordEncoder.matches(request.getPassword().trim(), dummyHash);
+        }
+
+        if (!passwordOk) {
+            // Existing accounts also get the durable database lock + owner email.
+            if (user != null) {
+                registerFailedAttempt(user, now);
+            }
+            // Every attempt (existing or unknown) is counted in memory per email.
+            int count = attemptTracker.recordFailure(email, now);
+            if (count >= threshold) {
+                throw tooManyAttempts(attemptTracker.retryAfterSeconds(email, now));
+            }
             throw signInFailed();
         }
 
-        if (!passwordEncoder.matches(request.getPassword().trim(), user.getPasswordHash())) {
-            registerFailedAttempt(user, now);
-            throw signInFailed();
-        }
-
-        // Correct password: clear any failure state before anything else can throw.
+        // Correct password: clear every failure counter before anything else can throw.
+        attemptTracker.reset(email);
         clearFailedAttempts(user);
         // Upgrade-on-login: migrate an older hash (bare bcrypt) to the current
         // default (Argon2id) using the password we just verified. The plaintext is
@@ -310,5 +335,13 @@ public class AuthService {
 
     private ResponseStatusException signInFailed() {
         return new ResponseStatusException(HttpStatus.UNAUTHORIZED, SIGN_IN_FAILED_MESSAGE);
+    }
+
+    private TooManyAttemptsException tooManyAttempts(long retryAfterSeconds) {
+        return new TooManyAttemptsException(TOO_MANY_ATTEMPTS_MESSAGE, retryAfterSeconds);
+    }
+
+    private long secondsUntil(LocalDateTime until, LocalDateTime now) {
+        return Math.max(1, java.time.Duration.between(now, until).toSeconds());
     }
 }

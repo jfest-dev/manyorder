@@ -33,15 +33,25 @@ describe('SignIn', () => {
     expect(robots?.getAttribute('content')).toContain('noindex');
   });
 
-  it('shows a Forgot password link beside the sign-in error', async () => {
+  it('shows the plain 401 message and a Forgot password link beside the error', async () => {
     const user = userEvent.setup();
-    login.mockRejectedValue(new ApiError(401,
-      "Invalid email or password. If you've tried several times, wait 15 minutes or reset your password."));
+    login.mockRejectedValue(new ApiError(401, 'Invalid email or password'));
     renderSignIn();
     await user.type(screen.getByPlaceholderText('you@example.com'), 'a@b.com');
     await user.type(screen.getByPlaceholderText('Enter your password'), 'password123');
     await user.click(screen.getByRole('button', { name: /Sign In/i }));
-    await screen.findByText(/Invalid email or password/);
+    await screen.findByText('Invalid email or password.');
+    expect(screen.getAllByRole('button', { name: 'Forgot password?' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows the too-many-attempts message on a 429, keeping the Forgot password link', async () => {
+    const user = userEvent.setup();
+    login.mockRejectedValue(new ApiError(429, 'Too many attempts. Try again in 15 minutes, or reset your password.'));
+    renderSignIn();
+    await user.type(screen.getByPlaceholderText('you@example.com'), 'a@b.com');
+    await user.type(screen.getByPlaceholderText('Enter your password'), 'password123');
+    await user.click(screen.getByRole('button', { name: /Sign In/i }));
+    await screen.findByText('Too many attempts. Try again in 15 minutes, or reset your password.');
     expect(screen.getAllByRole('button', { name: 'Forgot password?' }).length).toBeGreaterThanOrEqual(1);
   });
 
@@ -71,7 +81,7 @@ describe('SignIn', () => {
     await user.type(screen.getByPlaceholderText('Enter your password'), 'nope');
     await user.click(screen.getByRole('button', { name: /Sign In/i }));
 
-    expect(await screen.findByText('Invalid email or password')).toBeTruthy();
+    expect(await screen.findByText('Invalid email or password.')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
   });
 

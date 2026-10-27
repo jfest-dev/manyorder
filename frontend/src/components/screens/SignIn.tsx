@@ -77,7 +77,16 @@ export function SignIn() {
       await login(trimmedEmail, password.trim(), remember);
       navigate('/app');
     } catch (e: any) {
-      setError(e?.message || 'Sign in failed');
+      // Two fixed sign-in messages: 429 once the email is throttled, 401 for a wrong
+      // password or unknown email. Other errors (e.g. a suspended account) keep the
+      // backend message, which may carry the support address.
+      if (e?.status === 429) {
+        setError('Too many attempts. Try again in 15 minutes, or reset your password.');
+      } else if (e?.status === 401) {
+        setError('Invalid email or password.');
+      } else {
+        setError(e?.message || 'Sign in failed');
+      }
     } finally {
       setBusy(false);
     }

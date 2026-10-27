@@ -29,7 +29,9 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
 
-        return ResponseEntity.status(ex.getStatusCode()).body(error);
+        // Carry any headers the exception set (e.g. Retry-After on a 429). Empty for
+        // a plain ResponseStatusException, so this is a no-op in the common case.
+        return ResponseEntity.status(ex.getStatusCode()).headers(ex.getHeaders()).body(error);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

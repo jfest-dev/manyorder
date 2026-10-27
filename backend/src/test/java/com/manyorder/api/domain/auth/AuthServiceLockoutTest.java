@@ -42,8 +42,9 @@ import static org.mockito.Mockito.when;
  */
 class AuthServiceLockoutTest {
 
-    private static final String MESSAGE =
-            "Invalid email or password. If you've tried several times, wait 15 minutes or reset your password.";
+    private static final String MESSAGE = "Invalid email or password.";
+    private static final String TOO_MANY =
+            "Too many attempts. Try again in 15 minutes, or reset your password.";
 
     /** A clock whose instant the test can advance. */
     static final class MutableClock extends Clock {
@@ -81,7 +82,8 @@ class AuthServiceLockoutTest {
         clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
         mailer = mock(AccountSecurityMailer.class);
         authService = new AuthService(userRepository, merchantRepository, passwordEncoder, jwtUtil,
-                emailVerificationService, "", "support@manyorder.app", clock, mailer);
+                emailVerificationService, "", "support@manyorder.app", clock, mailer,
+                new SignInAttemptTracker());
     }
 
     private User existing(UserRole role) {
@@ -125,8 +127,8 @@ class AuthServiceLockoutTest {
         for (int i = 0; i < 5; i++) attempt("known@test.com", "wrong");
 
         ResponseStatusException e = attempt("known@test.com", "correct");
-        assertEquals(HttpStatus.UNAUTHORIZED, e.getStatusCode());
-        assertEquals(MESSAGE, e.getReason());
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, e.getStatusCode(), "locked -> 429");
+        assertEquals(TOO_MANY, e.getReason());
         assertNotNull(u.getLockedUntil(), "still locked");
         verify(jwtUtil, never()).generateToken(nullable(Long.class), anyString(), anyString(), anyBoolean());
     }

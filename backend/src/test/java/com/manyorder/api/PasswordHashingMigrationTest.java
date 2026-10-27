@@ -29,8 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class PasswordHashingMigrationTest extends IntegrationTestBase {
 
-    private static final String SIGN_IN_FAILED =
-            "Invalid email or password. If you've tried several times, wait 15 minutes or reset your password.";
+    private static final String SIGN_IN_FAILED = "Invalid email or password.";
 
     @MockitoSpyBean private PasswordResetMailer mailer;
     @Autowired private UserRepository userRepository;
