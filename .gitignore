@@ -1,0 +1,25 @@
+# Secrets: never commit real credentials
+.env
+.env.*
+!.env.example
+
+# Java / Maven
+backend/target/
+*.jar
+*.class
+
+# Node
+node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*

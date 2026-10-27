@@ -1,0 +1,447 @@
+package com.manyorder.api.domain.order;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.manyorder.api.domain.customer.Customer;
+import com.manyorder.api.domain.customer.CustomerRepository;
+import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.util.PhoneNumbers;
+import com.manyorder.api.domain.merchant.MerchantRepository;
+import com.manyorder.api.domain.product.Product;
+import com.manyorder.api.domain.product.ProductRepository;
+
+/**
+ * All merchant-facing methods take an already-authorized Merchant resolved by
+ * StoreAccessService in the controller layer. This service never trusts a raw
+ * merchantId from the client.
+ */
+@Service
+public class OrderService {
+
+    private final OrderRepository orderRepository;
+    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final ProductRepository productRepository;
+
+    public OrderService(
+            OrderRepository orderRepository,
+            MerchantRepository merchantRepository,
+            CustomerRepository customerRepository,
+            OrderItemRepository orderItemRepository,
+            ProductRepository productRepository) {
+
+        this.orderRepository = orderRepository;
+        this.merchantRepository = merchantRepository;
+        this.customerRepository = customerRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.productRepository = productRepository;
+    }
+
+    // ---- Merchant / staff (store already authorized) ----
+
+    public List<Order> getOrders(Merchant merchant, OrderStatus status) {
+        if (status != null) {
+            return orderRepository.findByMerchantAndStatusOrderByCreatedAtDesc(merchant, status);
+        }
+        return orderRepository.findByMerchantOrderByCreatedAtDesc(merchant);
+    }
+
+    public Order getOrder(Merchant merchant, Long orderId) {
+        return orderRepository.findByMerchantAndId(merchant, orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found"));
+    }
+
+    /** Unseen new-order count for one store: storefront orders (not the merchant's
+     *  own manual entries), not cancelled, placed since the Orders screen was last
+     *  opened. Drives the sidebar badge. */
+    /** "Never opened Orders" (null lastOrdersViewedAt) → everything counts. A real
+     *  far-past timestamp stands in for null so the query binds a typed parameter. */
+    private static final LocalDateTime NEVER_VIEWED = LocalDateTime.of(1970, 1, 1, 0, 0);
+
+    @Transactional(readOnly = true)
+    public long unseenOrderCount(Merchant merchant) {
+        LocalDateTime since = merchant.getLastOrdersViewedAt() != null
+                ? merchant.getLastOrdersViewedAt()
+                : NEVER_VIEWED;
+        return orderRepository.countUnseen(merchant, OrderSource.STOREFRONT, OrderStatus.CANCELLED, since);
+    }
+
+    /** Mark this store's orders as seen (stamps now), so the badge clears to 0. */
+    @Transactional
+    public void markOrdersSeen(Merchant merchant) {
+        merchant.setLastOrdersViewedAt(LocalDateTime.now());
+        merchantRepository.save(merchant);
+    }
+
+    @Transactional
+    public OrderResponse createMerchantOrder(Merchant merchant, CreateMerchantOrderRequest request) {
+        Customer customer = findOrCreateCustomer(
+                merchant, request.getCustomerName(), request.getEmail(), request.getPhoneNumber());
+
+        Order order = new Order(customer, merchant);
+        order.setSource(OrderSource.MANUAL); // merchant-created via the dashboard
+        if (request.getPaymentStatus() != null) order.setPaymentStatus(request.getPaymentStatus());
+        if (request.getPaymentMethod() != null) order.setPaymentMethod(request.getPaymentMethod());
+        if (request.getPaymentReference() != null) order.setPaymentReference(request.getPaymentReference());
+        if (request.getNotes() != null) order.setNotes(request.getNotes());
+
+        boolean hasAddress = request.getDeliveryAddress() != null && !request.getDeliveryAddress().isBlank();
+        if (request.getOrderType() != null) {
+            // Explicit choice from manual entry is authoritative. Address is optional
+            // even for DELIVERY (merchant can add it later via Edit).
+            order.setOrderType(request.getOrderType());
+            if (request.getOrderType() == OrderType.DELIVERY && hasAddress) {
+                order.setDeliveryAddress(request.getDeliveryAddress());
+            }
+        } else if (hasAddress) {
+            // Backward compatible inference for guest / storefront path.
+            order.setDeliveryAddress(request.getDeliveryAddress());
+            order.setOrderType(OrderType.DELIVERY);
+        }
+        orderRepository.save(order);
+
+        BigDecimal subtotal = BigDecimal.ZERO;
+        if (request.getItems() != null) {
+            for (CreateMerchantOrderRequest.ItemRequest itemReq : request.getItems()) {
+                subtotal = subtotal.add(persistOrderItem(merchant, order, itemReq));
+            }
+        }
+        BigDecimal fee = request.getDeliveryFee() != null ? request.getDeliveryFee() : BigDecimal.ZERO;
+        order.setSubtotal(subtotal);
+        order.setDeliveryFee(fee);
+        order.setTotalAmount(subtotal.add(fee).max(BigDecimal.ZERO));
+        return toResponse(orderRepository.save(order));
+    }
+
+    /**
+     * Edit contact/logistics on any status; line items are replaced only when
+     * {@code request.items} is present, and only while PENDING or CONFIRMED.
+     * Payment and order status are untouched — they have their own flows.
+     */
+    @Transactional
+    public OrderResponse updateMerchantOrder(Merchant merchant, Long orderId, UpdateMerchantOrderRequest request) {
+        Order order = getOrder(merchant, orderId);
+
+        // Contact & logistics — editable at any status.
+        order.setContactName(request.getCustomerName().trim());
+        order.setContactPhone(request.getPhoneNumber() != null ? request.getPhoneNumber().trim() : "");
+        order.setContactEmail(request.getEmail() != null && !request.getEmail().isBlank()
+                ? request.getEmail().trim() : null);
+        order.setNotes(request.getNotes() != null && !request.getNotes().isBlank()
+                ? request.getNotes().trim() : null);
+
+        OrderType type = request.getOrderType() != null ? request.getOrderType() : order.getOrderType();
+        order.setOrderType(type);
+        if (type == OrderType.DELIVERY) {
+            boolean hasAddress = request.getDeliveryAddress() != null && !request.getDeliveryAddress().isBlank();
+            order.setDeliveryAddress(hasAddress ? request.getDeliveryAddress().trim() : null);
+        } else {
+            // PICKUP never carries an address.
+            order.setDeliveryAddress(null);
+        }
+
+        // Line items — replaced only when explicitly provided, and only while editable.
+        if (request.getItems() != null) {
+            OrderStatus status = order.getStatus();
+            if (status != OrderStatus.PENDING && status != OrderStatus.CONFIRMED) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Line items can only be edited while the order is Pending or Confirmed");
+            }
+            // Return the old lines' drawn-down inventory before replacing them, so
+            // the recreated lines decrement from a correct base (no double count).
+            List<OrderItem> oldItems = orderItemRepository.findByOrder(order);
+            for (OrderItem oi : oldItems) {
+                restockOrderLine(oi);
+            }
+            orderItemRepository.deleteAll(oldItems);
+            orderItemRepository.flush();
+
+            BigDecimal subtotal = BigDecimal.ZERO;
+            for (CreateMerchantOrderRequest.ItemRequest itemReq : request.getItems()) {
+                subtotal = subtotal.add(persistOrderItem(merchant, order, itemReq));
+            }
+            order.setSubtotal(subtotal);
+        }
+
+        // Delivery fee override + total recompute. Legacy orders (pre-breakdown)
+        // stored a 0 subtotal but a real total, so derive their subtotal on the
+        // fly before recomputing, otherwise a fee edit would zero the total.
+        if (request.getDeliveryFee() != null) {
+            order.setDeliveryFee(request.getDeliveryFee());
+            order.setDeliveryFeePending(false); // merchant has now confirmed the real fee
+        }
+        BigDecimal subtotal = order.getSubtotal();
+        if (subtotal.signum() == 0 && order.getTotalAmount().signum() > 0) {
+            subtotal = order.getTotalAmount().add(order.getDiscountAmount()).subtract(order.getDeliveryFee());
+            order.setSubtotal(subtotal.max(BigDecimal.ZERO));
+        }
+        order.setTotalAmount(order.getSubtotal()
+                .add(order.getDeliveryFee())
+                .subtract(order.getDiscountAmount())
+                .max(BigDecimal.ZERO));
+
+        return toResponse(orderRepository.save(order));
+    }
+
+    /**
+     * Resolve one manual-order line, persist it (base price snapshot + validated
+     * modifier snapshots + per-line note), and return its line subtotal. Modifiers
+     * go through the same {@link ModifierResolver} trust boundary as guest
+     * checkout, so manual orders enforce the same min/max/required rules and
+     * re-derive prices from the product rather than trusting the client.
+     */
+    private BigDecimal persistOrderItem(Merchant merchant, Order order,
+                                        CreateMerchantOrderRequest.ItemRequest itemReq) {
+        Product product = productRepository.findByMerchantAndId(merchant, itemReq.getProductId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Product not found in this store: " + itemReq.getProductId()));
+        ModifierResolver.Resolution resolution =
+                ModifierResolver.resolve(product, itemReq.getModifierOptionIds());
+        // Honour an active sale on manual orders too, snapshotting the effective base.
+        OrderItem item = new OrderItem(order, product, itemReq.getQuantity(),
+                product.effectivePriceAt(java.time.LocalDateTime.now()));
+        // Draw down tracked inventory (rejects the whole order if it would oversell).
+        item.setStockDecremented(decrementStockForOrderLine(product, itemReq.getQuantity()));
+        if (itemReq.getNotes() != null && !itemReq.getNotes().isBlank()) {
+            item.setNotes(itemReq.getNotes().trim());
+        }
+        for (ModifierResolver.Selection s : resolution.selections()) {
+            item.addModifier(new OrderItemModifier(
+                    item, s.groupName(), s.optionName(), s.priceDelta(), s.sourceOptionId()));
+        }
+        orderItemRepository.save(item); // cascades the modifier snapshots
+        return item.getLineSubtotal();
+    }
+
+    /**
+     * Atomically draw down stock for one ordered line, or reject the whole order.
+     * Applies to every product; only pre-order lines are exempt (they sell before
+     * the item is in stock). A single conditional UPDATE decrements the stock iff
+     * enough remains; if it doesn't, the order is rejected with the quantity left.
+     * Returns true when stock was actually decremented, so the caller can record
+     * it on the order line for an exact restock on cancel.
+     *
+     * <p>Runs in the caller's transaction (guest checkout and manual-order create
+     * are both {@code @Transactional}), so a rejection here rolls back the whole
+     * order — including any lines already decremented in the same cart.
+     */
+    public boolean decrementStockForOrderLine(Product product, int quantity) {
+        if (product.isPreOrder()) {
+            return false;
+        }
+        int updated = productRepository.decrementStockIfAvailable(product.getId(), quantity);
+        if (updated == 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Only " + product.getStock() + " of " + product.getName() + " left");
+        }
+        return true;
+    }
+
+    /**
+     * Return an order line's drawn-down units to stock, once. No-op unless the
+     * line actually decremented and its product still exists (a deleted product
+     * has no stock to restore). Clears the flag so a repeat call can't double-add.
+     */
+    void restockOrderLine(OrderItem item) {
+        if (item.isStockDecremented() && item.getProduct() != null) {
+            productRepository.restock(item.getProduct().getId(), item.getQuantity());
+            item.setStockDecremented(false);
+        }
+    }
+
+    @Transactional
+    public OrderResponse updateOrderStatus(Merchant merchant, Long orderId, OrderStatus newStatus) {
+        Order order = getOrder(merchant, orderId);
+        OrderStatus currentStatus = order.getStatus();
+
+        if (!isValidStatusTransition(currentStatus, newStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid status transition from " + currentStatus + " to " + newStatus);
+        }
+
+        // Cancelling releases any inventory the order drew down. CANCELLED is a
+        // terminal state (unreachable once COMPLETED or already CANCELLED), so this
+        // restock runs exactly once per order.
+        if (newStatus == OrderStatus.CANCELLED) {
+            List<OrderItem> items = orderItemRepository.findByOrder(order);
+            for (OrderItem oi : items) {
+                restockOrderLine(oi);
+            }
+            orderItemRepository.saveAll(items);
+        }
+
+        order.setStatus(newStatus);
+        return toResponse(orderRepository.save(order));
+    }
+
+    @Transactional
+    public OrderResponse updatePaymentStatus(Merchant merchant, Long orderId, PaymentStatus paymentStatus) {
+        Order order = getOrder(merchant, orderId);
+        order.setPaymentStatus(paymentStatus);
+        return toResponse(orderRepository.save(order));
+    }
+
+    /**
+     * Lifecycle: PENDING -> CONFIRMED -> PREPARING -> READY -> (OUT_FOR_DELIVERY -> DELIVERED | COMPLETED) -> COMPLETED.
+     * CANCELLED is reachable from every state except COMPLETED (and itself) —
+     * a completed order can no longer be cancelled.
+     */
+    boolean isValidStatusTransition(OrderStatus current, OrderStatus next) {
+        if (next == current) {
+            return false;
+        }
+        if (next == OrderStatus.CANCELLED) {
+            return current != OrderStatus.COMPLETED && current != OrderStatus.CANCELLED;
+        }
+        return switch (current) {
+            case PENDING -> next == OrderStatus.CONFIRMED;
+            case CONFIRMED -> next == OrderStatus.PREPARING;
+            case PREPARING -> next == OrderStatus.READY;
+            case READY -> next == OrderStatus.OUT_FOR_DELIVERY || next == OrderStatus.COMPLETED;
+            case OUT_FOR_DELIVERY -> next == OrderStatus.DELIVERED;
+            case DELIVERED -> next == OrderStatus.COMPLETED;
+            default -> false;
+        };
+    }
+
+    /**
+     * Per-store customer identity: match by phone first, then email, always
+     * scoped to this merchant — never a bare cross-store lookup (see Module 12
+     * guardrail). Creates the customer when no match exists.
+     */
+    public Customer findOrCreateCustomer(Merchant merchant, String name, String email, String phone) {
+        Customer customer = null;
+
+        String phoneKey = PhoneNumbers.normalize(phone);
+        if (!phoneKey.isEmpty()) {
+            customer = customerRepository.findByMerchantAndPhoneNormalized(merchant, phoneKey).orElse(null);
+        }
+        if (customer == null && email != null && !email.isBlank()) {
+            customer = customerRepository.findByMerchantAndEmail(merchant, email).orElse(null);
+        }
+        if (customer == null) {
+            customer = customerRepository.save(new Customer(
+                    merchant, name, email != null ? email : "", phone));
+        }
+        return customer;
+    }
+
+    /**
+     * Whether this customer has no prior (non-cancelled) order at the store - the
+     * "first order only" discount condition. Call this BEFORE persisting the new
+     * order so the in-progress order can't disqualify a genuine first-timer.
+     */
+    public boolean isFirstOrder(Merchant merchant, Customer customer) {
+        return orderRepository.countByMerchantAndCustomerAndStatusNot(
+                merchant, customer, OrderStatus.CANCELLED) == 0;
+    }
+
+    /**
+     * First-order check for a contact that may not yet be a saved customer
+     * (the validate preview). Resolves find-only by phone then email; an unknown
+     * or blank contact is assumed to be a first-timer, and enforced for real at
+     * checkout once the customer is resolved.
+     */
+    public boolean isFirstOrderForContact(Merchant merchant, String email, String phone) {
+        Customer customer = null;
+        String phoneKey = PhoneNumbers.normalize(phone);
+        if (!phoneKey.isEmpty()) {
+            customer = customerRepository.findByMerchantAndPhoneNormalized(merchant, phoneKey).orElse(null);
+        }
+        if (customer == null && email != null && !email.isBlank()) {
+            customer = customerRepository.findByMerchantAndEmail(merchant, email).orElse(null);
+        }
+        return customer == null || isFirstOrder(merchant, customer);
+    }
+
+    // ---- Admin (PLATFORM_ADMIN, cross-store view layer) ----
+
+    public List<Order> getAllOrders() {
+        return orderRepository.findAll();
+    }
+
+    public List<Order> getOrdersForAdminByMerchantId(Long merchantId) {
+        Merchant merchant = merchantRepository.findById(merchantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Merchant not found"));
+        return orderRepository.findByMerchantOrderByCreatedAtDesc(merchant);
+    }
+
+    public List<Order> getOrdersForAdminByCustomerId(Long customerId) {
+        Customer customer = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+        return orderRepository.findByCustomer(customer);
+    }
+
+    public List<Order> getOrdersForAdminByStatus(OrderStatus status) {
+        return orderRepository.findByStatus(status);
+    }
+
+    public List<Order> getOrdersForAdminByDateRange(LocalDateTime start, LocalDateTime end) {
+        return orderRepository.findByCreatedAtBetween(start, end);
+    }
+
+    // ---- Mapping ----
+
+    public OrderResponse toResponse(Order order) {
+        List<OrderItemResponse> items = orderItemRepository.findByOrder(order)
+                .stream()
+                .map(item -> new OrderItemResponse(
+                        item.getProduct() != null ? item.getProduct().getId() : null,
+                        item.getProductName(), // snapshot: correct even after the product is deleted
+                        item.getQuantity(),
+                        item.getPrice(),
+                        item.getUnitPrice(),
+                        item.getLineSubtotal(),
+                        item.getModifiers().stream()
+                                .map(m -> new OrderItemResponse.ModifierLine(
+                                        m.getGroupName(), m.getOptionName(), m.getPriceDelta(), m.getSourceOptionId()))
+                                .toList(),
+                        item.getNotes()))
+                .toList();
+
+        Long customerId = order.getCustomer() != null ? order.getCustomer().getId() : null;
+        List<com.manyorder.api.domain.customer.CustomerTag> customerTags = order.getCustomer() != null
+                ? List.copyOf(order.getCustomer().getTags())
+                : List.of();
+
+        return new OrderResponse(
+                order.getId(),
+                customerId,
+                order.getContactName(),
+                order.getMerchant().getId(),
+                order.getMerchant().getName(),
+                order.getStatus(),
+                order.getPaymentStatus(),
+                order.getPaymentMethod(),
+                order.getPaymentReference(),
+                order.getOrderType(),
+                order.getContactName(),
+                order.getContactPhone(),
+                order.getContactEmail(),
+                order.getDeliveryAddress(),
+                order.getNotes(),
+                order.getScheduledDate(),
+                order.getScheduledTime(),
+                order.getCreatedAt(),
+                order.getSubtotal(),
+                order.getDeliveryFee(),
+                order.isDeliveryFeePending(),
+                order.getDiscountAmount(),
+                order.getDeliveryDiscount(),
+                order.isFreeDelivery(),
+                order.getDiscountCode(),
+                order.getOrderGroupId(),
+                order.getTotalAmount(),
+                items,
+                order.getSource(),
+                customerTags);
+    }
+}

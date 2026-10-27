@@ -1,0 +1,111 @@
+package com.manyorder.api.domain.product;
+
+import java.util.List;
+import java.util.Map;
+
+import com.manyorder.api.domain.storeemailverification.StoreEmail;
+import com.manyorder.api.email.EmailLayout;
+import com.manyorder.api.email.ResendEmail;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+
+import com.manyorder.api.domain.merchant.Merchant;
+
+/**
+ * Delivers low-stock alerts to merchants through Resend's REST API.
+ *
+ * Shares the same gating as the other Resend mailers: when
+ * {@code app.resend.api-key} is blank (tests, local dev) it no-ops with a log
+ * line. Send failures are swallowed so a product save can never fail because an
+ * alert couldn't be delivered.
+ */
+@Component
+public class ResendLowStockMailer implements LowStockMailer {
+
+    private static final Logger log = LoggerFactory.getLogger(ResendLowStockMailer.class);
+
+    private final String apiKey;
+    private final String fromAddress;
+    private final String supportEmail;
+    private final String frontendBaseUrl;
+    private final RestClient restClient = RestClient.create();
+
+    public ResendLowStockMailer(
+            @Value("${app.resend.api-key:}") String apiKey,
+            @Value("${app.mail.from:onboarding@resend.dev}") String fromAddress,
+            @Value("${app.support.email:support@manyorder.app}") String supportEmail,
+            @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
+        this.fromAddress = fromAddress;
+        this.supportEmail = supportEmail;
+        this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
+                ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
+                : frontendBaseUrl;
+    }
+
+    @Override
+    public void sendLowStock(Merchant merchant, Product product, int stock) {
+        // Owner login email always, plus the store email only when verified, deduped.
+        List<String> to = StoreEmail.alertRecipients(merchant);
+        if (to.isEmpty()) {
+            log.info("Store {} has no alert recipients — skipping low-stock alert", merchant.getId());
+            return;
+        }
+        if (apiKey.isEmpty()) {
+            log.info("Resend API key not configured — skipping low-stock email (store {}, product {}, stock {})",
+                    merchant.getId(), product.getId(), stock);
+            return;
+        }
+
+        Map<String, Object> payload = ResendEmail.payload(
+                fromAddress, to, supportEmail,
+                subjectFor(product.getName(), stock),
+                buildHtml(merchant.getName(), product.getName(), stock, frontendBaseUrl + "/app", supportEmail));
+
+        try {
+            restClient.post()
+                    .uri(ResendEmail.RESEND_EMAILS_URL)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(payload)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            log.warn("Failed to send low-stock email to {}: {}", to, e.getMessage());
+        }
+    }
+
+    /**
+     * Subject line, distinguishing a genuine out-of-stock (0) from merely
+     * running low (1..threshold). Package-private and primitive-typed so the
+     * wording can be unit-tested without constructing entities.
+     */
+    static String subjectFor(String productName, int stock) {
+        return stock == 0
+                ? productName + " is out of stock"
+                : productName + " is almost out (" + stock + " left)";
+    }
+
+    /** Email body, with wording that reflects out-of-stock vs running-low, an
+     *  "Open Products" button and the opt-out footer. */
+    static String buildHtml(String storeName, String productName, int stock, String productsUrl, String supportEmail) {
+        boolean outOfStock = stock == 0;
+        String heading = outOfStock
+                ? productName + " is out of stock"
+                : productName + " is almost out (" + stock + " left)";
+        String body = outOfStock
+                ? "Customers can't order it until you restock."
+                : EmailLayout.escape(productName) + " at " + EmailLayout.escape(storeName) + " has " + stock
+                        + " left. Update its stock in Products so customers can keep ordering.";
+        String inner = "<p style=\"margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;\">" + body + "</p>"
+                + EmailLayout.button("Open Products", productsUrl)
+                + "<p style=\"color:#9ca3af;font-size:12px;\">Turn off low stock emails in Settings.</p>";
+        return EmailLayout.shell(heading, inner, supportEmail);
+    }
+}

@@ -1,0 +1,213 @@
+package com.manyorder.api.domain.product;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
+
+import com.manyorder.api.domain.category.Category;
+import com.manyorder.api.domain.merchant.Merchant;
+
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "products")
+public class Product {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "merchant_id", nullable = false)
+    private Merchant merchant;
+
+    @Column(nullable = false, length = 255)
+    private String name;
+
+    /** Long-form menu description; stored as TEXT so it is not capped at 255. */
+    @Column(columnDefinition = "text")
+    private String description;
+
+    @Column(nullable = false)
+    private BigDecimal price;
+
+    /**
+     * Optional temporary sale price and its window. When {@code salePrice} is set
+     * and now is within [saleStartsAt, saleEndsAt] (null bound = open-ended), the
+     * product sells at the sale price automatically — no code needed. Evaluated
+     * live at read/checkout time (see {@link #effectivePriceAt}); nothing flips a
+     * stored flag, so the sale reverts on its own once the window passes.
+     */
+    private BigDecimal salePrice;
+    private LocalDateTime saleStartsAt;
+    private LocalDateTime saleEndsAt;
+
+    @Column(nullable = false)
+    private Boolean isActive;
+
+    /** Optional reference to a per-store managed category. Null = uncategorized. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private Category category;
+
+    /** Inventory count. Out-of-stock is derived from stock == 0, not a status.
+     *  Every product is stock-tracked: orders draw this down and are rejected
+     *  rather than oversell (pre-order lines excepted). */
+    @Column(nullable = false, columnDefinition = "integer default 0 not null")
+    private Integer stock = 0;
+
+    /** Merchant-defined ordering for the products list + storefront (lower first). */
+    @Column(nullable = false, columnDefinition = "integer default 0 not null")
+    private Integer displayOrder = 0;
+
+    /** Stock-keeping unit — free text, not enforced unique. */
+    @Column(length = 255)
+    private String sku;
+
+    /** Absolute product photo URL on the image host. Null = no photo. */
+    @Column(length = 512)
+    private String photoUrl;
+
+    /** Pre-order toggle + its details (ready date / note). Not a category. */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean preOrder = false;
+
+    private LocalDate preOrderReadyDate;
+
+    /** Optional ready time window shown on the storefront (both required to show a range). */
+    private LocalTime preOrderReadyTimeStart;
+    private LocalTime preOrderReadyTimeEnd;
+
+    private String preOrderNote;
+
+    /** Add-on/modifier groups (e.g. "Sauce Selection"). Owned by the product and
+     *  replaced wholesale on save. */
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("sortOrder ASC")
+    private List<ModifierGroup> modifierGroups = new ArrayList<>();
+
+    private LocalDateTime createdAt;
+
+    protected Product() {
+        // JPA only
+    }
+
+    public Product(Merchant merchant, String name, String description, BigDecimal price) {
+        this.merchant = merchant;
+        this.name = name;
+        this.description = description;
+        this.price = price;
+        this.isActive = true;
+        this.createdAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Merchant getMerchant() {
+        return merchant;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public BigDecimal getPrice() {
+        return price;
+    }
+
+    public Boolean getIsActive() {
+        return isActive;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public void setPrice(BigDecimal price) {
+        this.price = price;
+    }
+
+    public BigDecimal getSalePrice() { return salePrice; }
+    public void setSalePrice(BigDecimal salePrice) { this.salePrice = salePrice; }
+    public LocalDateTime getSaleStartsAt() { return saleStartsAt; }
+    public void setSaleStartsAt(LocalDateTime saleStartsAt) { this.saleStartsAt = saleStartsAt; }
+    public LocalDateTime getSaleEndsAt() { return saleEndsAt; }
+    public void setSaleEndsAt(LocalDateTime saleEndsAt) { this.saleEndsAt = saleEndsAt; }
+
+    /** Whether a sale price is configured and active at {@code now}. */
+    public boolean isOnSaleAt(LocalDateTime now) {
+        if (salePrice == null) return false;
+        if (saleStartsAt != null && now.isBefore(saleStartsAt)) return false;
+        if (saleEndsAt != null && now.isAfter(saleEndsAt)) return false;
+        return true;
+    }
+
+    /** The price in force at {@code now}: the sale price while the sale is active,
+     *  otherwise the base price. The single source of truth for sale-aware pricing. */
+    public BigDecimal effectivePriceAt(LocalDateTime now) {
+        return isOnSaleAt(now) ? salePrice : price;
+    }
+
+    public void setIsActive(Boolean isActive) {
+        this.isActive = isActive;
+    }
+
+    public Category getCategory() { return category; }
+    public void setCategory(Category category) { this.category = category; }
+
+    public Integer getStock() { return stock; }
+    public void setStock(Integer stock) { this.stock = stock; }
+
+    public Integer getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
+
+    public String getSku() { return sku; }
+    public void setSku(String sku) { this.sku = sku; }
+
+    public String getPhotoUrl() { return photoUrl; }
+    public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
+
+    public boolean isPreOrder() { return preOrder; }
+    public void setPreOrder(boolean preOrder) { this.preOrder = preOrder; }
+
+    public LocalDate getPreOrderReadyDate() { return preOrderReadyDate; }
+    public void setPreOrderReadyDate(LocalDate preOrderReadyDate) { this.preOrderReadyDate = preOrderReadyDate; }
+
+    public LocalTime getPreOrderReadyTimeStart() { return preOrderReadyTimeStart; }
+    public void setPreOrderReadyTimeStart(LocalTime preOrderReadyTimeStart) { this.preOrderReadyTimeStart = preOrderReadyTimeStart; }
+    public LocalTime getPreOrderReadyTimeEnd() { return preOrderReadyTimeEnd; }
+    public void setPreOrderReadyTimeEnd(LocalTime preOrderReadyTimeEnd) { this.preOrderReadyTimeEnd = preOrderReadyTimeEnd; }
+
+    public String getPreOrderNote() { return preOrderNote; }
+    public void setPreOrderNote(String preOrderNote) { this.preOrderNote = preOrderNote; }
+
+    public List<ModifierGroup> getModifierGroups() { return modifierGroups; }
+}

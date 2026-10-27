@@ -1,0 +1,453 @@
+import { useState, useEffect, useRef } from 'react';
+import { Toast } from './Toast';
+import { Menu, X, Eye, Link2, MailWarning } from 'lucide-react';
+import { Sidebar } from './Sidebar';
+import { useMediaQuery } from '../hooks/useMediaQuery';
+import { useAuth } from '../context/AuthContext';
+import { authApi } from '../lib/api';
+import logoImage from '../assets/manyorder-logo.png';
+
+interface Store {
+  id: string;
+  name: string;
+  slug: string;
+  color: string;
+  logo?: string;
+}
+
+interface AppShellProps {
+  children: React.ReactNode;
+  activeItem: string;
+  onNavigate: (item: string) => void;
+  stores: Store[];
+  activeStoreId: string;
+  onStoreChange: (storeId: string) => void;
+  /** Unseen new-order count per store id, for the sidebar badge/dots. */
+  unseenCounts?: Record<string, number>;
+}
+
+export function AppShell({
+  children,
+  activeItem,
+  onNavigate,
+  stores,
+  activeStoreId,
+  onStoreChange,
+  unseenCounts,
+}: AppShellProps) {
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const { user } = useAuth();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const copyNoticeTimer = useRef<number | null>(null);
+
+  // Email-verification nag: a non-blocking reminder shown until the account is
+  // verified, with a one-tap resend. State is local; the banner simply goes away
+  // once AuthContext refreshes the verified flag.
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  const resendVerification = async () => {
+    if (resendState === 'sending') return;
+    setResendState('sending');
+    try {
+      await authApi.resendVerification();
+    } catch {
+      // The endpoint is intentionally generic; treat any outcome as "sent".
+    } finally {
+      setResendState('sent');
+    }
+  };
+  const showVerifyNag = user != null && !user.verified;
+
+  const activeStore = stores.find((s) => s.id === activeStoreId);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .map((word) => word[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  // Close mobile menu when switching to desktop
+  useEffect(() => {
+    if (isDesktop) {
+      setIsMobileMenuOpen(false);
+    }
+  }, [isDesktop]);
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  // --- Swipe to open/close the mobile drawer -------------------------------
+  // A right-swipe that starts inside the content (not the extreme left edge)
+  // opens the drawer; a left-swipe closes it. We reserve the leftmost EDGE_ZONE
+  // for iOS Safari's native back gesture (which we can't reliably suppress) so
+  // back-navigation keeps working. Listeners are attached natively to `document`
+  // (not via React's synthetic delegation) and never preventDefault, so vertical
+  // scrolling and sticky headers are untouched.
+  const swipe = useRef<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false });
+  const menuOpenRef = useRef(isMobileMenuOpen);
+  useEffect(() => { menuOpenRef.current = isMobileMenuOpen; }, [isMobileMenuOpen]);
+
+  useEffect(() => {
+    if (isDesktop) return; // no drawer on desktop
+    const EDGE_ZONE = 28; // px from the left edge reserved for iOS native back
+    const H_THRESHOLD = 60; // min horizontal travel to trigger
+    // Ignore swipes that begin inside a horizontally-scrollable region.
+    const inHScroller = (target: EventTarget | null) => {
+      let el = target as HTMLElement | null;
+      while (el && el !== document.body) {
+        if (el.scrollWidth > el.clientWidth + 2) {
+          const ox = getComputedStyle(el).overflowX;
+          if (ox === 'auto' || ox === 'scroll') return true;
+        }
+        el = el.parentElement;
+      }
+      return false;
+    };
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || inHScroller(e.target)) { swipe.current.active = false; return; }
+      const t = e.touches[0];
+      swipe.current = { x: t.clientX, y: t.clientY, active: true };
+    };
+    const onEnd = (e: TouchEvent) => {
+      const s = swipe.current;
+      const wasActive = s.active; // capture before reset - s aliases swipe.current
+      swipe.current.active = false;
+      if (!wasActive) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      const horizontal = Math.abs(dx) > Math.abs(dy); // ignore vertical scrolls
+      if (!menuOpenRef.current && horizontal && dx > H_THRESHOLD && s.x > EDGE_ZONE) setIsMobileMenuOpen(true);
+      else if (menuOpenRef.current && horizontal && dx < -H_THRESHOLD) setIsMobileMenuOpen(false);
+    };
+    document.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('touchend', onEnd, { passive: true });
+    return () => {
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchend', onEnd);
+    };
+  }, [isDesktop]);
+
+  const openStorePreview = () => {
+    const s = stores.find((x) => x.id === activeStoreId);
+    if (!s) return;
+    window.open(`https://manyorder.app/${s.slug}`, '_blank');
+  };
+
+  // Shared-Toast confirmation for the copy-link action (replaces native alert()),
+  // matching the "Customer updated." style used elsewhere. Caller owns dismissal.
+  const showCopyNotice = (msg: string) => {
+    setCopyNotice(msg);
+    if (copyNoticeTimer.current) window.clearTimeout(copyNoticeTimer.current);
+    copyNoticeTimer.current = window.setTimeout(() => setCopyNotice(null), 2400);
+  };
+
+  const copyStoreLink = () => {
+    const s = stores.find((x) => x.id === activeStoreId);
+    if (!s) return;
+
+    const url = `https://manyorder.app/${s.slug}`;
+
+    // try modern clipboard API first
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(url)
+        .then(() => showCopyNotice('Store link copied to clipboard!'))
+        .catch(() => {
+          // fallback if permissions blocked
+          const textarea = document.createElement('textarea');
+          textarea.value = url;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          try {
+            document.execCommand('copy');
+            showCopyNotice('Store link copied to clipboard!');
+          } catch {
+            showCopyNotice(`Copy this link: ${url}`);
+          }
+          document.body.removeChild(textarea);
+        });
+      return;
+    }
+
+    // fallback method
+    const textarea = document.createElement('textarea');
+    textarea.value = url;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      showCopyNotice('Store link copied to clipboard!');
+    } catch {
+      showCopyNotice(`Copy this link: ${url}`);
+    }
+    document.body.removeChild(textarea);
+  };
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative' }}>
+      {/* Desktop Sidebar */}
+      {isDesktop && (
+        <Sidebar
+          activeItem={activeItem}
+          onNavigate={onNavigate}
+          stores={stores}
+          activeStoreId={activeStoreId}
+          onStoreChange={onStoreChange}
+          unseenCounts={unseenCounts}
+          isOpen={isSidebarOpen}
+        />
+      )}
+
+      {/* Mobile Sidebar Overlay. Kept mounted on mobile so it can slide in/out;
+          the backdrop fades and the drawer translates based on isMobileMenuOpen. */}
+      {!isDesktop && (
+        <>
+          <div
+            onClick={toggleMobileMenu}
+            aria-hidden={!isMobileMenuOpen}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 40,
+              opacity: isMobileMenuOpen ? 1 : 0,
+              pointerEvents: isMobileMenuOpen ? 'auto' : 'none',
+              transition: 'opacity 0.25s ease',
+            }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              zIndex: 50,
+              transform: isMobileMenuOpen ? 'translateX(0)' : 'translateX(-100%)',
+              transition: 'transform 0.25s ease',
+              willChange: 'transform',
+            }}
+          >
+            <Sidebar
+              activeItem={activeItem}
+              onNavigate={(item) => {
+                onNavigate(item);
+                setIsMobileMenuOpen(false);
+              }}
+              stores={stores}
+              activeStoreId={activeStoreId}
+              onStoreChange={onStoreChange}
+              unseenCounts={unseenCounts}
+              isOpen={true}
+            />
+          </div>
+        </>
+      )}
+
+      {/* Main Content Area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        {/* Top Bar */}
+        <div
+          style={{
+            height: '56px',
+            background: 'var(--bg-card)',
+            borderBottom: '1px solid var(--border-subtle)',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 16px',
+            gap: '16px',
+          }}
+        >
+          {/* Mobile Menu Button */}
+          {!isDesktop && (
+            <button
+              onClick={toggleMobileMenu}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--text-primary)',
+              }}
+            >
+              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          )}
+
+          {/* ManyOrder Logo and Brand. The wordmark is a single unbreakable word,
+              so it's hidden on mobile - the logo mark carries the brand there and
+              the row stays within narrow viewports. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flexShrink: 0 }}>
+            <img
+              src={logoImage}
+              alt="ManyOrder"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '6px',
+                flexShrink: 0,
+              }}
+            />
+            {isDesktop && (
+              <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>ManyOrder</span>
+            )}
+          </div>
+
+          <div style={{ flex: 1 }} />
+
+          {/* Preview and Copy Link Buttons. On mobile they collapse to icon-only
+              squares so the top bar fits narrow viewports; text returns on desktop. */}
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            <button
+              onClick={openStorePreview}
+              aria-label="Preview store page"
+              title="Preview store page"
+              style={{
+                height: '36px',
+                width: isDesktop ? undefined : '36px',
+                padding: isDesktop ? '0 14px' : '0',
+                fontSize: '13px',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '6px',
+                background: 'transparent',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--bg-app)';
+                e.currentTarget.style.borderColor = 'var(--border-strong)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = 'var(--border-subtle)';
+              }}
+            >
+              {isDesktop ? 'Preview store page' : <Eye size={18} />}
+            </button>
+
+            <button
+              onClick={copyStoreLink}
+              aria-label="Copy store link"
+              title="Copy store link"
+              style={{
+                height: '36px',
+                width: isDesktop ? undefined : '36px',
+                padding: isDesktop ? '0 14px' : '0',
+                fontSize: '13px',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                background: '#000000',
+                color: 'white',
+                border: '1px solid #000000',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#1a1a1a';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#000000';
+              }}
+            >
+              {isDesktop ? 'Copy store link' : <Link2 size={18} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Content. overflowX is hidden (not auto) so a stray too-wide child can
+            never pan the whole screen sideways - only opt-in inner scrollers (e.g.
+            a wide table in its own overflow-x:auto wrapper) scroll horizontally.
+            overflowY stays auto for normal vertical scrolling + sticky headers. */}
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            background: 'var(--bg-app)',
+            padding: '24px',
+          }}
+        >
+          {showVerifyNag && (
+            <div
+              role="status"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+                background: '#FEF3C7',
+                border: '1px solid #FCD34D',
+                color: '#92400E',
+                borderRadius: '10px',
+                padding: '12px 16px',
+                marginBottom: '20px',
+                fontSize: '13.5px',
+              }}
+            >
+              <MailWarning size={18} style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: '200px' }}>
+                {resendState === 'sent'
+                  ? `Verification email sent to ${user?.email}. Check your inbox and spam folder.`
+                  : `Please verify your email address (${user?.email}) to secure your account.`}
+              </span>
+              {resendState !== 'sent' && (
+                <button
+                  onClick={resendVerification}
+                  disabled={resendState === 'sending'}
+                  style={{
+                    flexShrink: 0,
+                    height: '32px',
+                    padding: '0 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #92400E',
+                    background: 'transparent',
+                    color: '#92400E',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: resendState === 'sending' ? 'default' : 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {resendState === 'sending' ? 'Sending…' : 'Resend verification email'}
+                </button>
+              )}
+            </div>
+          )}
+          {children}
+        </div>
+      </div>
+      {copyNotice && <Toast message={copyNotice} />}
+    </div>
+  );
+}

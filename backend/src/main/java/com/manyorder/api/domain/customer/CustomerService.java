@@ -1,0 +1,132 @@
+package com.manyorder.api.domain.customer;
+
+import java.math.BigDecimal;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.domain.order.OrderRepository;
+import com.manyorder.api.domain.order.OrderStatus;
+import com.manyorder.api.util.PhoneNumbers;
+
+@Service
+public class CustomerService {
+
+    private final CustomerRepository customerRepository;
+    private final OrderRepository orderRepository;
+
+    public CustomerService(CustomerRepository customerRepository, OrderRepository orderRepository) {
+        this.customerRepository = customerRepository;
+        this.orderRepository = orderRepository;
+    }
+
+    /** A store's customers, each with derived order count, spend and first/last order. */
+    public List<CustomerResponse> listForStore(Merchant merchant) {
+        Map<Long, CustomerOrderStats> statsById = orderRepository
+                .aggregateCustomerStats(merchant, OrderStatus.CANCELLED)
+                .stream()
+                .collect(Collectors.toMap(CustomerOrderStats::getCustomerId, Function.identity()));
+
+        return customerRepository.findByMerchant(merchant).stream()
+                .map(c -> {
+                    CustomerOrderStats s = statsById.get(c.getId());
+                    return s == null
+                            ? new CustomerResponse(c, 0, BigDecimal.ZERO, null, null)
+                            : new CustomerResponse(c, s.getOrderCount(), s.getTotalSpent(), s.getFirstOrderAt(), s.getLastOrderAt());
+                })
+                // Most active first, then most recently added.
+                .sorted(Comparator.comparingLong(CustomerResponse::getOrdersCount).reversed()
+                        .thenComparing(CustomerResponse::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    /**
+     * Add a customer manually. Dedupes on the same key as guest checkout and
+     * manual orders (phone, then email) so the three creation paths never
+     * produce two records for one person; a match is rejected as a conflict.
+     */
+    @Transactional
+    public CustomerResponse createCustomer(Merchant merchant, CreateCustomerRequest req) {
+        String phone = req.getPhoneNumber();
+        String email = req.getEmail();
+        String phoneKey = PhoneNumbers.normalize(phone);
+        boolean exists =
+                (!phoneKey.isEmpty() && customerRepository.findByMerchantAndPhoneNormalized(merchant, phoneKey).isPresent())
+                || (email != null && !email.isBlank() && customerRepository.findByMerchantAndEmail(merchant, email).isPresent());
+        if (exists) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "A customer with this phone or email already exists.");
+        }
+        Customer customer = new Customer(merchant, req.getFullName(), email != null ? email : "", phone);
+        // Optional tags, normalized/limited by Customer.setTags exactly as on update.
+        if (req.getTags() != null) {
+            customer.setTags(req.getTags().stream()
+                    .map(t -> new CustomerTag(t.getName(), t.getColor()))
+                    .toList());
+        }
+        Customer saved = customerRepository.save(customer);
+        return new CustomerResponse(saved, 0, BigDecimal.ZERO, null, null);
+    }
+
+    /**
+     * Edit a customer's live details (full-record replace). Dedupes like create,
+     * but excludes the customer being edited so re-saving an unchanged phone/email
+     * is not a self-collision; a match against a DIFFERENT customer is a conflict.
+     * Past orders are untouched: each keeps its own contact snapshot.
+     */
+    @Transactional
+    public CustomerResponse updateCustomer(Merchant merchant, Long customerId, UpdateCustomerRequest req) {
+        Customer customer = customerRepository.findByMerchantAndId(merchant, customerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+
+        String phone = req.getPhoneNumber();
+        String email = req.getEmail();
+        String phoneKey = PhoneNumbers.normalize(phone);
+        boolean phoneClash = !phoneKey.isEmpty()
+                && customerRepository.findByMerchantAndPhoneNormalized(merchant, phoneKey)
+                        .filter(other -> !other.getId().equals(customerId)).isPresent();
+        boolean emailClash = email != null && !email.isBlank()
+                && customerRepository.findByMerchantAndEmail(merchant, email)
+                        .filter(other -> !other.getId().equals(customerId)).isPresent();
+        if (phoneClash || emailClash) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Another customer with this phone or email already exists.");
+        }
+
+        customer.updateDetails(req.getFullName(), email != null ? email : "", phone);
+        // null = leave tags unchanged; a list (even empty) replaces them.
+        if (req.getTags() != null) {
+            customer.setTags(req.getTags().stream()
+                    .map(t -> new CustomerTag(t.getName(), t.getColor()))
+                    .toList());
+        }
+        Customer saved = customerRepository.save(customer);
+
+        // Return the row with its derived order stats, consistent with the list.
+        CustomerOrderStats s = orderRepository.aggregateCustomerStats(merchant, OrderStatus.CANCELLED).stream()
+                .filter(row -> row.getCustomerId().equals(saved.getId()))
+                .findFirst().orElse(null);
+        return s == null
+                ? new CustomerResponse(saved, 0, BigDecimal.ZERO, null, null)
+                : new CustomerResponse(saved, s.getOrderCount(), s.getTotalSpent(), s.getFirstOrderAt(), s.getLastOrderAt());
+    }
+
+    /**
+     * Permanently delete a customer (a genuine erasure, e.g. for a PDPA request).
+     * Their past orders are detached (customer_id nulled) and survive via the
+     * contact snapshot already on each order, mirroring product hard-delete.
+     */
+    @Transactional
+    public void deleteCustomer(Merchant merchant, Long customerId) {
+        Customer customer = customerRepository.findByMerchantAndId(merchant, customerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Customer not found"));
+        orderRepository.detachCustomer(customer); // null out customer_id on any past orders
+        customerRepository.delete(customer);
+    }
+}

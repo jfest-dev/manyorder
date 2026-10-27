@@ -1,0 +1,233 @@
+import { useState } from 'react';
+import { Select } from './Select';
+
+interface FieldInputProps {
+  label?: string;
+  placeholder?: string;
+  value?: string;
+  onChange: (value: string) => void;
+  helperText?: string;
+  error?: string;
+  prefix?: string;
+  suffix?: React.ReactNode;
+  type?: string;
+
+  // ✅ add these
+  required?: boolean;
+  disabled?: boolean;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  multiline?: boolean;
+  rows?: number;
+  style?: React.CSSProperties;
+  inputMode?: 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url' | 'none';
+  onFocus?: () => void;
+  onBlur?: () => void;
+}
+
+export function FieldInput({
+  label,
+  placeholder,
+  value = '',
+  onChange,
+  helperText,
+  error,
+  prefix,
+  suffix,
+  type = 'text',
+
+  // ✅ receive here
+  required,
+  disabled,
+  maxLength,
+  min,
+  max,
+  step,
+  multiline,
+  rows = 2,
+  style,
+  inputMode,
+  onFocus,
+  onBlur,
+}: FieldInputProps) {
+  const [isFocused, setIsFocused] = useState(false);
+
+  const fieldBorder = error
+    ? '1px solid var(--error-color)'
+    : isFocused
+      ? '1px solid var(--primary-solid)'
+      : '1px solid var(--border-strong)';
+
+  return (
+    <div style={style}>
+      {label && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+          <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            {label}
+          </label>
+          {required && (
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              *
+            </span>
+          )}
+        </div>
+      )}
+
+      <div style={{ position: 'relative' }}>
+        {prefix && (
+          <div
+            style={{
+              position: 'absolute',
+              left: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--text-muted)',
+              fontSize: '13px',
+              pointerEvents: 'none',
+            }}
+          >
+            {prefix}
+          </div>
+        )}
+
+        {multiline ? (
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            required={required}
+            disabled={disabled}
+            maxLength={maxLength}
+            rows={rows}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            className="text-small w-full"
+            style={{
+              borderRadius: 'var(--radius-field)',
+              border: fieldBorder,
+              background: 'var(--bg-card)',
+              padding: '8px 12px',
+              outline: 'none',
+              transition: 'all 0.15s ease',
+              resize: 'none',
+              overflowY: 'auto',
+              lineHeight: 1.4,
+              fontFamily: 'inherit',
+            }}
+          />
+        ) : (
+          <input
+            type={type}
+            inputMode={inputMode}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            // ✅ apply here
+            required={required}
+            disabled={disabled}
+            maxLength={maxLength}
+            min={min}
+            max={max}
+            step={step}
+            onFocus={() => { setIsFocused(true); onFocus?.(); }}
+            onBlur={() => { setIsFocused(false); onBlur?.(); }}
+            className="text-small w-full"
+            style={{
+              height: '40px',
+              borderRadius: 'var(--radius-field)',
+              border: fieldBorder,
+              background: 'var(--bg-card)',
+              paddingLeft: prefix ? '32px' : '12px',
+              paddingRight: suffix ? '36px' : '12px',
+              outline: 'none',
+              transition: 'all 0.15s ease',
+            }}
+          />
+        )}
+
+        {suffix && (
+          <div
+            style={{
+              position: 'absolute',
+              right: '8px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            {suffix}
+          </div>
+        )}
+      </div>
+
+      {error ? (
+        <p className="text-xs" style={{ color: 'var(--error-color)', marginTop: '6px' }}>
+          {error}
+        </p>
+      ) : helperText ? (
+        <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
+          {helperText}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+interface FieldSelectOption {
+  value: string;
+  label: string;
+}
+
+interface FieldSelectProps {
+  label?: string;
+  placeholder?: string;
+  options: FieldSelectOption[];
+  value?: string;
+  onChange: (value: string) => void;
+  helperText?: string;
+  required?: boolean;
+}
+
+export function FieldSelect({
+  label,
+  placeholder = 'Select...',
+  options,
+  value = '',
+  onChange,
+  helperText,
+  required,
+}: FieldSelectProps) {
+  return (
+    <div>
+      {label && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+          <label className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            {label}
+          </label>
+          {required && (
+            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              *
+            </span>
+          )}
+        </div>
+      )}
+
+      <Select
+        value={value}
+        onChange={onChange}
+        options={options}
+        placeholder={placeholder}
+        ariaLabel={label}
+      />
+
+      {helperText && (
+        <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
+          {helperText}
+        </p>
+      )}
+    </div>
+  );
+}

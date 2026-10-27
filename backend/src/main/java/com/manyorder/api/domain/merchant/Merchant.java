@@ -1,0 +1,245 @@
+package com.manyorder.api.domain.merchant;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+import com.manyorder.api.domain.user.User;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+
+/**
+ * A Merchant row is a single store. One User (role MERCHANT) can own up to
+ * three stores; the limit is enforced in MerchantStoreController.
+ */
+@Entity
+@Table(name = "merchants")
+public class Merchant {
+
+    public static final int MAX_STORES_PER_OWNER = 3;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_user_id", nullable = false)
+    private User owner;
+
+    @Column(nullable = false)
+    private String name;
+
+    /** Public store link, e.g. "kirikiri-brew". Also the staff sign-up store code. */
+    @Column(nullable = false, unique = true)
+    private String slug;
+
+    private String email;
+
+    /** Normalized (trimmed, lowercase) store contact email the owner has confirmed.
+     *  The store email counts as verified when it equals this, or equals the owner's
+     *  verified login email. Nullable; changing the store email auto-unverifies by comparison. */
+    @Column(name = "verified_email")
+    private String verifiedEmail;
+    private String phoneNumber;
+
+    /** Label only for now (e.g. "Food & Beverage"). */
+    private String businessType;
+
+    /** Per-store display currency: SGD or IDR. */
+    @Column(nullable = false)
+    private String currency = "SGD";
+
+    /** Storefront theme color hex, e.g. "#0F172A". */
+    private String themeColor;
+
+    /** Absolute URL of the store logo on the image host. Null = no logo (fall back to initials). */
+    @Column(length = 512)
+    private String logoUrl;
+
+    @Column(columnDefinition = "TEXT")
+    private String storeDescription;
+
+    /** Free-text opening hours shown on the storefront, e.g. "Mon–Sat, 9am–6pm". Null/blank = not shown. */
+    @Column(columnDefinition = "TEXT")
+    private String operatingHours;
+
+    @Column(columnDefinition = "TEXT")
+    private String paymentInstruction;
+
+    /**
+     * Which fulfilment options the storefront offers: "BOTH" (default),
+     * "PICKUP_ONLY", or "DELIVERY_ONLY". Drives which choices appear at checkout.
+     */
+    @Column(nullable = false, columnDefinition = "varchar(20) default 'BOTH' not null")
+    private String fulfilmentMode = "BOTH";
+
+    /**
+     * Flat delivery fee for DELIVERY storefront orders. Null = not configured →
+     * the fee is "to be confirmed by seller" (resolved off-platform); 0 = free.
+     */
+    private BigDecimal deliveryFee;
+
+    /** Waive the delivery fee when the order subtotal reaches this amount. Null = no free-delivery threshold. */
+    private BigDecimal freeDeliveryThreshold;
+
+    /**
+     * Merchant's own customer-facing wording for the "to be confirmed" delivery
+     * case (deliveryFee == null). Null/blank → the storefront uses a default line.
+     */
+    @Column(columnDefinition = "TEXT")
+    private String deliveryToBeConfirmedMessage;
+
+    /**
+     * Whether the store's WhatsApp number has been verified as belonging to the
+     * merchant. Unused for now (we accept the entered number at this stage); the
+     * column exists so a future "send-to-verify" flow can set it without a
+     * migration. SQL default backfills existing rows.
+     */
+    @Column(nullable = false, columnDefinition = "boolean default false not null")
+    private boolean whatsappVerified = false;
+
+    private String streetAddress;
+    private String city;
+    private String postalCode;
+
+    // Notification preferences (consumed by Resend/WhatsApp integrations later).
+    // Explicit SQL defaults let ddl-auto add these columns to existing rows.
+    @Column(nullable = false, columnDefinition = "boolean default true not null")
+    private boolean notifyNewOrderEmail = true;
+    @Column(nullable = false, columnDefinition = "boolean default true not null")
+    private boolean notifyLowStockEmail = true;
+    @Column(nullable = false, columnDefinition = "boolean default true not null")
+    private boolean notifyNewOrderWhatsapp = true;
+    @Column(nullable = false, columnDefinition = "boolean default true not null")
+    private boolean notifyUrgentWhatsapp = true;
+
+    /** When false, the storefront hides the per-item note field on the product page. */
+    @Column(nullable = false, columnDefinition = "boolean default true not null")
+    private boolean itemNotesEnabled = true;
+
+    /** When the merchant last opened this store's Orders screen. Drives the
+     *  "new orders" sidebar badge: storefront orders placed after this are unseen.
+     *  Null = never opened, so every storefront order counts as unseen. */
+    private LocalDateTime lastOrdersViewedAt;
+
+    private LocalDateTime createdAt;
+
+    /**
+     * Soft-delete marker. Null = active; non-null = archived (hidden everywhere,
+     * frees a store slot, but the row and all its data are preserved). The slug
+     * stays reserved by the archived row so it can't be reassigned.
+     */
+    private LocalDateTime archivedAt;
+
+    /**
+     * Platform-admin suspension marker. Null = active; non-null = suspended by an
+     * admin (storefront hidden, owner/staff login blocked). Distinct from
+     * {@link #archivedAt}: archiving is the merchant's own "I closed this store"
+     * and is merchant-reversible, whereas suspension is a punitive admin state the
+     * merchant cannot lift themselves.
+     */
+    private LocalDateTime suspendedAt;
+
+    /**
+     * When true, the store is shielded from deletion: a platform admin cannot
+     * "Delete now" and the retention cleanup job skips it. Nullable (treated as
+     * false) so the column adds cleanly to the existing merchants table; the demo
+     * stores are seeded protected.
+     */
+    @Column(name = "protected_from_deletion")
+    private Boolean protectedFromDeletion;
+
+    /**
+     * Whether the store's address is shown on the shared-link preview card.
+     * Nullable so the column can be added to a table that already has rows;
+     * null is treated as on (the default), so existing stores show their address.
+     */
+    @Column(name = "show_address_in_preview")
+    private Boolean showAddressInPreview;
+
+    protected Merchant() {}
+
+    public Merchant(User owner, String name, String slug, String email, String phoneNumber) {
+        this.owner = owner;
+        this.name = name;
+        this.slug = slug;
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+        this.createdAt = LocalDateTime.now();
+    }
+
+    public Long getId() { return id; }
+    public User getOwner() { return owner; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getSlug() { return slug; }
+    public void setSlug(String slug) { this.slug = slug; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public String getVerifiedEmail() { return verifiedEmail; }
+    public void setVerifiedEmail(String verifiedEmail) { this.verifiedEmail = verifiedEmail; }
+    public String getPhoneNumber() { return phoneNumber; }
+    public void setPhoneNumber(String phoneNumber) { this.phoneNumber = phoneNumber; }
+    public String getBusinessType() { return businessType; }
+    public void setBusinessType(String businessType) { this.businessType = businessType; }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
+    public String getThemeColor() { return themeColor; }
+    public void setThemeColor(String themeColor) { this.themeColor = themeColor; }
+    public String getLogoUrl() { return logoUrl; }
+    public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+    public String getStoreDescription() { return storeDescription; }
+    public void setStoreDescription(String storeDescription) { this.storeDescription = storeDescription; }
+    public String getOperatingHours() { return operatingHours; }
+    public void setOperatingHours(String operatingHours) { this.operatingHours = operatingHours; }
+    public String getDeliveryToBeConfirmedMessage() { return deliveryToBeConfirmedMessage; }
+    public void setDeliveryToBeConfirmedMessage(String deliveryToBeConfirmedMessage) { this.deliveryToBeConfirmedMessage = deliveryToBeConfirmedMessage; }
+    public String getFulfilmentMode() { return fulfilmentMode; }
+    public void setFulfilmentMode(String fulfilmentMode) { this.fulfilmentMode = fulfilmentMode; }
+    public String getPaymentInstruction() { return paymentInstruction; }
+    public void setPaymentInstruction(String paymentInstruction) { this.paymentInstruction = paymentInstruction; }
+    public BigDecimal getDeliveryFee() { return deliveryFee; }
+    public void setDeliveryFee(BigDecimal deliveryFee) { this.deliveryFee = deliveryFee; }
+    public BigDecimal getFreeDeliveryThreshold() { return freeDeliveryThreshold; }
+    public void setFreeDeliveryThreshold(BigDecimal freeDeliveryThreshold) { this.freeDeliveryThreshold = freeDeliveryThreshold; }
+    public boolean isWhatsappVerified() { return whatsappVerified; }
+    public void setWhatsappVerified(boolean whatsappVerified) { this.whatsappVerified = whatsappVerified; }
+    public String getStreetAddress() { return streetAddress; }
+    public void setStreetAddress(String streetAddress) { this.streetAddress = streetAddress; }
+    public String getCity() { return city; }
+    public void setCity(String city) { this.city = city; }
+    public String getPostalCode() { return postalCode; }
+    public void setPostalCode(String postalCode) { this.postalCode = postalCode; }
+    public boolean isNotifyNewOrderEmail() { return notifyNewOrderEmail; }
+    public void setNotifyNewOrderEmail(boolean v) { this.notifyNewOrderEmail = v; }
+    public boolean isNotifyLowStockEmail() { return notifyLowStockEmail; }
+    public void setNotifyLowStockEmail(boolean v) { this.notifyLowStockEmail = v; }
+    public boolean isNotifyNewOrderWhatsapp() { return notifyNewOrderWhatsapp; }
+    public void setNotifyNewOrderWhatsapp(boolean v) { this.notifyNewOrderWhatsapp = v; }
+    public boolean isNotifyUrgentWhatsapp() { return notifyUrgentWhatsapp; }
+    public void setNotifyUrgentWhatsapp(boolean v) { this.notifyUrgentWhatsapp = v; }
+    public boolean isItemNotesEnabled() { return itemNotesEnabled; }
+    public void setItemNotesEnabled(boolean v) { this.itemNotesEnabled = v; }
+    /** Effective value: null (unset on an existing row) is treated as on. */
+    public boolean isAddressShownInPreview() { return showAddressInPreview == null || showAddressInPreview; }
+    public Boolean getShowAddressInPreview() { return showAddressInPreview; }
+    public void setShowAddressInPreview(Boolean v) { this.showAddressInPreview = v; }
+    public LocalDateTime getLastOrdersViewedAt() { return lastOrdersViewedAt; }
+    public void setLastOrdersViewedAt(LocalDateTime v) { this.lastOrdersViewedAt = v; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getArchivedAt() { return archivedAt; }
+    public void setArchivedAt(LocalDateTime archivedAt) { this.archivedAt = archivedAt; }
+    public boolean isArchived() { return archivedAt != null; }
+    public LocalDateTime getSuspendedAt() { return suspendedAt; }
+    public void setSuspendedAt(LocalDateTime suspendedAt) { this.suspendedAt = suspendedAt; }
+    public boolean isSuspended() { return suspendedAt != null; }
+    public boolean isProtectedFromDeletion() { return Boolean.TRUE.equals(protectedFromDeletion); }
+    public void setProtectedFromDeletion(boolean protectedFromDeletion) { this.protectedFromDeletion = protectedFromDeletion; }
+}

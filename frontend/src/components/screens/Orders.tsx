@@ -1,0 +1,800 @@
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ChevronDown, Download, Plus, Search, MessageCircle, Copy, Check, DollarSign, ShoppingBag, RotateCcw, XCircle } from 'lucide-react';
+import { Button } from '../Button';
+import { Card } from '../Card';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { ordersApi, adminApi, OrderResponse, OrderStatus, PaymentStatus, OrderType } from '../../lib/api';
+import { formatMoney } from '../../lib/currency';
+import { orderSummaryLines, waLink, type WaOrderSection } from '../../lib/whatsapp';
+import { computeOrderStats, ordersWithinRange, ordersInDateRange, ordersToday, type RangeKey } from '../../lib/orderStats';
+import { DatePicker } from '../DatePicker';
+import { TagChip } from '../TagChip';
+import type { Store } from '../../App';
+import { useConfirm } from '../ConfirmDialog';
+
+interface OrdersProps {
+  store: Store;
+  onNavigate: (screen: string) => void;
+  initialStatus?: OrderStatus | 'ALL';
+  canEdit?: boolean;
+  onEditOrder?: (orderId: number) => void;
+  /** When set, view THIS merchant's orders via the /admin API (Platform Admin drill-down). */
+  adminMerchantId?: number;
+  /** View-only: no Add Order, no status change (plain badge), no payment change.
+   *  The admin console switches this on; the merchant screen never does. */
+  readOnly?: boolean;
+}
+
+// 'NEW' is a synthetic tab (not a status): a customer order not yet acted on.
+type TabKey = OrderStatus | 'ALL' | 'NEW';
+
+const STATUS_TABS: TabKey[] = [
+  'ALL', 'NEW', 'PENDING', 'CONFIRMED', 'PREPARING', 'READY',
+  'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED', 'CANCELLED',
+];
+
+const STATUS_LABEL: Record<string, string> = {
+  ALL: 'All', NEW: 'New', PENDING: 'Pending', CONFIRMED: 'Confirmed', PREPARING: 'Preparing',
+  READY: 'Ready', OUT_FOR_DELIVERY: 'Out for Delivery', DELIVERED: 'Delivered',
+  COMPLETED: 'Completed', CANCELLED: 'Cancelled',
+};
+
+/** A customer order not yet acted on: still in its initial (forward-only) status.
+ *  Drives both the per-row "New" tag and the "New" filter tab. */
+const isNewOrder = (o: OrderResponse) => o.source === 'STOREFRONT' && o.status === 'PENDING';
+
+const STATUS_STYLE: Record<OrderStatus, { bg: string; fg: string }> = {
+  PENDING: { bg: '#FFF7ED', fg: '#C2410C' },
+  CONFIRMED: { bg: '#EFF6FF', fg: '#1D4ED8' },
+  PREPARING: { bg: '#EEF2FF', fg: '#4338CA' },
+  READY: { bg: '#F5F3FF', fg: '#6D28D9' },
+  OUT_FOR_DELIVERY: { bg: '#ECFEFF', fg: '#0E7490' },
+  DELIVERED: { bg: '#F0FDF4', fg: '#15803D' },
+  COMPLETED: { bg: '#ECFDF5', fg: '#047857' },
+  CANCELLED: { bg: '#FEF2F2', fg: '#B91C1C' },
+};
+
+const PAYMENT_STYLE: Record<PaymentStatus, { bg: string; fg: string }> = {
+  PAID: { bg: '#ECFDF5', fg: '#047857' },
+  UNPAID: { bg: '#FFF7ED', fg: '#C2410C' },
+  REFUNDED: { bg: '#F1F5F9', fg: '#475569' },
+};
+
+/** Mirrors the server-side state machine for UX; the API remains the enforcer. */
+const NEXT_STATUS: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED: ['PREPARING', 'CANCELLED'],
+  PREPARING: ['READY', 'CANCELLED'],
+  READY: ['COMPLETED', 'OUT_FOR_DELIVERY', 'CANCELLED'],
+  OUT_FOR_DELIVERY: ['DELIVERED', 'CANCELLED'],
+  DELIVERED: ['COMPLETED', 'CANCELLED'],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
+function Badge({ text, bg, fg }: { text: string; bg: string; fg: string }) {
+  return (
+    <span
+      className="text-xs"
+      style={{ background: bg, color: fg, padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 600, whiteSpace: 'nowrap' }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/** A money line in the order breakdown (subtotal / delivery / discount). */
+function BreakdownRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="text-small" style={{ display: 'flex', justifyContent: 'space-between' }}>
+      <span style={{ color: accent || 'var(--text-secondary)' }}>{label}</span>
+      <span style={{ color: accent || 'var(--text-primary)', fontWeight: 500 }}>{value}</span>
+    </div>
+  );
+}
+
+/** A labeled detail row (Contact / Fulfilment / Payment / Notes) with a fixed-
+ *  width label column, so values line up and read clearly. */
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+      <span className="text-xs" style={{ width: '84px', flexShrink: 0, fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.02em', paddingTop: '1px' }}>{label}</span>
+      <div className="text-small" style={{ flex: 1, color: 'var(--text-primary)', minWidth: 0 }}>{value}</div>
+    </div>
+  );
+}
+
+/** A tap-to-copy value line: full-width, touch-comfortable target that copies
+ *  `text` to the clipboard and briefly confirms with a check. */
+function CopyValue({ text, muted = false }: { text: string; muted?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch { /* clipboard unavailable (older browser / insecure context) */ }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Tap to copy"
+      style={{
+        // flex-start (not center) so the value's first line aligns with the label,
+        // matching the other InfoRows; min-height keeps a comfortable touch target.
+        display: 'flex', alignItems: 'flex-start', gap: '8px', width: '100%', minHeight: '40px',
+        padding: 0, border: 'none', background: 'none', textAlign: 'left', cursor: 'pointer',
+        font: 'inherit', color: muted ? 'var(--text-secondary)' : 'var(--text-primary)',
+      }}
+    >
+      <span style={{ flex: 1, minWidth: 0, wordBreak: 'break-word', lineHeight: 1.5 }}>{text}</span>
+      <span style={{
+        flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: '40px', height: '20px', marginRight: '-8px',
+        color: copied ? '#047857' : 'var(--text-muted)',
+      }}>
+        {copied ? <Check size={16} /> : <Copy size={16} />}
+      </span>
+    </button>
+  );
+}
+
+// Time-range scope for the whole screen: 'today', rolling presets, custom range.
+type TileRange = RangeKey | 'today' | 'custom';
+const RANGE_OPTIONS: { key: TileRange; label: string }[] = [
+  { key: 'today', label: 'Today' },
+  { key: '7d', label: '7 days' },
+  { key: '30d', label: '30 days' },
+  { key: '90d', label: '90 days' },
+  { key: 'all', label: 'All time' },
+  { key: 'custom', label: 'Custom' },
+];
+
+function StatCard({ icon, tint, label, value }: { icon: ReactNode; tint: string; label: string; value: string }) {
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          width: '40px', height: '40px', borderRadius: '8px', background: `${tint}20`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {icon}
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <p className="text-xs" style={{ color: 'var(--text-secondary)', marginBottom: '4px' }}>{label}</p>
+          <p style={{ fontSize: '20px', fontWeight: 600, overflowWrap: 'anywhere' }}>{value}</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+export function Orders({ store, onNavigate, initialStatus = 'ALL', canEdit = false, onEditOrder, adminMerchantId, readOnly = false }: OrdersProps) {
+  const confirm = useConfirm();
+  const storeId = Number(store.id);
+  const isAdmin = adminMerchantId != null;
+  const api = useMemo(() => (isAdmin
+    ? adminApi.ordersFor(adminMerchantId!)
+    : {
+        list: () => ordersApi.list(storeId),
+        updateStatus: (orderId: number, status: OrderStatus) => ordersApi.updateStatus(storeId, orderId, status),
+        updatePaymentStatus: (orderId: number, paymentStatus: PaymentStatus) => ordersApi.updatePaymentStatus(storeId, orderId, paymentStatus),
+      }
+  ), [isAdmin, adminMerchantId, storeId]);
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+  const [orders, setOrders] = useState<OrderResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabKey>(initialStatus);
+  const [query, setQuery] = useState('');
+  // Time-range scope (default 'all' preserves the all-orders view on load).
+  const [range, setRange] = useState<TileRange>('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  // Each row toggles its OWN expand/collapse; several can stay open at once, and
+  // clicking elsewhere never closes them (same model as the sidebar submenus).
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
+
+  const toggleExpanded = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      setOrders(await api.list());
+    } catch (e: any) {
+      alert(e?.message || 'Could not load orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  // Search across every human-visible field: order number (with/without '#'),
+  // customer name, phone, product names, the status label (Pending … Cancelled),
+  // and payment status (Unpaid / Paid / Refunded). Status is included both
+  // as-shown and collapsed, so "out for delivery" and "outfordelivery" both match.
+  // The time range scopes the whole screen. Custom-range validity mirrors the
+  // Dashboard: both dates required and start on or before end (single day OK).
+  const isCustom = range === 'custom';
+  const customComplete = isCustom && customStart !== '' && customEnd !== '';
+  const customInvalid = customComplete && customStart > customEnd;
+  const customValid = customComplete && !customInvalid;
+  const rangeReady = !isCustom || customValid;
+
+  const rangedOrders = useMemo(() => {
+    if (isCustom) return customValid ? ordersInDateRange(orders, customStart, customEnd) : [];
+    if (range === 'today') return ordersToday(orders);
+    return ordersWithinRange(orders, range as RangeKey);
+  }, [orders, range, isCustom, customValid, customStart, customEnd]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rangedOrders.filter((o) => {
+      if (tab === 'NEW') {
+        if (!isNewOrder(o)) return false;
+      } else if (tab !== 'ALL' && o.status !== tab) {
+        return false;
+      }
+      if (!q) return true;
+      const status = STATUS_LABEL[o.status] || o.status;
+      const haystack = [
+        String(o.id), `#${o.id}`,
+        o.contactName, o.contactPhone,
+        status, status.replace(/[\s-]/g, ''),
+        o.paymentStatus,
+        ...o.items.map((i) => i.productName),
+      ]
+        .filter(Boolean)
+        .map((s) => String(s).toLowerCase());
+      return haystack.some((h) => h.includes(q));
+    });
+  }, [rangedOrders, tab, query]);
+
+  const applyUpdated = (updated: OrderResponse) =>
+    setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+
+  const changeStatus = async (order: OrderResponse, status: OrderStatus) => {
+    // Cancelling is destructive and can't be undone - confirm before it takes effect.
+    if (status === 'CANCELLED') {
+      const ok = await confirm({
+        title: 'Cancel order',
+        message: `Cancel order #${order.id}? This can't be undone and the customer's order will be marked cancelled.`,
+        confirmLabel: 'Cancel order',
+        cancelLabel: 'Keep order',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
+    setBusyOrderId(order.id);
+    try {
+      applyUpdated(await api.updateStatus(order.id, status));
+    } catch (e: any) {
+      alert(e?.message || 'Status update failed');
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  const changePayment = async (order: OrderResponse, paymentStatus: PaymentStatus) => {
+    if (paymentStatus === order.paymentStatus) return;
+    setBusyOrderId(order.id);
+    try {
+      applyUpdated(await api.updatePaymentStatus(order.id, paymentStatus));
+    } catch (e: any) {
+      alert(e?.message || 'Payment update failed');
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  const exportCsv = () => {
+    const rows = [
+      ['Order', 'Customer', 'Phone', 'Total', 'Payment', 'Status', 'Items', 'Created'],
+      ...filtered.map((o) => [
+        `#${o.id}`,
+        o.contactName || '',
+        o.contactPhone || '',
+        String(o.totalAmount),
+        o.paymentStatus,
+        o.status,
+        o.items.map((i) => `${i.productName} x${i.quantity}`).join('; '),
+        o.createdAt,
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${store.slug}-orders.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const fmtDate = (iso: string) => new Date(iso).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' });
+
+  const fulfilmentLabel = (t: OrderType) => (t === 'DELIVERY' ? 'Delivery' : 'Pickup');
+
+  // One combined WhatsApp message to the customer covering every order in the
+  // group. A split checkout is two linked orders sharing an orderGroupId, so a
+  // grouped order messages all its siblings as one summary (reusing the shared
+  // "one message, sections + combined totals" builder).
+  const messageCustomerUrl = (order: OrderResponse): string | null => {
+    const group = order.orderGroupId
+      ? orders.filter((o) => o.orderGroupId === order.orderGroupId).sort((a, b) => a.id - b.id)
+      : [order];
+    const sections: WaOrderSection[] = group.map((o) => ({
+      orderId: o.id,
+      label: null,
+      items: o.items.map((it) => ({ quantity: it.quantity, productName: it.productName, subtotal: it.lineSubtotal, modifiers: it.modifiers, notes: it.notes })),
+      subtotal: o.subtotal,
+      deliveryFee: o.deliveryFee,
+      discountAmount: o.discountAmount,
+      totalAmount: o.totalAmount,
+    }));
+    const combined = {
+      subtotal: group.reduce((n, o) => n + o.subtotal, 0),
+      deliveryFee: group.reduce((n, o) => n + o.deliveryFee, 0),
+      deliveryFeePending: group.some((o) => o.deliveryFeePending),
+      isDelivery: order.orderType === 'DELIVERY', // show "Delivery fee: Free" on $0 delivery, matching the panel
+      discountAmount: group.reduce((n, o) => n + o.discountAmount, 0),
+      discountCode: group.find((o) => o.discountCode)?.discountCode ?? null,
+      totalAmount: group.reduce((n, o) => n + o.totalAmount, 0),
+    };
+    const name = order.contactName || order.customerName || '';
+    const lines = [name ? `Hi ${name}! Here's your order with ${store.name}:` : `Your order with ${store.name}:`, ''];
+    lines.push(...orderSummaryLines(sections, store.currency, combined));
+    lines.push('');
+    lines.push(`Fulfilment: ${fulfilmentLabel(order.orderType)}`);
+    if (order.orderType === 'DELIVERY' && order.deliveryAddress) lines.push(`Address: ${order.deliveryAddress}`);
+    return waLink(order.contactPhone, lines.join('\n'));
+  };
+
+  // Summary stats over the orders in the active range (the tab/search filter is
+  // applied separately, in the list). Shared with the Dashboard via
+  // computeOrderStats so the two can't drift: revenue counts only fulfilled
+  // orders, refunded/cancelled are context.
+  const { totalRevenue, refundedAmount, cancelledCount } = useMemo(() => computeOrderStats(rangedOrders), [rangedOrders]);
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ marginBottom: '8px' }}>Orders</h1>
+          <p className="text-small" style={{ color: 'var(--text-secondary)' }}>
+            Manage and track all customer orders
+          </p>
+        </div>
+        {!readOnly && (isDesktop ? (
+          <Button variant="primary" onClick={() => onNavigate('orders-add')}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={16} />
+              Add Order
+            </div>
+          </Button>
+        ) : (
+          /* Mobile: compact "+ Add" pill, mirroring the top-bar buttons' responsive
+             collapse. aria-label carries the full action since the label is shortened. */
+          <button
+            onClick={() => onNavigate('orders-add')}
+            aria-label="Add order"
+            title="Add order"
+            style={{
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'var(--primary-solid)',
+              color: 'var(--text-on-dark)',
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--primary-solid-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--primary-solid)'; }}
+          >
+            <Plus size={16} />
+            Add
+          </button>
+        ))}
+      </div>
+
+      {/* Time-range scope (presets + custom start/end), applied to the whole screen. */}
+      {!loading && orders.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
+          <div role="group" aria-label="Time range" style={{ display: 'inline-flex', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', overflow: 'hidden', background: 'var(--bg-card)' }}>
+            {RANGE_OPTIONS.map((opt, i) => {
+              const active = opt.key === range;
+              return (
+                <button
+                  key={opt.key}
+                  onClick={() => setRange(opt.key)}
+                  aria-pressed={active}
+                  className="text-small"
+                  style={{
+                    padding: '8px 12px', fontWeight: 600, cursor: 'pointer',
+                    border: 'none', borderLeft: i === 0 ? 'none' : '1px solid var(--border-subtle)',
+                    background: active ? 'var(--primary-solid)' : 'transparent',
+                    color: active ? 'var(--text-on-dark)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {isCustom && (
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
+                <div style={{ minWidth: '160px' }}>
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Start date</label>
+                  <DatePicker value={customStart} onChange={setCustomStart} placeholder="Start date" ariaLabel="Custom range start date" />
+                </div>
+                <div style={{ minWidth: '160px' }}>
+                  <label className="text-xs" style={{ color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>End date</label>
+                  <DatePicker value={customEnd} onChange={setCustomEnd} min={customStart || undefined} placeholder="End date" ariaLabel="Custom range end date" />
+                </div>
+              </div>
+              {customInvalid && (
+                <p className="text-small" style={{ color: 'var(--error-color)', margin: '8px 0 0' }}>
+                  Start date must be on or before the end date.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Summary stats (same pattern as the Products/Marketing screens). */}
+      {!loading && orders.length > 0 && rangeReady && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <StatCard icon={<DollarSign size={20} style={{ color: '#10B981' }} />} tint="#10B981" label="Total Revenue" value={formatMoney(totalRevenue, store.currency)} />
+          <StatCard icon={<ShoppingBag size={20} style={{ color: '#3B82F6' }} />} tint="#3B82F6" label="Total Orders" value={String(rangedOrders.length)} />
+          <StatCard icon={<RotateCcw size={20} style={{ color: '#D97706' }} />} tint="#D97706" label="Refunded" value={formatMoney(refundedAmount, store.currency)} />
+          <StatCard icon={<XCircle size={20} style={{ color: '#DC2626' }} />} tint="#DC2626" label="Cancelled" value={String(cancelledCount)} />
+        </div>
+      )}
+
+      {/* Search + filters */}
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: '1 1 320px', minWidth: '240px' }}>
+          <Search size={16} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by order #, customer, product, status or payment"
+            style={{
+              width: '100%', padding: '10px 14px 10px 40px',
+              borderRadius: 'var(--radius-field)', border: '1px solid var(--border-strong)',
+              background: 'var(--bg-card)', fontSize: '14px', outline: 'none',
+            }}
+          />
+        </div>
+        <Button variant="secondary" onClick={exportCsv}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Download size={15} />
+            Export
+          </div>
+        </Button>
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {STATUS_TABS.map((s) => {
+          const active = tab === s;
+          const count = s === 'ALL' ? rangedOrders.length
+            : s === 'NEW' ? rangedOrders.filter(isNewOrder).length
+            : rangedOrders.filter((o) => o.status === s).length;
+          return (
+            <button
+              key={s}
+              onClick={() => setTab(s)}
+              className="text-small"
+              style={{
+                padding: '8px 14px', borderRadius: 'var(--radius-pill)', cursor: 'pointer',
+                border: active ? '1px solid var(--primary-solid)' : '1px solid var(--border-strong)',
+                background: active ? 'var(--primary-solid)' : 'var(--bg-card)',
+                color: active ? 'var(--text-on-dark)' : 'var(--text-primary)', fontWeight: 500,
+              }}
+            >
+              {STATUS_LABEL[s]}{count > 0 ? ` (${count})` : ''}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Table */}
+      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-card)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+        <div
+          className="text-xs orders-head"
+          style={{
+            display: 'grid', gridTemplateColumns: '78px 1.2fr 96px 92px 90px 96px 52px 120px 0.9fr 36px',
+            gap: '12px', padding: '14px 20px', background: 'var(--bg-card-subtle)',
+            color: 'var(--text-secondary)', fontWeight: 600,
+          }}
+        >
+          <span>Order</span><span>Customer</span><span>Fulfilment</span><span>Total</span><span>Payment</span><span>Method</span>
+          <span>Items</span><span>Status</span><span>Date</span><span />
+        </div>
+
+        {loading ? (
+          <p className="text-small" style={{ padding: '32px 20px', color: 'var(--text-secondary)' }}>Loading orders…</p>
+        ) : !rangeReady ? (
+          <p className="text-small" style={{ padding: '32px 20px', color: 'var(--text-muted)' }}>
+            {customInvalid ? 'Adjust the dates above to see orders.' : 'Pick a start and end date to see orders.'}
+          </p>
+        ) : filtered.length === 0 ? (
+          <p className="text-small" style={{ padding: '32px 20px', color: 'var(--text-secondary)' }}>
+            No orders {tab === 'NEW' ? 'tagged New' : tab !== 'ALL' ? `with status ${STATUS_LABEL[tab]}` : 'in this range'}.
+          </p>
+        ) : (
+          filtered.map((o) => {
+            const expanded = expandedIds.has(o.id);
+            const busy = busyOrderId === o.id;
+            const isNew = isNewOrder(o);
+            return (
+              <div
+                key={o.id}
+                style={{ borderTop: '1px solid var(--border-subtle)' }}
+              >
+                <div
+                  onClick={() => toggleExpanded(o.id)}
+                  className="orders-row"
+                  style={{
+                    display: 'grid', gridTemplateColumns: '78px 1.2fr 96px 92px 90px 96px 52px 120px 0.9fr 36px',
+                    gap: '12px', padding: '16px 20px', alignItems: 'center', cursor: 'pointer',
+                    opacity: busy ? 0.6 : 1,
+                  }}
+                >
+                  <span className="order-id text-small" style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    #{o.id}
+                    {isNew && (
+                      <span style={{
+                        fontSize: '10px', fontWeight: 700, letterSpacing: '0.02em',
+                        padding: '1px 6px', borderRadius: '999px', background: '#DC2626',
+                        color: '#FFFFFF', lineHeight: 1.5,
+                      }}>New</span>
+                    )}
+                  </span>
+                  <span className="text-small" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}><span className="m-label">Customer</span>{o.contactName || o.customerName || '-'}
+                    {o.customerTags.map((t) => <TagChip key={t.name} tag={t} size="xs" />)}
+                  </span>
+                  <span><span className="m-label">Fulfilment</span>
+                    <span style={{
+                      display: 'inline-block', fontSize: '11px', fontWeight: 600,
+                      padding: '2px 9px', borderRadius: '999px',
+                      background: o.orderType === 'DELIVERY' ? '#EFF6FF' : '#F3F4F6',
+                      color: o.orderType === 'DELIVERY' ? '#1D4ED8' : '#4B5563',
+                    }}>
+                      {fulfilmentLabel(o.orderType)}
+                    </span>
+                  </span>
+                  <span className="text-small" style={{ fontWeight: 600 }}><span className="m-label">Total</span>{formatMoney(o.totalAmount, store.currency)}</span>
+                  <span><span className="m-label">Payment</span>
+                    <Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} />
+                  </span>
+                  <span className="text-small" style={{ color: 'var(--text-secondary)' }}><span className="m-label">Method</span>{o.paymentMethod || '-'}</span>
+                  <span className="text-small"><span className="m-label">Items</span>{o.items.reduce((n, i) => n + i.quantity, 0)}</span>
+                  <span><span className="m-label">Status</span><Badge text={STATUS_LABEL[o.status]} {...STATUS_STYLE[o.status]} /></span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}><span className="m-label">Date</span>{fmtDate(o.createdAt)}</span>
+                  <span className="order-chevron" style={{ color: 'var(--text-muted)', display: 'inline-flex' }}>
+                    <ChevronDown
+                      size={16}
+                      style={{
+                        transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transition: 'transform 0.2s ease',
+                      }}
+                    />
+                  </span>
+                </div>
+
+                {expanded && (
+                  <div className="orders-detail" style={{ padding: '0 20px 20px', display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px' }}>
+                    {/* Items, money breakdown + labeled details */}
+                    <div style={{ background: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-medium)', padding: '16px' }}>
+                      <p className="text-xs" style={{ fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.03em', marginBottom: '10px' }}>ITEMS</p>
+                      {o.items.length === 0 && <p className="text-small" style={{ color: 'var(--text-muted)' }}>No line items recorded.</p>}
+                      {o.items.map((i, idx) => (
+                        <div key={idx} className="text-small" style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', padding: '4px 0' }}>
+                          <span style={{ color: 'var(--text-primary)', minWidth: 0 }}>
+                            {i.productName} × {i.quantity}
+                            {i.modifiers.length > 0 && (
+                              <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '11px', marginTop: '1px' }}>
+                                {i.modifiers.map((m) => m.optionName).join(', ')}
+                              </span>
+                            )}
+                            {i.notes && (
+                              <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '11px', fontStyle: 'italic', marginTop: '1px' }}>“{i.notes}”</span>
+                            )}
+                          </span>
+                          <span style={{ color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{formatMoney(i.lineSubtotal, store.currency)}</span>
+                        </div>
+                      ))}
+
+                      <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '10px', paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <BreakdownRow label="Subtotal" value={formatMoney(o.subtotal, store.currency)} />
+                        {o.deliveryFeePending
+                          ? <BreakdownRow label="Delivery fee" value="To be confirmed" accent="#B45309" />
+                          : o.orderType === 'DELIVERY' && (
+                              o.deliveryFee > 0
+                                ? <BreakdownRow label="Delivery fee" value={formatMoney(o.deliveryFee, store.currency)} />
+                                : <BreakdownRow label="Delivery fee" value="Free" accent="#047857" />
+                            )}
+                        {o.discountAmount > 0 && (
+                          <BreakdownRow label={`Discount${o.discountCode ? ` (${o.discountCode})` : ''}`} value={`− ${formatMoney(o.discountAmount, store.currency)}`} accent="#047857" />
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '4px', fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                          <span>{o.deliveryFeePending ? 'Estimated total' : 'Total'}</span>
+                          <span>{formatMoney(o.totalAmount, store.currency)}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '14px', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <InfoRow label="Contact" value={
+                          <>
+                            {(o.contactName || o.customerName)
+                              ? <CopyValue text={o.contactName || o.customerName || ''} />
+                              : <div>-</div>}
+                            {o.contactPhone
+                              ? <CopyValue text={o.contactPhone} muted />
+                              : <div style={{ color: 'var(--text-secondary)' }}>No phone</div>}
+                            {o.contactEmail && <CopyValue text={o.contactEmail} muted />}
+                            {o.customerTags.length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '2px' }}>
+                                {o.customerTags.map((t) => <TagChip key={t.name} tag={t} size="xs" />)}
+                              </div>
+                            )}
+                          </>
+                        } />
+                        {o.orderType === 'DELIVERY' && (
+                          <InfoRow label="Deliver to" value={
+                            o.deliveryAddress
+                              ? <CopyValue text={o.deliveryAddress} />
+                              : <div style={{ color: 'var(--text-secondary)' }}>No address given</div>
+                          } />
+                        )}
+                        {o.paymentReference && (
+                          <InfoRow label="Payment ref" value={o.paymentReference} />
+                        )}
+                        {o.notes && <InfoRow label="Notes" value={<span style={{ whiteSpace: 'pre-wrap' }}>{o.notes}</span>} />}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ background: 'var(--bg-card-subtle)', borderRadius: 'var(--radius-medium)', padding: '16px' }}>
+                      {(() => {
+                        const waUrl = messageCustomerUrl(o);
+                        return waUrl ? (
+                          <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                              height: '40px', borderRadius: 'var(--radius-field)', background: '#25D366', color: 'white',
+                              fontSize: '13px', fontWeight: 600, textDecoration: 'none', marginBottom: '16px',
+                            }}
+                          >
+                            <MessageCircle size={16} /> Message customer on WhatsApp
+                          </a>
+                        ) : (
+                          <p className="text-xs" style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>
+                            No phone on file, so we can't message this customer.
+                          </p>
+                        );
+                      })()}
+                      {canEdit && onEditOrder && (
+                        <div style={{ marginBottom: '16px' }}>
+                          <Button variant="secondary" onClick={() => onEditOrder(o.id)}>
+                            Edit Order Details
+                          </Button>
+                        </div>
+                      )}
+                      <p className="text-xs" style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>STATUS</p>
+                      {readOnly ? (
+                        <div style={{ marginBottom: '16px' }}>
+                          <Badge text={STATUS_LABEL[o.status]} {...STATUS_STYLE[o.status]} />
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                          {NEXT_STATUS[o.status].length === 0 && (
+                            <p className="text-small" style={{ color: 'var(--text-muted)' }}>Order is {STATUS_LABEL[o.status].toLowerCase()}. No further steps.</p>
+                          )}
+                          {NEXT_STATUS[o.status].map((s) => (
+                            <Button
+                              key={s}
+                              variant={s === 'CANCELLED' ? 'secondary' : 'primary'}
+                              disabled={busy}
+                              onClick={() => changeStatus(o, s)}
+                            >
+                              {s === 'CANCELLED' ? 'Cancel Order' : `Mark ${STATUS_LABEL[s]}`}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+
+                      <p className="text-xs" style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px' }}>PAYMENT</p>
+                      {readOnly ? (
+                        <Badge text={o.paymentStatus} {...PAYMENT_STYLE[o.paymentStatus]} />
+                      ) : (
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {(['UNPAID', 'PAID', 'REFUNDED'] as PaymentStatus[]).map((p) => (
+                            <button
+                              key={p}
+                              disabled={busy}
+                              onClick={() => changePayment(o, p)}
+                              className="text-xs"
+                              style={{
+                                padding: '6px 12px', borderRadius: 'var(--radius-pill)', cursor: 'pointer', fontWeight: 600,
+                                border: o.paymentStatus === p ? '2px solid var(--primary-solid)' : '1px solid var(--border-strong)',
+                                background: PAYMENT_STYLE[p].bg, color: PAYMENT_STYLE[p].fg,
+                              }}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {rangeReady && (
+        <p className="text-small" style={{ color: 'var(--text-secondary)', marginTop: '16px' }}>
+          Total {filtered.length} order{filtered.length === 1 ? '' : 's'}
+        </p>
+      )}
+
+      <style>{`
+        .m-label { display: none; }
+        @media (max-width: 1024px) {
+          .orders-head { display: none !important; }
+          .orders-row {
+            display: flex !important;
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 6px !important;
+            position: relative;
+            padding-right: 44px !important;
+          }
+          .orders-row > span { display: flex; align-items: center; gap: 8px; }
+          .orders-row .order-id { font-weight: 700; font-size: 14px; }
+          .orders-row .m-label {
+            display: inline-block;
+            min-width: 84px;
+            color: var(--text-secondary);
+            font-weight: 600;
+          }
+          .orders-row .order-chevron {
+            position: absolute;
+            top: 16px;
+            right: 20px;
+          }
+          .orders-detail { grid-template-columns: minmax(0, 1fr) !important; }
+        }
+      `}</style>
+    </div>
+  );
+}

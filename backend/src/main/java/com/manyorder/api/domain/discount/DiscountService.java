@@ -1,0 +1,430 @@
+package com.manyorder.api.domain.discount;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.domain.product.Product;
+import com.manyorder.api.domain.product.ProductRepository;
+
+@Service
+public class DiscountService {
+
+    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
+
+    private final DiscountRepository discountRepository;
+    private final ProductRepository productRepository;
+
+    public DiscountService(DiscountRepository discountRepository, ProductRepository productRepository) {
+        this.discountRepository = discountRepository;
+        this.productRepository = productRepository;
+    }
+
+    /** One resolved cart line the discount is measured against: which product, its
+     *  priced line total (effective unit price plus modifiers, times quantity), and
+     *  whether that product is on sale (so a non-stacking code can skip it). */
+    public record LineAmount(long productId, BigDecimal lineTotal, boolean onSale) {}
+
+    // ---------- merchant CRUD ----------
+
+    @Transactional(readOnly = true)
+    public List<DiscountResponse> getDiscounts(Merchant merchant) {
+        return discountRepository.findByMerchantOrderByDisplayOrderAscCreatedAtDesc(merchant)
+                .stream().map(DiscountResponse::new).toList();
+    }
+
+    /** Apply a merchant-chosen order: the given ids become positions 0..n. Ids
+     *  must all belong to the store. Mirrors category/product reordering. */
+    @Transactional
+    public List<DiscountResponse> reorderDiscounts(Merchant merchant, List<Long> discountIds) {
+        int i = 0;
+        for (Long id : discountIds) {
+            requireOwned(merchant, id).setDisplayOrder(i++);
+        }
+        return getDiscounts(merchant);
+    }
+
+    @Transactional
+    public DiscountResponse createDiscount(Merchant merchant, CreateDiscountRequest request) {
+        String code = normalizeCode(request.getCode());
+        if (discountRepository.existsByMerchantAndCodeIgnoreCase(merchant, code)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "A discount with that code already exists.");
+        }
+        validateShape(request.getType(), request.getValue(), request.getStartsAt(), request.getEndsAt());
+        // A FREE_DELIVERY voucher has no value; any delivery discount (full or a
+        // partial % / fixed off the fee) has no product scope - normalise those away.
+        boolean freeDelivery = request.getType() == DiscountType.FREE_DELIVERY;
+        boolean appliesToDelivery = !freeDelivery && Boolean.TRUE.equals(request.getAppliesToDelivery());
+        boolean deliveryScoped = freeDelivery || appliesToDelivery;
+        BigDecimal value = freeDelivery ? BigDecimal.ZERO : request.getValue();
+
+        Discount discount = new Discount(
+                merchant, code, request.getType(), value,
+                request.getUsageLimit(), request.getStartsAt(), request.getEndsAt(),
+                request.getActive() == null || request.getActive());
+        discount.setName(request.getName());
+        discount.setProductIds(deliveryScoped ? new HashSet<>() : validateProductScope(merchant, request.getProductIds()));
+        discount.setMinSpend(request.getMinSpend());
+        discount.setFirstOrderOnly(request.getFirstOrderOnly() != null && request.getFirstOrderOnly());
+        discount.setCanStackWithSale(request.getCanStackWithSale() != null && request.getCanStackWithSale());
+        discount.setPublic(request.getIsPublic() != null && request.getIsPublic());
+        discount.setAppliesToDelivery(appliesToDelivery);
+        // New discounts append at the end of the merchant's order.
+        int nextOrder = discountRepository.findByMerchantOrderByDisplayOrderAscCreatedAtDesc(merchant)
+                .stream().mapToInt(Discount::getDisplayOrder).max().orElse(-1) + 1;
+        discount.setDisplayOrder(nextOrder);
+        return new DiscountResponse(discountRepository.save(discount));
+    }
+
+    @Transactional
+    public DiscountResponse updateDiscount(Merchant merchant, Long discountId, UpdateDiscountRequest request) {
+        Discount discount = requireOwned(merchant, discountId);
+
+        if (request.getCode() != null && !request.getCode().isBlank()) {
+            String code = normalizeCode(request.getCode());
+            if (!code.equalsIgnoreCase(discount.getCode())
+                    && discountRepository.existsByMerchantAndCodeIgnoreCase(merchant, code)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "A discount with that code already exists.");
+            }
+            discount.setCode(code);
+        }
+        if (request.getName() != null) discount.setName(request.getName());
+        if (request.getType() != null) discount.setType(request.getType());
+        if (request.getValue() != null) discount.setValue(request.getValue());
+        if (request.getUsageLimit() != null) discount.setUsageLimit(request.getUsageLimit());
+        // The validity window is always fully sent by the edit form, so a null here
+        // means "cleared" (open-ended on that side), not "leave unchanged". Set it
+        // unconditionally so an existing start/end can be cleared back to empty.
+        discount.setStartsAt(request.getStartsAt());
+        discount.setEndsAt(request.getEndsAt());
+        if (request.getActive() != null) discount.setActive(request.getActive());
+        // Null = leave scope unchanged; a list (even empty) replaces it.
+        if (request.getProductIds() != null) {
+            discount.setProductIds(validateProductScope(merchant, request.getProductIds()));
+        }
+        // Null = leave the minimum unchanged; 0 clears it; a positive value sets it.
+        if (request.getMinSpend() != null) {
+            discount.setMinSpend(request.getMinSpend().signum() == 0 ? null : request.getMinSpend());
+        }
+        if (request.getFirstOrderOnly() != null) discount.setFirstOrderOnly(request.getFirstOrderOnly());
+        if (request.getCanStackWithSale() != null) discount.setCanStackWithSale(request.getCanStackWithSale());
+        if (request.getIsPublic() != null) discount.setPublic(request.getIsPublic());
+        if (request.getAppliesToDelivery() != null) discount.setAppliesToDelivery(request.getAppliesToDelivery());
+        // Normalise delivery-discount data, whichever way things were set (incl. a
+        // type flip): FREE_DELIVERY carries no value and is never appliesToDelivery;
+        // any delivery discount (full or partial) carries no product scope.
+        if (discount.getType() == DiscountType.FREE_DELIVERY) {
+            discount.setValue(BigDecimal.ZERO);
+            discount.setAppliesToDelivery(false);
+        }
+        if (discount.getType() == DiscountType.FREE_DELIVERY || discount.isAppliesToDelivery()) {
+            discount.setProductIds(new HashSet<>());
+        }
+
+        validateShape(discount.getType(), discount.getValue(), discount.getStartsAt(), discount.getEndsAt());
+        return new DiscountResponse(discountRepository.save(discount));
+    }
+
+    @Transactional
+    public void deleteDiscount(Merchant merchant, Long discountId) {
+        discountRepository.delete(requireOwned(merchant, discountId));
+    }
+
+    /** Flip only the Active flag (no other field changes). Mirrors product hide/unhide. */
+    @Transactional
+    public DiscountResponse deactivateDiscount(Merchant merchant, Long discountId) {
+        Discount discount = requireOwned(merchant, discountId);
+        discount.setActive(false);
+        return new DiscountResponse(discountRepository.save(discount));
+    }
+
+    @Transactional
+    public DiscountResponse activateDiscount(Merchant merchant, Long discountId) {
+        Discount discount = requireOwned(merchant, discountId);
+        discount.setActive(true);
+        return new DiscountResponse(discountRepository.save(discount));
+    }
+
+    // ---------- redemption (checkout + public validation) ----------
+
+    /**
+     * Resolve a redeemable discount for this store, or throw 400 with a
+     * customer-facing reason. Does not mutate usedCount — the checkout increments
+     * it once the order is actually placed.
+     */
+    @Transactional(readOnly = true)
+    public Discount requireRedeemable(Merchant merchant, String code) {
+        Discount discount = discountRepository
+                .findByMerchantAndCodeIgnoreCase(merchant, normalizeCode(code))
+                .orElseThrow(() -> reject("That discount code isn't valid."));
+
+        if (!discount.isActive()) throw reject("That discount code is no longer active.");
+
+        LocalDateTime now = LocalDateTime.now();
+        if (discount.getStartsAt() != null && now.isBefore(discount.getStartsAt())) {
+            throw reject("That discount code isn't active yet.");
+        }
+        if (discount.getEndsAt() != null && now.isAfter(discount.getEndsAt())) {
+            throw reject("That discount code has expired.");
+        }
+        if (discount.getUsageLimit() != null && discount.getUsedCount() >= discount.getUsageLimit()) {
+            throw reject("That discount code has reached its usage limit.");
+        }
+        return discount;
+    }
+
+    /** Whether a discount is currently redeemable (active, within its window, not
+     *  usage-exhausted) - the non-throwing form of requireRedeemable's checks. */
+    private boolean isLive(Discount d, LocalDateTime now) {
+        if (!d.isActive()) return false;
+        if (d.getStartsAt() != null && now.isBefore(d.getStartsAt())) return false;
+        if (d.getEndsAt() != null && now.isAfter(d.getEndsAt())) return false;
+        if (d.getUsageLimit() != null && d.getUsedCount() >= d.getUsageLimit()) return false;
+        return true;
+    }
+
+    /** Public offers a customer may see and one-tap apply on the storefront:
+     *  flagged public AND currently live. Private (code-only) offers are never
+     *  included, so their existence and codes stay hidden. Eligibility rules
+     *  (min spend, first-order-only) still apply when the code is validated. */
+    @Transactional(readOnly = true)
+    public List<PublicOfferResponse> listPublicOffers(Merchant merchant) {
+        LocalDateTime now = LocalDateTime.now();
+        return discountRepository.findPublicByMerchant(merchant).stream()
+                .filter(d -> isLive(d, now))
+                .map(d -> new PublicOfferResponse(d, scopeLabelFor(merchant, d)))
+                .toList();
+    }
+
+    /**
+     * Human "applies to" label for an offer: "All products" store-wide; otherwise
+     * the single product's name, or the shared category when every scoped product
+     * belongs to one, or "N products". Stale ids (deleted products) are ignored.
+     */
+    private String scopeLabelFor(Merchant merchant, Discount d) {
+        if (d.isStoreWide()) return "All products";
+        List<Product> scoped = productRepository.findByMerchantAndIdIn(merchant, d.getProductIds());
+        if (scoped.isEmpty()) return "Selected products";
+        if (scoped.size() == 1) return scoped.get(0).getName();
+        Set<String> categories = new HashSet<>();
+        for (Product p : scoped) categories.add(p.getCategory() != null ? p.getCategory().getName() : null);
+        if (categories.size() == 1 && categories.iterator().next() != null) {
+            return categories.iterator().next();
+        }
+        return scoped.size() + " products";
+    }
+
+    /**
+     * Money off, given the discountable subtotal (the matching subtotal for a
+     * product-specific code, or the whole subtotal for a store-wide one). A FIXED
+     * amount is capped at that subtotal, so a fixed code larger than the matching
+     * items' worth only takes off what those items are worth.
+     */
+    public BigDecimal computeAmount(Discount discount, BigDecimal discountableSubtotal) {
+        BigDecimal amount = discount.getType() == DiscountType.PERCENTAGE
+                ? discountableSubtotal.multiply(discount.getValue()).divide(HUNDRED, 2, RoundingMode.HALF_UP)
+                : discount.getValue();
+        return amount.min(discountableSubtotal).max(BigDecimal.ZERO);
+    }
+
+    /** The order's delivery situation, needed to resolve a FREE_DELIVERY code:
+     *  whether it's a delivery order, the fee that would apply, and whether that
+     *  fee is still to-be-confirmed (the store had none configured). */
+    public record DeliveryContext(boolean delivery, BigDecimal fee, boolean pending) {}
+
+    /** Preview a code against the given cart lines without redeeming it (powers the
+     *  checkout "Apply" button). Prices are the server-derived line totals.
+     *  {@code firstOrder} says whether the shopper has no prior order (assume true
+     *  when unknown, e.g. no contact entered yet - enforced for real at submit). */
+    @Transactional(readOnly = true)
+    public Redemption previewForCheckout(Merchant merchant, String code, List<LineAmount> lines,
+                                         DeliveryContext delivery, boolean firstOrder) {
+        return resolve(requireRedeemable(merchant, code), lines, delivery, firstOrder);
+    }
+
+    /** Validate + redeem at checkout: resolves the amount (or delivery waiver) and
+     *  increments usedCount. {@code firstOrder} is computed from the customer's
+     *  prior (non-cancelled) orders, counted before the new order is persisted. */
+    @Transactional
+    public Redemption redeemForCheckout(Merchant merchant, String code, List<LineAmount> lines,
+                                        DeliveryContext delivery, boolean firstOrder) {
+        Discount discount = requireRedeemable(merchant, code);
+        Redemption redemption = resolve(discount, lines, delivery, firstOrder);
+        discount.setUsedCount(discount.getUsedCount() + 1);
+        discountRepository.save(discount);
+        return redemption;
+    }
+
+    /** Shared resolution. Applies the first-order and minimum-spend gates (all
+     *  types), then either the free-delivery waiver or the product-discount
+     *  amount. Rejections happen here, before usedCount is bumped, so a rejected
+     *  code is never counted. */
+    private Redemption resolve(Discount discount, List<LineAmount> lines, DeliveryContext delivery, boolean firstOrder) {
+        // First-order-only: valid only when the customer has no prior order.
+        if (discount.isFirstOrderOnly() && !firstOrder) {
+            throw reject("This code is valid on your first order only.");
+        }
+
+        // Minimum spend gates on the WHOLE cart subtotal (all lines), independent
+        // of any product scope, so it's checked first for every discount type.
+        if (discount.getMinSpend() != null) {
+            BigDecimal fullSubtotal = BigDecimal.ZERO;
+            for (LineAmount line : lines) fullSubtotal = fullSubtotal.add(line.lineTotal());
+            if (fullSubtotal.compareTo(discount.getMinSpend()) < 0) {
+                throw reject("Spend at least " + money(discount) + " to use this code.");
+            }
+        }
+
+        // Delivery discounts (full FREE_DELIVERY, or a partial % / fixed off the
+        // fee) discount the delivery fee, not products.
+        if (discount.getType() == DiscountType.FREE_DELIVERY) {
+            return resolveDeliveryDiscount(discount, delivery, true);
+        }
+        if (discount.isAppliesToDelivery()) {
+            return resolveDeliveryDiscount(discount, delivery, false);
+        }
+
+        // In-scope subtotal (store-wide = all lines; product-specific = matching
+        // lines). The discountable subtotal further excludes on-sale lines unless
+        // this code may stack with a sale.
+        BigDecimal inScope = BigDecimal.ZERO;
+        BigDecimal discountable = BigDecimal.ZERO;
+        boolean excludedSaleLine = false;
+        for (LineAmount line : lines) {
+            if (!(discount.isStoreWide() || discount.getProductIds().contains(line.productId()))) continue;
+            inScope = inScope.add(line.lineTotal());
+            if (line.onSale() && !discount.isCanStackWithSale()) { excludedSaleLine = true; continue; }
+            discountable = discountable.add(line.lineTotal());
+        }
+        if (!discount.isStoreWide() && inScope.signum() == 0) {
+            throw reject("This code only applies to specific items, none of which are in your cart.");
+        }
+        if (discountable.signum() == 0 && excludedSaleLine) {
+            throw reject("This code can't be combined with sale-priced items.");
+        }
+        BigDecimal amount = computeAmount(discount, discountable);
+        return new Redemption(discount.getCode(), amount, discount.isStoreWide(),
+                Set.copyOf(discount.getProductIds()), false, BigDecimal.ZERO, discount.isCanStackWithSale(), false);
+    }
+
+    /**
+     * Resolve a delivery discount against the order's delivery situation. Rejects
+     * a pickup order (nothing to discount) and an order whose delivery is already
+     * free (via the store threshold).
+     *
+     * <p>{@code full} = a FREE_DELIVERY code: it waives the whole fee, and a
+     * to-be-confirmed fee is forced to free (nothing quantifiable, but delivery is
+     * guaranteed free). A partial code (PERCENTAGE/FIXED off the fee) instead
+     * rejects a to-be-confirmed fee, since there is no confirmed number to compute
+     * against, and takes its value off the fee (capped at the fee).
+     */
+    private Redemption resolveDeliveryDiscount(Discount discount, DeliveryContext delivery, boolean full) {
+        if (delivery == null || !delivery.delivery()) {
+            throw reject("This code applies to delivery orders only.");
+        }
+        if (full) {
+            if (!delivery.pending() && delivery.fee().signum() == 0) {
+                throw reject("Delivery is already free on this order.");
+            }
+            BigDecimal waived = delivery.pending() ? BigDecimal.ZERO : delivery.fee();
+            return new Redemption(discount.getCode(), BigDecimal.ZERO, true, Set.of(), true, waived,
+                    discount.isCanStackWithSale(), false);
+        }
+        // Partial: needs a confirmed fee to compute a percentage/fixed amount.
+        if (delivery.pending()) {
+            throw reject("The delivery fee is still to be confirmed, so this code can't be applied.");
+        }
+        if (delivery.fee().signum() == 0) {
+            throw reject("Delivery is already free on this order.");
+        }
+        BigDecimal amount = computeAmount(discount, delivery.fee()); // % or fixed off the fee, capped at the fee
+        return new Redemption(discount.getCode(), BigDecimal.ZERO, true, Set.of(), false, amount,
+                discount.isCanStackWithSale(), true);
+    }
+
+    /** Format the discount's minimum spend in the store's currency, for the
+     *  customer-facing reject message (SGD "$30.00", IDR "Rp 30000"). */
+    private String money(Discount discount) {
+        String currency = discount.getMerchant().getCurrency();
+        String symbol = "IDR".equalsIgnoreCase(currency) ? "Rp " : "$";
+        return symbol + discount.getMinSpend().toPlainString();
+    }
+
+    /**
+     * Result of a redemption/preview: the canonical code, the product money off,
+     * the scope (store-wide, or the specific product ids) so the caller can
+     * allocate the amount across a split order by matching share, and - for a
+     * delivery code - the fee it discounts plus which kind it is. {@code freeDelivery}
+     * marks a FREE_DELIVERY code (full waiver, labelled "Free delivery");
+     * {@code partialDelivery} marks a percentage/fixed code off the fee (labelled
+     * "Delivery discount"). The two are mutually exclusive; the label is chosen by
+     * the configured type, never by whether the net fee happens to reach $0.
+     */
+    public record Redemption(String code, BigDecimal amount, boolean storeWide, Set<Long> productIds,
+                             boolean freeDelivery, BigDecimal deliveryDiscount, boolean canStackWithSale,
+                             boolean partialDelivery) {}
+
+    // ---------- helpers ----------
+
+    private Discount requireOwned(Merchant merchant, Long discountId) {
+        return discountRepository.findByMerchantAndId(merchant, discountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Discount not found"));
+    }
+
+    private String normalizeCode(String code) {
+        return code.trim().toUpperCase();
+    }
+
+    /**
+     * Resolve a requested product-scope list to a validated id set. Null/empty
+     * means store-wide (empty set). Every id must be a product owned by this
+     * store; a foreign or unknown id is rejected so a discount can't be scoped to
+     * another merchant's catalogue.
+     */
+    private Set<Long> validateProductScope(Merchant merchant, List<Long> requested) {
+        if (requested == null || requested.isEmpty()) return new HashSet<>();
+        Set<Long> wanted = new HashSet<>(requested);
+        Set<Long> owned = new HashSet<>();
+        for (Product p : productRepository.findByMerchantAndIdIn(merchant, wanted)) {
+            owned.add(p.getId());
+        }
+        if (!owned.containsAll(wanted)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "One or more selected products don't belong to this store.");
+        }
+        return wanted;
+    }
+
+    private void validateShape(DiscountType type, BigDecimal value, LocalDateTime startsAt, LocalDateTime endsAt) {
+        // A percentage/fixed code needs a positive value; a free-delivery code has none.
+        if (type != DiscountType.FREE_DELIVERY) {
+            if (value == null || value.signum() <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enter a value greater than 0.");
+            }
+            if (type == DiscountType.PERCENTAGE && value.compareTo(HUNDRED) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A percentage discount cannot exceed 100%.");
+            }
+        }
+        if (startsAt != null && endsAt != null && startsAt.isAfter(endsAt)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The start date must be before the end date.");
+        }
+        // An end date must be in the future (mirrors the sale-end rule): a past end
+        // means the code is dead on arrival. Start dates may be backdated freely.
+        if (endsAt != null && endsAt.isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The end date must be in the future.");
+        }
+    }
+
+    private ResponseStatusException reject(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    }
+}

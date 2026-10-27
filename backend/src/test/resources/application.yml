@@ -1,0 +1,50 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:manyorder;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    # Mirror production so the suite exercises the same Hibernate fetch behaviour.
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+
+app:
+  # Seed the demo data in tests (many integration tests rely on the seeded admin,
+  # Kiri Brew store, etc.). Production leaves SEED_DEMO unset (false).
+  demo:
+    seed: true
+    # Demo-seed password for the test suite only. Must match SEED_DEMO_PASSWORD in
+    # IntegrationTestBase. Test-only fixture, never a real credential.
+    password: test-only-password-123
+  # Off by default in tests (they share MockMvc's default client IP, so limits
+  # would throttle the suite). The rate-limit test re-enables it via @TestPropertySource.
+  ratelimit:
+    enabled: false
+  jwt:
+    secret: test-secret-test-secret-test-secret-test-secret-64-bytes-min!!
+    expiration-ms: 3600000
+  google:
+    client-id: ""
+  cors:
+    allowed-origins: http://localhost:5173
+  resend:
+    api-key: ""
+  mail:
+    from: onboarding@resend.dev
+  frontend:
+    base-url: http://localhost:3000
+  docs:
+    # Mirror production: off by default (so the suite proves docs are gated); the
+    # docs-enabled test flips app.docs.enabled=true via @SpringBootTest properties.
+    enabled: ${APP_DOCS_ENABLED:false}
+
+springdoc:
+  api-docs:
+    enabled: ${app.docs.enabled}
+  swagger-ui:
+    enabled: ${app.docs.enabled}
+    path: /swagger-ui.html

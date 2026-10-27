@@ -1,0 +1,180 @@
+package com.manyorder.api.domain.admin;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+
+import com.manyorder.api.domain.merchant.Merchant;
+import com.manyorder.api.domain.merchant.MerchantRepository;
+import com.manyorder.api.domain.user.User;
+import com.manyorder.api.security.CurrentUserService;
+
+/**
+ * Platform-admin actions on any merchant. URL-gated to PLATFORM_ADMIN by
+ * SecurityConfig ({@code /admin/**}), so MERCHANT/STAFF can never reach it.
+ */
+@RestController
+@RequestMapping("/admin/merchants")
+public class AdminMerchantController {
+
+    private final MerchantRepository merchantRepository;
+    private final CurrentUserService currentUserService;
+    private final AdminAuditService adminAuditService;
+    private final AdminMerchantService adminMerchantService;
+    private final MerchantActionMailer merchantActionMailer;
+
+    public AdminMerchantController(MerchantRepository merchantRepository,
+                                   CurrentUserService currentUserService,
+                                   AdminAuditService adminAuditService,
+                                   AdminMerchantService adminMerchantService,
+                                   MerchantActionMailer merchantActionMailer) {
+        this.merchantRepository = merchantRepository;
+        this.currentUserService = currentUserService;
+        this.adminAuditService = adminAuditService;
+        this.adminMerchantService = adminMerchantService;
+        this.merchantActionMailer = merchantActionMailer;
+    }
+
+    /** All merchants (including suspended/archived), newest first, with per-store counts. */
+    @GetMapping
+    public List<AdminMerchantSummary> list() {
+        return adminMerchantService.listMerchants();
+    }
+
+    /** Distinct business-type values across all stores, for the Merchants filter. */
+    @GetMapping("/business-types")
+    public List<String> businessTypes() {
+        return adminMerchantService.listBusinessTypes();
+    }
+
+    /** Filtered, sorted, paged merchants for the Merchants screen. {@code page} is 1-based. */
+    @GetMapping("/search")
+    public AdminMerchantPage search(@RequestParam(required = false) String q,
+                                    @RequestParam(required = false) String status,
+                                    @RequestParam(required = false) String currency,
+                                    @RequestParam(required = false) String businessType,
+                                    @RequestParam(required = false, defaultValue = "newest") String sort,
+                                    @RequestParam(defaultValue = "1") int page,
+                                    @RequestParam(defaultValue = "20") int size) {
+        return adminMerchantService.searchMerchants(q, status, currency, businessType, sort, page, size);
+    }
+
+    /** Drill-down on one merchant. */
+    @GetMapping("/{merchantId}")
+    public AdminMerchantSummary get(@PathVariable Long merchantId, Authentication authentication) {
+        return adminMerchantService.getMerchant(currentUserService.require(authentication), merchantId);
+    }
+
+    /** Full store-detail payload: owner, profile, counts, revenue, last order, low stock, recent admin actions. */
+    @GetMapping("/{merchantId}/detail")
+    public AdminStoreDetailResponse detail(@PathVariable Long merchantId, Authentication authentication) {
+        return adminMerchantService.getStoreDetail(currentUserService.require(authentication), merchantId);
+    }
+
+    /** Suspend a merchant: hides its storefront and blocks owner/staff login. Idempotent.
+     *  Requires a written reason, saved to the audit log and emailed to the owner. */
+    @PostMapping("/{merchantId}/suspend")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    public void suspend(@PathVariable Long merchantId, @RequestBody AdminReasonRequest body, Authentication authentication) {
+        String reason = body.validated(); // restricting: reason required, always email
+        User admin = currentUserService.require(authentication);
+        Merchant merchant = requireMerchant(merchantId);
+        if (!merchant.isSuspended()) {
+            merchant.setSuspendedAt(LocalDateTime.now());
+            merchantRepository.save(merchant);
+            boolean sent = notifyOwner(merchant, MerchantActionMailer.Action.SUSPENDED, reason);
+            adminAuditService.record(admin, "SUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(),
+                    reason, sent, merchant.getName(), merchant.getName());
+        }
+    }
+
+    /** Lift a suspension. Idempotent. Restoring: reason optional, emails the owner by default. */
+    @PostMapping("/{merchantId}/unsuspend")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    public void unsuspend(@PathVariable Long merchantId, @RequestBody AdminReasonRequest body, Authentication authentication) {
+        String reason = body.optionalReason();
+        User admin = currentUserService.require(authentication);
+        Merchant merchant = requireMerchant(merchantId);
+        if (merchant.isSuspended()) {
+            merchant.setSuspendedAt(null);
+            merchantRepository.save(merchant);
+            boolean sent = body.shouldEmail() && notifyOwner(merchant, MerchantActionMailer.Action.UNSUSPENDED, reason);
+            adminAuditService.record(admin, "UNSUSPEND_MERCHANT", "MERCHANT", merchant.getId(), merchant.getId(),
+                    reason, sent, merchant.getName(), merchant.getName());
+        }
+    }
+
+    /** Protect a store from deletion (admin Delete-now and the cleanup job both skip it). Idempotent, audited. */
+    @PostMapping("/{merchantId}/protect")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    public void protect(@PathVariable Long merchantId, Authentication authentication) {
+        setProtection(merchantId, true, "PROTECT_STORE", authentication);
+    }
+
+    /** Remove deletion protection. Idempotent, audited. */
+    @PostMapping("/{merchantId}/unprotect")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    public void unprotect(@PathVariable Long merchantId, Authentication authentication) {
+        setProtection(merchantId, false, "UNPROTECT_STORE", authentication);
+    }
+
+    private void setProtection(Long merchantId, boolean value, String action, Authentication authentication) {
+        User admin = currentUserService.require(authentication);
+        Merchant merchant = requireMerchant(merchantId);
+        if (merchant.isProtectedFromDeletion() != value) {
+            merchant.setProtectedFromDeletion(value);
+            merchantRepository.save(merchant);
+            adminAuditService.record(admin, action, "MERCHANT", merchant.getId(), merchant.getId(),
+                    null, false, merchant.getName(), merchant.getName());
+        }
+    }
+
+    /** Restore a store the owner deleted (archived), until it is erased. Clears the deleted marker,
+     *  emails the owner by default, and is audited. Refused if the store is not owner-deleted. */
+    @PostMapping("/{merchantId}/restore")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Transactional
+    public void restore(@PathVariable Long merchantId, @RequestBody AdminReasonRequest body, Authentication authentication) {
+        String reason = body.optionalReason();
+        User admin = currentUserService.require(authentication);
+        Merchant merchant = requireMerchant(merchantId);
+        if (!merchant.isArchived()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This store has not been deleted by its owner.");
+        }
+        merchant.setArchivedAt(null);
+        merchantRepository.save(merchant);
+        boolean sent = body.shouldEmail() && notifyOwner(merchant, MerchantActionMailer.Action.STORE_RESTORED, reason);
+        adminAuditService.record(admin, "RESTORE_STORE", "MERCHANT", merchant.getId(), merchant.getId(),
+                reason, sent, merchant.getName(), merchant.getName());
+    }
+
+    /** Email the owner, swallowing any failure: a failed notice must never undo the action. Returns whether sent. */
+    private boolean notifyOwner(Merchant merchant, MerchantActionMailer.Action action, String reason) {
+        try {
+            return merchantActionMailer.notifyOwner(merchant, action, reason);
+        } catch (Exception e) {
+            return false; // deliberately ignored: the action is already recorded
+        }
+    }
+
+    private Merchant requireMerchant(Long merchantId) {
+        return merchantRepository.findById(merchantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+    }
+}

@@ -1,0 +1,509 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Package, ShoppingBag, Plus, MapPin, Clock, Search, X, Share2, Check, Tag, ChevronDown } from 'lucide-react';
+import { WhatsAppIcon } from '../icons/WhatsAppIcon';
+import { formatMoney } from '../../lib/currency';
+import { cloudinaryImage } from '../../lib/cloudinary';
+import { formatPreorderReady } from '../../lib/datetime';
+import { bestsellerProductIds } from '../../lib/bestsellers';
+import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from '../../lib/offers';
+import type { ProductResponse, PublicOffer } from '../../lib/api';
+import { StorefrontStore, isOrderable, initialsOf, maxOrderQuantity, lowStockRemaining } from './storefrontTypes';
+import { QuantityStepper } from './QuantityStepper';
+
+interface StorefrontViewProps {
+  store: StorefrontStore;
+  products: ProductResponse[];
+  /** Public offers to surface as a discovery carousel under the category chips. */
+  offers?: PublicOffer[];
+  onProductClick?: (productId: number) => void;
+  onAddToCart?: (productId: number) => void;
+  /** Per-product quantities of the PLAIN line already in the cart (drives the inline stepper). */
+  quantities?: Record<number, number>;
+  /** Total qty per product across all its cart lines - the count badge on modifier products. */
+  productTotals?: Record<number, number>;
+  onSetQuantity?: (productId: number, quantity: number) => void;
+  cartCount?: number;
+  /** Running cart subtotal incl. modifiers (from the hydrated cart). Falls back
+   *  to a plain products×qty estimate when omitted (e.g. preview). */
+  cartTotal?: number;
+  onViewCart?: () => void;
+  /** "Find my order" - re-open a past order's confirmation. Omitted in preview. */
+  onTrackOrder?: () => void;
+  /** Preview mode (onboarding/edit): render read-only, no cart bar. */
+  preview?: boolean;
+}
+
+const ALL = '__all__';
+// Buttons/selection controls use a fixed brand colour, never the store theme.
+const BRAND = 'var(--primary-solid)';
+
+/** The round brand "+" on a product row (add, or open the PDP to choose options). */
+const plusButtonStyle = (enabled: boolean): React.CSSProperties => ({
+  width: '36px', height: '36px', borderRadius: '10px', border: 'none',
+  background: enabled ? BRAND : '#E5E7EB', color: 'white',
+  cursor: enabled ? 'pointer' : 'not-allowed',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+});
+
+/** The floating brand add/options control on a grid card's photo: a circle for
+ *  "+"/add, a pill when it shows a modifier count. Carries a shadow so it reads
+ *  against any photo. */
+const floatBtnStyle = (enabled: boolean, pill: boolean): React.CSSProperties => ({
+  height: '34px', minWidth: '34px', width: pill ? undefined : '34px',
+  padding: pill ? '0 10px' : '0', borderRadius: pill ? '999px' : '50%', border: 'none',
+  background: enabled ? BRAND : '#9CA3AF', color: 'white',
+  cursor: enabled ? 'pointer' : 'not-allowed',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.25)', fontSize: '14px', fontWeight: 700, lineHeight: 1,
+});
+
+/**
+ * The public shop view - store header, category filter, product list. Purely
+ * presentational and width-fluid, so it renders identically full-page and inside
+ * a phone-frame preview. Interactions are no-ops unless handlers are provided.
+ * Only the header uses the store's theme colour; all buttons are brand-black.
+ */
+export function StorefrontView({
+  store,
+  products,
+  offers = [],
+  onProductClick,
+  onAddToCart,
+  quantities = {},
+  productTotals = {},
+  onSetQuantity,
+  cartCount = 0,
+  cartTotal,
+  onViewCart,
+  onTrackOrder,
+  preview = false,
+}: StorefrontViewProps) {
+  const headerColor = store.themeColor || '#000000';
+  const currency = store.currency;
+
+  // Prefer the true subtotal (incl. modifiers) from the hydrated cart; fall back
+  // to a plain estimate for preview surfaces that don't pass one.
+  const barTotal = cartTotal ?? products.reduce((sum, p) => sum + (p.effectivePrice ?? p.price) * (quantities[p.id] ?? 0), 0);
+
+  // Category chips, ordered by the merchant's displayOrder (then name), not by
+  // the order products happen to load in.
+  const categories = useMemo(() => {
+    const byName = new Map<string, number>();
+    products.forEach((p) => {
+      if (!p.categoryName) return;
+      const order = p.categoryDisplayOrder ?? Number.MAX_SAFE_INTEGER;
+      // keep the smallest order seen for a name (all products in a category share it)
+      if (!byName.has(p.categoryName) || order < (byName.get(p.categoryName) as number)) {
+        byName.set(p.categoryName, order);
+      }
+    });
+    return Array.from(byName.keys()).sort((a, b) => {
+      const d = (byName.get(a) as number) - (byName.get(b) as number);
+      return d !== 0 ? d : a.localeCompare(b);
+    });
+  }, [products]);
+
+  const [activeCategory, setActiveCategory] = useState<string>(ALL);
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  // Which offer cards are expanded (accordion). Collapsed shows just value + name.
+  const [expandedOffers, setExpandedOffers] = useState<Set<string>>(new Set());
+  const toggleOffer = (code: string) => setExpandedOffers((prev) => {
+    const next = new Set(prev);
+    next.has(code) ? next.delete(code) : next.add(code);
+    return next;
+  });
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  // Focus the field the moment the search input expands.
+  useEffect(() => { if (searchOpen) searchInputRef.current?.focus(); }, [searchOpen]);
+
+  // Category chip AND text search combine (both must match). Search is
+  // case-insensitive over name, description, and category name - never price.
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products.filter((p) => {
+      if (activeCategory !== ALL && p.categoryName !== activeCategory) return false;
+      if (!q) return true;
+      return [p.name, p.description, p.categoryName]
+        .filter(Boolean)
+        .some((field) => (field as string).toLowerCase().includes(q));
+    });
+  }, [products, activeCategory, search]);
+
+  // Bestseller badge: computed over the whole catalogue (not the filtered view),
+  // so a leader stays flagged regardless of the active category or search. Uses
+  // the storefront-only, fulfilled unitsSold the API already returns.
+  const bestsellerIds = useMemo(() => bestsellerProductIds(products), [products]);
+
+  const filtering = search.trim() !== '' || activeCategory !== ALL;
+
+  // Share the storefront link. Native share sheet on mobile; clipboard fallback
+  // with a brief "Copied" state (mirrors the dashboard's Copy Store Link).
+  const [shareCopied, setShareCopied] = useState(false);
+  const shareShop = async () => {
+    const url = window.location.origin + window.location.pathname;
+    if (navigator.share) {
+      try { await navigator.share({ title: store.name || 'Shop', url }); } catch { /* dismissed */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 1600);
+    } catch { /* clipboard blocked - nothing to do */ }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', background: '#F3F4F6' }}>
+      <style>{`@media (max-width: 360px) { .shop-card-desc { display: none; } }`}</style>
+      {/* Theme-colour band - the store's brand colour across the top; the card
+          overlaps its bottom so the two touch (only a vertical negative margin,
+          so no horizontal pan). Share Shop sits in the top-right. */}
+      <div style={{
+        background: headerColor, height: '110px', position: 'relative',
+        // Respect the notch/status bar if this is ever shown full-bleed (PWA/webview);
+        // in a normal browser the inset is 0, so this is a no-op there.
+        paddingTop: 'env(safe-area-inset-top, 0px)', boxSizing: 'content-box',
+      }}>
+        {!preview && (
+          <button
+            type="button"
+            onClick={shareShop}
+            aria-label="Share shop"
+            style={{
+              position: 'absolute',
+              top: 'calc(env(safe-area-inset-top, 0px) + 24px)',
+              right: 'calc(env(safe-area-inset-right, 0px) + 12px)',
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '8px 12px', borderRadius: '999px', border: 'none', cursor: 'pointer',
+              background: 'rgba(255, 255, 255, 0.92)', color: '#111827', fontSize: '12px', fontWeight: 600,
+              boxShadow: '0 1px 4px rgba(0, 0, 0, 0.15)',
+            }}
+          >
+            {shareCopied ? <Check size={14} /> : <Share2 size={14} />}
+            {shareCopied ? 'Copied' : 'Share'}
+          </button>
+        )}
+      </div>
+
+      {/* Store card - white, left-aligned, overlapping the band. */}
+      <div
+        style={{
+          background: 'white', borderRadius: '16px', margin: '-40px 12px 12px', padding: '16px',
+          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.08)', position: 'relative',
+          display: 'flex', flexDirection: 'column', gap: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+          <div
+            style={{
+              width: '76px', height: '76px', borderRadius: '16px', flexShrink: 0, overflow: 'hidden',
+              background: store.logoUrl ? '#F3F4F6' : headerColor, color: 'white',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 600,
+            }}
+          >
+            {store.logoUrl
+              ? <img src={cloudinaryImage(store.logoUrl, 128)} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : initialsOf(store.name)}
+          </div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: '#111827', overflowWrap: 'anywhere' }}>
+              {store.name || 'My Store'}
+            </h1>
+            {store.storeDescription && (
+              <p style={{
+                fontSize: '13px', color: '#6B7280', margin: '4px 0 0', lineHeight: 1.45,
+                whiteSpace: 'pre-line', overflowWrap: 'anywhere',
+                // Cap at 4 lines so a very long description can't blow up the card height.
+                display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+              }}>
+                {store.storeDescription}
+              </p>
+            )}
+            {/* "X sold" count is intentionally hidden on the storefront (tracking kept
+                on store.totalItemsSold). See docs/backlog.md - to be replaced by a
+                seller gamification/badge system rather than a raw sold count. */}
+          </div>
+        </div>
+
+        {/* Store info - hours, phone, address as one plain, left-aligned list
+            (same colour, size and spacing, no separate band). */}
+        {(store.operatingHours || store.phoneNumber || store.address) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: '#6B7280' }}>
+            {store.operatingHours && (
+              <span style={{ display: 'inline-flex', alignItems: 'flex-start', gap: '8px' }}>
+                <Clock size={14} style={{ flexShrink: 0, marginTop: '1px', color: '#6B7280' }} />
+                {/* Wraps naturally (typically <= 2 lines); never truncated. */}
+                <span style={{ minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.45 }}>{store.operatingHours}</span>
+              </span>
+            )}
+            {store.phoneNumber && (
+              <a href={`https://wa.me/${store.phoneNumber.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'inherit', textDecoration: 'none' }}>
+                <WhatsAppIcon size={14} color="#6B7280" style={{ flexShrink: 0 }} /> {store.phoneNumber}
+              </a>
+            )}
+            {store.address && (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(store.address)}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{ display: 'inline-flex', alignItems: 'flex-start', gap: '8px', color: 'inherit', textDecoration: 'none' }}
+              >
+                <MapPin size={14} style={{ flexShrink: 0, marginTop: '1px', color: '#6B7280' }} />
+                <span style={{ minWidth: 0 }}>{store.address}</span>
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Sticky filter row: category chips + a search icon that expands, in place,
+          into a full-width search field (chips hidden while it's open). One compact
+          row either way, pinned so the customer can filter while scrolling. */}
+      {products.length > 0 && (
+        <div style={{ position: 'sticky', top: 0, zIndex: 15, background: 'white', borderBottom: '1px solid var(--border-subtle)', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {searchOpen ? (
+            <>
+              <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                <input
+                  ref={searchInputRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search products"
+                  aria-label="Search products"
+                  style={{
+                    width: '100%', padding: '9px 12px 9px 36px', borderRadius: '999px',
+                    border: '1px solid var(--border-subtle)', background: '#F3F4F6',
+                    fontSize: '14px', outline: 'none', color: 'var(--text-primary)',
+                  }}
+                />
+              </div>
+              <button
+                aria-label="Close search"
+                onClick={() => { setSearchOpen(false); setSearch(''); }}
+                style={{ flexShrink: 0, width: '34px', height: '34px', borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X size={18} />
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: '8px', overflowX: 'auto' }}>
+                {categories.length > 0 && [{ key: ALL, label: 'All' }, ...categories.map((c) => ({ key: c, label: c }))].map((chip) => {
+                  const on = activeCategory === chip.key;
+                  return (
+                    <button
+                      key={chip.key}
+                      onClick={() => setActiveCategory(chip.key)}
+                      style={{
+                        flexShrink: 0, padding: '6px 14px', borderRadius: '999px', cursor: 'pointer',
+                        fontSize: '12.5px', fontWeight: on ? 600 : 500,
+                        border: on ? `1px solid ${BRAND}` : '1px solid var(--border-subtle)',
+                        background: on ? BRAND : 'white', color: on ? 'white' : 'var(--text-secondary)',
+                      }}
+                    >
+                      {chip.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                aria-label="Search products"
+                onClick={() => setSearchOpen(true)}
+                style={{ flexShrink: 0, width: '34px', height: '34px', borderRadius: '50%', border: '1px solid var(--border-subtle)', background: 'white', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Search size={18} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Public offers discovery carousel: horizontally-scrollable cards so a
+          browsing customer sees vouchers exist before checkout (where they apply
+          one). Hidden entirely when the store has no public offers. */}
+      {offers.length > 0 && (
+        <div style={{ padding: '12px 12px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+            <Tag size={14} style={{ color: BRAND }} />
+            <span style={{ fontSize: '13px', fontWeight: 700 }}>Offers</span>
+          </div>
+          <div className="no-scrollbar" style={{ display: 'flex', gap: '10px', overflowX: 'auto' }}>
+            {offers.map((o) => {
+              // Minimal by default (value + name); tap to expand inline (accordion)
+              // to reveal scope, conditions and expiry.
+              const expanded = expandedOffers.has(o.code);
+              const conditions = offerConditions(o, store.currency) || 'No conditions';
+              const expiry = offerExpiry(o) || 'No expiry';
+              return (
+                <button
+                  key={o.code}
+                  type="button"
+                  onClick={() => toggleOffer(o.code)}
+                  aria-expanded={expanded}
+                  style={{ flexShrink: 0, width: '210px', textAlign: 'left', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '12px', background: 'white', cursor: 'pointer', alignSelf: 'flex-start' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '15px', fontWeight: 700, color: BRAND }}>{offerValueLabel(o, store.currency)}</div>
+                      {o.name && <div style={{ fontSize: '12px', fontWeight: 600, marginTop: '2px' }}>{o.name}</div>}
+                    </div>
+                    <ChevronDown size={16} style={{ flexShrink: 0, color: 'var(--text-muted)', transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                  </div>
+                  {expanded && (
+                    <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span>{offerScopeLabel(o)}</span>
+                      <span>{conditions}</span>
+                      <span>{expiry}</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Product list */}
+      <div style={{ flex: 1, padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {visible.length === 0 ? (
+          <div style={{ padding: '48px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
+            <Package size={22} style={{ marginBottom: '8px' }} />
+            <div>{filtering ? 'No products match.' : 'No products yet.'}</div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px' }}>
+            {visible.map((p) => {
+            const orderable = isOrderable(p);
+            // A product with ANY modifier group can't be blind quick-added - its "+"
+            // opens the PDP so the customer sees and chooses its options first. Only
+            // truly plain products get the inline quick-add / stepper.
+            const hasModifiers = (p.modifierGroups ?? []).length > 0;
+            // Quantity of the plain line (no options, no note) - what the inline
+            // stepper edits. Total is across ALL of the product's lines.
+            const plainQty = quantities[p.id] ?? 0;
+            const total = productTotals[p.id] ?? 0;
+            // Show the tap-to-open count badge for modifier products, and also for a
+            // plain product that has picked up note-bearing lines (total exceeds the
+            // plain line): the inline stepper can only edit the plain line, so it
+            // can't represent multiple lines. Such a product falls back to the badge
+            // that opens the PDP, exactly like a modifier product, and its count
+            // reflects every line rather than wrongly reverting to "+".
+            const useBadge = hasModifiers || total !== plainQty;
+            const badgeTotal = total;
+            const readyLine = p.preOrder ? formatPreorderReady(p.preOrderReadyDate, p.preOrderReadyTimeStart, p.preOrderReadyTimeEnd) : null;
+            return (
+              <div
+                key={p.id}
+                onClick={() => onProductClick?.(p.id)}
+                style={{
+                  background: 'white', borderRadius: '12px', border: '1px solid var(--border-subtle)',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden', minWidth: 0,
+                  cursor: onProductClick ? 'pointer' : 'default',
+                  display: 'flex', flexDirection: 'column',
+                }}
+              >
+                {/* Square photo with the floating add / options control at its corner. */}
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '1', background: '#E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {p.photoUrl
+                    ? <img src={cloudinaryImage(p.photoUrl, 400)} alt={p.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <Package size={28} style={{ color: '#9CA3AF' }} />}
+
+                  {/* Products with options: opens the PDP/decision sheet, showing the total
+                      already in the cart (or "+"). Plain products: "+" quick-add until in
+                      cart, then a stepper. */}
+                  <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', right: '8px', bottom: '8px' }}>
+                    {useBadge ? (
+                      <button
+                        aria-label={
+                          badgeTotal > 0
+                            ? (hasModifiers
+                                ? `${p.name}, ${badgeTotal} in cart, choose options`
+                                : `${p.name}, ${badgeTotal} in cart`)
+                            : `Choose options for ${p.name}`
+                        }
+                        disabled={!orderable || !onProductClick}
+                        onClick={() => onProductClick?.(p.id)}
+                        style={floatBtnStyle(orderable && !!onProductClick, badgeTotal > 0)}
+                      >
+                        {badgeTotal > 0 ? badgeTotal : <Plus size={18} />}
+                      </button>
+                    ) : plainQty > 0 && onSetQuantity ? (
+                      <div style={{ background: 'white', borderRadius: '999px', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>
+                        <QuantityStepper quantity={plainQty} onChange={(q) => onSetQuantity(p.id, q)} min={0} max={maxOrderQuantity(p)} size="sm" />
+                      </div>
+                    ) : (
+                      <button
+                        aria-label={`Add ${p.name}`}
+                        disabled={!orderable || !onAddToCart}
+                        onClick={() => onAddToCart?.(p.id)}
+                        style={floatBtnStyle(orderable && !!onAddToCart, false)}
+                      >
+                        <Plus size={18} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Name, description, price + badges - stacked below the photo. */}
+                <div style={{ padding: '8px 10px 10px', minWidth: 0 }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{p.name}</div>
+                  {p.description && (
+                    <div className="shop-card-desc" style={{ fontSize: '12px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>{p.description}</div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    {p.onSale ? (
+                      <>
+                        <span style={{ fontSize: '14px', fontWeight: 700, color: '#DC2626' }}>{formatMoney(p.effectivePrice, currency)}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', textDecoration: 'line-through' }}>{formatMoney(p.price, currency)}</span>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{formatMoney(p.price, currency)}</span>
+                    )}
+                    {bestsellerIds.has(p.id) && <span style={{ fontSize: '9px', fontWeight: 600, color: '#1D4ED8', background: '#EFF6FF', padding: '2px 6px', borderRadius: '4px' }}>Bestseller</span>}
+                    {p.preOrder && <span style={{ fontSize: '9px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', padding: '2px 6px', borderRadius: '4px' }}>Pre-order</span>}
+                    {!orderable && <span style={{ fontSize: '9px', fontWeight: 600, color: '#6B7280', background: '#F3F4F6', padding: '2px 6px', borderRadius: '4px' }}>Sold Out</span>}
+                    {lowStockRemaining(p) !== null && <span style={{ fontSize: '9px', fontWeight: 600, color: '#C2410C', background: '#FFEDD5', padding: '2px 6px', borderRadius: '4px' }}>Only {lowStockRemaining(p)} left</span>}
+                  </div>
+                  {readyLine && (
+                    <div style={{ fontSize: '10px', color: '#92400E', marginTop: '3px' }}>Ready {readyLine}</div>
+                  )}
+                </div>
+              </div>
+            );
+            })}
+          </div>
+        )}
+
+        {!preview && onTrackOrder && (
+          <button
+            onClick={onTrackOrder}
+            style={{
+              alignSelf: 'center', marginTop: '8px', padding: '8px 4px', background: 'none', border: 'none',
+              cursor: 'pointer', fontSize: '12.5px', fontWeight: 500, color: 'var(--text-secondary)', textDecoration: 'underline',
+            }}
+          >
+            Already ordered? Find my order
+          </button>
+        )}
+      </div>
+
+      {/* Cart bar (brand-black) - shows the running total + item count */}
+      {!preview && cartCount > 0 && onViewCart && (
+        <div style={{ position: 'sticky', bottom: 0, padding: '12px', background: 'white', borderTop: '1px solid var(--border-subtle)' }}>
+          <button
+            onClick={onViewCart}
+            style={{
+              width: '100%', height: '46px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+              background: BRAND, color: 'white', fontSize: '14px', fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+            }}
+          >
+            <ShoppingBag size={17} /> View cart · {formatMoney(barTotal, currency)} ({cartCount})
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

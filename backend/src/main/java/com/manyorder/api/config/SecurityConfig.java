@@ -1,0 +1,120 @@
+package com.manyorder.api.config;
+
+import java.util.Arrays;
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+/**
+ * URL-level rules are deliberately coarse:
+ *   /auth/**  and /public/**            -> open
+ *   /admin/**                           -> PLATFORM_ADMIN only
+ *   /merchant/**                        -> MERCHANT or STAFF
+ * Fine-grained rules (store ownership, staff limits) live in
+ * StoreAccessService and are enforced on every request that touches a store.
+ */
+@Configuration
+public class SecurityConfig {
+
+    private final JwtFilter jwtFilter;
+    private final RateLimitFilter rateLimitFilter;
+    private final List<String> allowedOrigins;
+
+    public SecurityConfig(JwtFilter jwtFilter,
+                          RateLimitFilter rateLimitFilter,
+                          @Value("${app.cors.allowed-origins}") String allowedOrigins) {
+        this.jwtFilter = jwtFilter;
+        this.rateLimitFilter = rateLimitFilter;
+        this.allowedOrigins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+    }
+
+    /**
+     * Password hashing. New hashes use Argon2id (memory 19 MiB, 2 iterations,
+     * parallelism 1); the prefix {@code {argon2}} records the scheme. Existing
+     * stored hashes are bare bcrypt with no prefix, so bcrypt is set as the default
+     * encoder for matching, and AuthService re-encodes each one to Argon2id on the
+     * owner's next successful sign-in (upgrade-on-login).
+     */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        String idForEncode = "argon2";
+        // (saltLength, hashLength, parallelism, memoryInKiB, iterations)
+        Argon2PasswordEncoder argon2 = new Argon2PasswordEncoder(16, 32, 1, 19 * 1024, 2);
+        BCryptPasswordEncoder bcrypt = new BCryptPasswordEncoder();
+
+        java.util.Map<String, PasswordEncoder> encoders = new java.util.HashMap<>();
+        encoders.put(idForEncode, argon2);
+        encoders.put("bcrypt", bcrypt);
+
+        DelegatingPasswordEncoder delegating = new DelegatingPasswordEncoder(idForEncode, encoders);
+        // Unprefixed legacy hashes are bcrypt; match them so old users can still sign in.
+        delegating.setDefaultPasswordEncoderForMatches(bcrypt);
+        return delegating;
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(allowedOrigins);
+        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/auth/**").permitAll()
+                        .requestMatchers("/public/**").permitAll()
+                        // The container's internal ERROR dispatch re-enters the filter
+                        // chain to render /error, but JwtFilter (a OncePerRequestFilter)
+                        // is skipped on error dispatches, so no auth is present. Without
+                        // permitAll here, every unhandled server error on a secured
+                        // endpoint is masked as an empty-body 401 instead of its true
+                        // status. Boot's default error body carries no exception detail.
+                        .requestMatchers("/error").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/webjars/**")
+                        .permitAll()
+                        .requestMatchers("/admin/**").hasRole("PLATFORM_ADMIN")
+                        .requestMatchers("/merchant/**").hasAnyRole("MERCHANT", "STAFF")
+                        .anyRequest().authenticated())
+                // Unauthenticated requests (no/invalid/expired token) → 401, so the
+                // client can distinguish "session expired" (re-login) from 403
+                // "authenticated but not allowed". Without this, Spring's default
+                // returns 403 for both, and the SPA can't tell them apart.
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                // Rate limit first (added before jwt), then JWT auth; both sit ahead
+                // of the username/password filter.
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+}

@@ -1,0 +1,105 @@
+server:
+  # Behind a reverse proxy (host platform / nginx), make getRemoteAddr() reflect
+  # the real client IP from X-Forwarded-For so rate-limit buckets are per-client,
+  # not one shared proxy bucket. Only safe when the proxy is trusted.
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: manyorder-api
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        # Collapse one-query-per-row lazy loading into a few batched IN (...)
+        # queries. When a list materializes N entities whose lazy associations
+        # (e.g. each product's category and modifier groups) are then read, the
+        # associations load in batches of up to 100 rather than one query each.
+        default_batch_fetch_size: 100
+    # Set the dialect explicitly so Hibernate does not need a live connection to
+    # auto-detect it. Without this, a datasource that cannot connect surfaces as
+    # the misleading "Unable to determine Dialect without JDBC metadata"; with it,
+    # boot fails with the real cause instead (connection refused, SSL, bad host).
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+  servlet:
+    multipart:
+      # Logos are capped at 5 MB by our own validator; this ceiling sits just
+      # above so oversize files are rejected with a clean message, not a stack
+      # trace. max-request-size leaves headroom for the multipart envelope.
+      max-file-size: 6MB
+      max-request-size: 8MB
+
+app:
+  # Per-IP rate limiting on public endpoints (single-instance, in-memory). Limits
+  # are requests per minute per client IP; see RateLimitFilter for the tiers.
+  ratelimit:
+    enabled: ${RATELIMIT_ENABLED:true}
+    strict-per-minute: ${RATELIMIT_STRICT:5}      # forgot-password, resend-verification, register
+    standard-per-minute: ${RATELIMIT_STANDARD:10} # login, checkout, discount validate, token submits, lookup
+    reads-per-minute: ${RATELIMIT_READS:60}       # public GETs
+    global-per-minute: ${RATELIMIT_GLOBAL:120}    # backstop across all public endpoints
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}          # 24 hours (default / not-remembered)
+    remember-expiration-ms: ${JWT_REMEMBER_EXPIRATION_MS:2592000000}  # 30 days (remember me)
+  google:
+    # Leave unset to disable Google sign-in (the button hides itself in the SPA).
+    client-id: ${GOOGLE_CLIENT_ID:}
+  cors:
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+  resend:
+    # Leave unset to disable outbound email (the reset flow no-ops the send).
+    api-key: ${RESEND_API_KEY:}
+  mail:
+    from: ${MAIL_FROM:onboarding@resend.dev}
+  support:
+    # Shown in every platform email footer and used as the Reply-To, and in the
+    # suspended sign-in message. The sender stays no-reply.
+    email: ${SUPPORT_EMAIL:support@manyorder.app}
+  # Platform-admin bootstrap: when both are set, the admin is created/updated at
+  # startup (password rotated). Never use the repo's demo password in production.
+  admin:
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+  # Demo accounts: seeding of demo DATA runs only when seed=true (local dev/CI).
+  # When demo.password is set, the existing demo merchant + staff password hashes
+  # are rotated at startup (independent of seed), so production never relies on the
+  # fixed code password.
+  demo:
+    seed: ${SEED_DEMO:false}
+    password: ${DEMO_PASSWORD:}
+  frontend:
+    # Base URL the emailed reset link points back to.
+    base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
+  docs:
+    # Public API docs (Swagger UI + /v3/api-docs). OFF by default; set
+    # APP_DOCS_ENABLED=true only locally or in non-prod. This gates the springdoc
+    # endpoints themselves (below), so when off the paths 404 and never leak.
+    enabled: ${APP_DOCS_ENABLED:false}
+  cloudinary:
+    # Server-side image hosting for store logos. Leave any value unset to
+    # disable uploads (the endpoint then returns 503 instead of failing oddly).
+    cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+    api-key: ${CLOUDINARY_API_KEY:}
+    api-secret: ${CLOUDINARY_API_SECRET:}
+    # Root prefix for all uploads. Per-asset paths are built under this — see the
+    # folder convention documented on CloudinaryImageService.
+    root-folder: ${CLOUDINARY_ROOT_FOLDER:manyorder}
+
+springdoc:
+  # Gated on app.docs.enabled: when false the OpenAPI JSON and Swagger UI endpoints
+  # are not registered, so they 404 in production rather than being merely secured.
+  api-docs:
+    enabled: ${app.docs.enabled}
+  swagger-ui:
+    enabled: ${app.docs.enabled}
+    path: /swagger-ui.html

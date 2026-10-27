@@ -1,0 +1,364 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { Button } from '../Button';
+import { FieldInput } from '../Field';
+import { OrderTypeToggle } from '../OrderTypeToggle';
+import { MoneyField } from '../MoneyField';
+import { ManualLineComposer, type ComposedLine } from '../ManualLineComposer';
+import { ordersApi, productsApi, ProductResponse, OrderType, OrderStatus } from '../../lib/api';
+import { formatMoney } from '../../lib/currency';
+import { lineSignature } from '../../lib/cart';
+import { resolveSelectedOptions, type ResolvedOption } from '../../lib/modifiers';
+import type { Store } from '../../App';
+
+interface EditOrderProps {
+  store: Store;
+  orderId: number;
+  onNavigate: (screen: string) => void;
+}
+
+interface Line {
+  key: string; // signature: product + chosen options + note
+  productId: number;
+  name: string;
+  /** Effective per-unit price (base + modifier deltas). */
+  unitPrice: number;
+  quantity: number;
+  modifierOptionIds: number[];
+  notes?: string;
+  selectedOptions: ResolvedOption[];
+}
+
+const sectionCard: React.CSSProperties = {
+  background: 'var(--bg-card)',
+  borderRadius: 'var(--radius-card)',
+  border: '1px solid var(--border-subtle)',
+  padding: '24px',
+};
+
+const textareaStyle: React.CSSProperties = {
+  width: '100%', minHeight: '88px', padding: '10px 14px', resize: 'vertical',
+  borderRadius: 'var(--radius-field)', border: '1px solid var(--border-strong)',
+  background: 'var(--bg-card)', fontSize: '14px', lineHeight: 1.5, fontFamily: 'inherit', outline: 'none',
+};
+
+/** Line items may only be changed while the order is still Pending or Confirmed. */
+const ITEMS_EDITABLE: OrderStatus[] = ['PENDING', 'CONFIRMED'];
+
+export function EditOrder({ store, orderId, onNavigate }: EditOrderProps) {
+  const storeId = Number(store.id);
+
+  const [products, setProducts] = useState<ProductResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<OrderStatus>('PENDING');
+
+  const [customerName, setCustomerName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [orderType, setOrderType] = useState<OrderType>('PICKUP');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [notes, setNotes] = useState('');
+  // Money breakdown carried from the placed order. deliveryFee is null while the
+  // fee is still "to be confirmed" (so the merchant sets it here); discount is
+  // preserved from checkout and shown, not re-derived.
+  const [deliveryFee, setDeliveryFee] = useState<number | null>(null);
+  const [deliveryFeePending, setDeliveryFeePending] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountCode, setDiscountCode] = useState<string | null>(null);
+  const [lines, setLines] = useState<Line[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  const itemsEditable = ITEMS_EDITABLE.includes(status);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    Promise.all([ordersApi.get(storeId, orderId), productsApi.list(storeId, true)])
+      .then(([order, prods]) => {
+        if (!active) return;
+        setProducts(prods);
+        setStatus(order.status);
+        setCustomerName(order.contactName || order.customerName || '');
+        setEmail(order.contactEmail || '');
+        setPhone(order.contactPhone || '');
+        setOrderType(order.orderType);
+        setDeliveryAddress(order.deliveryAddress || '');
+        setNotes(order.notes || '');
+        // A pending fee means "to be confirmed" - start the input empty so the
+        // merchant enters the real amount; otherwise prefill the saved fee.
+        setDeliveryFee(order.deliveryFeePending ? null : order.deliveryFee);
+        setDeliveryFeePending(order.deliveryFeePending);
+        setDiscountAmount(order.discountAmount);
+        setDiscountCode(order.discountCode);
+        setLines(
+          order.items.map((i) => {
+            const modifierOptionIds = i.modifiers
+              .map((m) => m.sourceOptionId)
+              .filter((x): x is number => x != null);
+            return {
+              key: lineSignature({ productId: i.productId, modifierOptionIds, notes: i.notes ?? undefined }),
+              productId: i.productId,
+              name: i.productName,
+              unitPrice: i.unitPrice,
+              quantity: i.quantity,
+              modifierOptionIds,
+              notes: i.notes ?? undefined,
+              selectedOptions: i.modifiers.map((m) => ({ groupName: m.groupName, optionName: m.optionName, priceDelta: m.priceDelta })),
+            };
+          }),
+        );
+      })
+      .catch((e) => alert(e?.message || 'Could not load order'))
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
+    };
+  }, [storeId, orderId]);
+
+  const subtotal = useMemo(
+    () => lines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0),
+    [lines],
+  );
+  const isDelivery = orderType === 'DELIVERY';
+  const effectiveDeliveryFee = isDelivery ? (deliveryFee ?? 0) : 0;
+  const total = Math.max(0, subtotal + effectiveDeliveryFee - discountAmount);
+
+  // Same product with different modifiers / note is a separate line (by signature).
+  const addComposedLine = (c: ComposedLine) => {
+    const key = lineSignature({ productId: c.product.id, modifierOptionIds: c.modifierOptionIds, notes: c.notes });
+    const { selectedOptions, modifiersTotal } = resolveSelectedOptions(c.product, c.modifierOptionIds);
+    const unitPrice = c.product.price + modifiersTotal;
+    setLines((prev) => {
+      const existing = prev.find((l) => l.key === key);
+      if (existing) return prev.map((l) => (l.key === key ? { ...l, quantity: l.quantity + c.quantity } : l));
+      return [...prev, { key, productId: c.product.id, name: c.product.name, unitPrice, quantity: c.quantity, modifierOptionIds: c.modifierOptionIds, notes: c.notes, selectedOptions }];
+    });
+  };
+
+  const submit = async () => {
+    if (!customerName.trim()) {
+      alert('Customer name is required');
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await ordersApi.update(storeId, orderId, {
+        customerName: customerName.trim(),
+        email: email.trim() || undefined,
+        phoneNumber: phone.trim() || undefined,
+        orderType,
+        deliveryAddress:
+          orderType === 'DELIVERY' && deliveryAddress.trim() ? deliveryAddress.trim() : undefined,
+        // Confirm/adjust the delivery fee (clears the pending "to be confirmed"
+        // state server-side). Only sent for delivery orders with a value entered.
+        deliveryFee: orderType === 'DELIVERY' && deliveryFee != null ? deliveryFee : undefined,
+        notes: notes.trim() || undefined,
+        // Omit items entirely when locked so the server leaves them untouched.
+        ...(itemsEditable
+          ? { items: lines.map((l) => ({
+              productId: l.productId,
+              quantity: l.quantity,
+              modifierOptionIds: l.modifierOptionIds.length ? l.modifierOptionIds : undefined,
+              notes: l.notes,
+            })) }
+          : {}),
+      });
+      alert(`Order #${updated.id} updated`);
+      onNavigate('orders-all');
+    } catch (e: any) {
+      alert(e?.message || 'Could not update order');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p className="text-small" style={{ color: 'var(--text-secondary)' }}>Loading order…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{ marginBottom: '8px' }}>Edit Order #{orderId}</h1>
+        <p className="text-small" style={{ color: 'var(--text-secondary)' }}>
+          Update customer, delivery and order details
+        </p>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '24px', alignItems: 'start' }}>
+        {/* Left column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={sectionCard}>
+            <h3 style={{ marginBottom: '20px' }}>Customer Information</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <FieldInput label="Customer Name" placeholder="Enter customer name" value={customerName} onChange={setCustomerName} required />
+              <FieldInput label="Email Address" type="email" placeholder="customer@example.com" value={email} onChange={setEmail} />
+              <FieldInput label="Phone Number" placeholder="+65 8123 4567" value={phone} onChange={setPhone} />
+              <OrderTypeToggle value={orderType} onChange={setOrderType} />
+              {orderType === 'DELIVERY' && (
+                <div>
+                  <p className="text-small" style={{ fontWeight: 500, marginBottom: '6px' }}>Delivery Address</p>
+                  <textarea
+                    style={textareaStyle}
+                    placeholder="Address can be added later if you don't have it yet"
+                    value={deliveryAddress}
+                    onChange={(e) => setDeliveryAddress(e.target.value)}
+                  />
+                  <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '4px' }}>
+                    Switching to Pickup clears the address.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={sectionCard}>
+            <h3 style={{ marginBottom: '20px' }}>Order Items</h3>
+
+            {!itemsEditable && (
+              <div
+                className="text-small"
+                style={{
+                  border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)',
+                  padding: '12px 14px', marginBottom: '16px', background: 'var(--bg-card-subtle)',
+                  color: 'var(--text-secondary)',
+                }}
+              >
+                Items are locked once an order reaches Preparing. Contact and delivery details can still be edited.
+              </div>
+            )}
+
+            {itemsEditable && (
+              <ManualLineComposer products={products} currency={store.currency} onAdd={addComposedLine} />
+            )}
+
+            {lines.length === 0 ? (
+              <div
+                className="text-small"
+                style={{
+                  border: '1px dashed var(--border-strong)', borderRadius: 'var(--radius-medium)',
+                  padding: '28px', textAlign: 'center', color: 'var(--text-muted)',
+                }}
+              >
+                No line items on this order
+              </div>
+            ) : (
+              <div>
+                {lines.map((l) => (
+                  <div
+                    key={l.key}
+                    className="text-small"
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)' }}
+                  >
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      {l.name}
+                      {l.selectedOptions.length > 0 && (
+                        <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '12px' }}>
+                          {l.selectedOptions.map((o) => o.optionName).join(', ')}
+                        </span>
+                      )}
+                      {l.notes && <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '12px', fontStyle: 'italic' }}>“{l.notes}”</span>}
+                    </span>
+                    <span style={{ width: '55px', textAlign: 'right' }}>× {l.quantity}</span>
+                    <span style={{ width: '95px', textAlign: 'right', fontWeight: 600 }}>
+                      {formatMoney(l.unitPrice * l.quantity, store.currency)}
+                    </span>
+                    {itemsEditable ? (
+                      <button
+                        onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error-color)', padding: '4px' }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    ) : (
+                      <span style={{ width: '23px' }} />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={sectionCard}>
+            <h3 style={{ marginBottom: '20px' }}>Notes</h3>
+            <textarea
+              style={textareaStyle}
+              placeholder="Anything to remember about this order"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </div>
+
+          <div style={sectionCard}>
+            <h3 style={{ marginBottom: '20px' }}>Order Summary</h3>
+
+            {/* One clean vertical list - subtotal, delivery fee, then discount as
+                its own line applied to the whole order (never nested under the fee). */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <SummaryRow label={`Items (${lines.reduce((n, l) => n + l.quantity, 0)}) · Subtotal`} value={formatMoney(subtotal, store.currency)} />
+
+              {isDelivery && (
+                <MoneyField
+                  label={deliveryFeePending ? 'Delivery fee · to be confirmed' : 'Delivery fee'}
+                  currency={store.currency}
+                  value={deliveryFee}
+                  onChange={setDeliveryFee}
+                  min={0}
+                  helperText="Enter 0 for free delivery."
+                />
+              )}
+
+              {discountAmount > 0 && (
+                <SummaryRow label={`Discount${discountCode ? ` (${discountCode})` : ''}`} value={`− ${formatMoney(discountAmount, store.currency)}`} accent="#047857" />
+              )}
+            </div>
+
+            {isDelivery && deliveryFeePending && (
+              <p className="text-xs" style={{ color: '#B45309', background: '#FEF3C7', borderRadius: '8px', padding: '8px 10px', marginTop: '12px' }}>
+                This order's delivery fee is unconfirmed. Set it here, then message the customer with the final total.
+              </p>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderTop: '1px solid var(--border-subtle)', paddingTop: '12px', marginTop: '16px', marginBottom: '20px' }}>
+              <h3>Total</h3>
+              <h3>{formatMoney(total, store.currency)}</h3>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <Button variant="primary" fullWidth disabled={busy || !customerName.trim()} onClick={submit}>
+                {busy ? 'Saving…' : 'Save Changes'}
+              </Button>
+              <Button variant="secondary" fullWidth onClick={() => onNavigate('orders-all')}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @media (max-width: 1024px) {
+          div[style*="grid-template-columns: 1.6fr 1fr"] {
+            grid-template-columns: minmax(0, 1fr) !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="text-small" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+      <span style={{ color: accent || 'var(--text-secondary)' }}>{label}</span>
+      <span style={{ color: accent || 'var(--text-primary)', fontWeight: 500 }}>{value}</span>
+    </div>
+  );
+}
