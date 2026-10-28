@@ -37,7 +37,7 @@ public final class EmailLayout {
                         <p style="margin:16px 0 4px;color:#374151;font-size:14px;">Questions? Contact support at <a href="mailto:%s" style="color:#374151;">%s</a></p>
                       </div>
                       <div style="padding:16px 24px;border-top:1px solid #e5e7eb;color:#9ca3af;font-size:12px;">
-                        ManyOrder. You're receiving this because you have a store on ManyOrder.
+                        You're receiving this because you have a store on ManyOrder.
                       </div>
                     </div>
                   </body>

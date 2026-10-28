@@ -61,4 +61,12 @@ class EmailLayoutTest {
         String html = EmailLayout.shell("Hello", "<p>Body</p>", "help@store.example");
         assertTrue(html.contains("mailto:help@store.example"), "configured support address in the footer");
     }
+
+    @Test
+    void shell_footerHasTheSingleReceivingLineWithNoDuplicatedBrand() {
+        String html = EmailLayout.shell("Hello", "<p>Body</p>", "help@store.example");
+        assertTrue(html.contains("You're receiving this because you have a store on ManyOrder."),
+                "footer carries the exact receiving line");
+        assertFalse(html.contains("ManyOrder. You're receiving"), "no duplicated brand before the line");
+    }
 }
