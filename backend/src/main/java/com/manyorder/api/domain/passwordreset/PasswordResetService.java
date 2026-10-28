@@ -120,6 +120,9 @@ public class PasswordResetService {
         // in immediately with the new password.
         user.setFailedLoginAttempts(null);
         user.setLockedUntil(null);
+        // Invalidate every previously issued token (a reset means the old password,
+        // and any session that used it, must stop working).
+        user.bumpTokenVersion();
         userRepository.save(user);
 
         LocalDateTime now = LocalDateTime.now();

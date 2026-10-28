@@ -21,28 +21,39 @@ public class JwtUtil {
     public JwtUtil(
             @Value("${app.jwt.secret}") String secret,
             @Value("${app.jwt.expiration-ms}") long expirationMs,
-            @Value("${app.jwt.remember-expiration-ms:2592000000}") long rememberExpirationMs) {
+            @Value("${app.jwt.remember-expiration-ms:604800000}") long rememberExpirationMs) {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes());
         this.expirationMs = expirationMs;
         this.rememberExpirationMs = rememberExpirationMs;
     }
 
-    /** Standard-lifetime token (the default session length). */
+    /** Standard-lifetime token (the default session length), token version 0. */
     public String generateToken(Long userId, String email, String role) {
-        return generateToken(userId, email, role, false);
+        return generateToken(userId, email, role, false, 0);
     }
 
-    /** When {@code rememberMe}, the token lasts the longer remember-me lifetime instead. */
-    public String generateToken(Long userId, String email, String role, boolean rememberMe) {
+    /**
+     * Build a signed token. When {@code rememberMe}, it lasts the longer remember-me
+     * lifetime instead of the standard one. {@code tokenVersion} is carried as a "ver"
+     * claim so the auth filter can reject a token older than the account's version.
+     */
+    public String generateToken(Long userId, String email, String role, boolean rememberMe, int tokenVersion) {
         long ttl = rememberMe ? rememberExpirationMs : expirationMs;
         return Jwts.builder()
                 .subject(email)
                 .claim("uid", userId)
                 .claim("role", role)
+                .claim("ver", tokenVersion)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + ttl))
                 .signWith(secretKey)
                 .compact();
+    }
+
+    /** The token's version claim, or 0 when absent (tokens issued before versioning). */
+    public int extractTokenVersion(String token) {
+        Object ver = getClaims(token).get("ver");
+        return ver instanceof Number n ? n.intValue() : 0;
     }
 
     public String extractEmail(String token) {

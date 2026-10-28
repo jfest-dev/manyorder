@@ -326,7 +326,7 @@ public class AuthService {
     }
 
     public LoginResponse toLoginResponse(User user, boolean rememberMe) {
-        String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole().name(), rememberMe);
+        String token = jwtUtil.generateToken(user.getId(), user.getEmail(), user.getRole().name(), rememberMe, user.tokenVersion());
         Long staffStoreId = user.getStaffStore() != null ? user.getStaffStore().getId() : null;
         return new LoginResponse(
                 user.getId(), user.getFullName(), user.getEmail(),

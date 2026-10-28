@@ -72,4 +72,21 @@ class QueryCountIT extends IntegrationTestBase {
         System.out.println("QUERYCOUNT|merchant-customers|" + merchantCustomers);
         System.out.println("QUERYCOUNT|admin-merchants|" + adminMerchants);
     }
+
+    /**
+     * The token-version check added in the auth filter must not add a per-request
+     * query: the filter loads the account once and CurrentUserService reuses it, so
+     * an authenticated request loads the User entity exactly once.
+     */
+    @Test
+    void authenticatedRequestLoadsTheUserExactlyOnce() throws Exception {
+        String token = loginAndGetToken("manyorder.app@gmail.com", SEED_DEMO_PASSWORD);
+        Statistics s = stats();
+        s.clear();
+        mockMvc.perform(get("/account").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        long userLoads = s.getEntityStatistics(com.manyorder.api.domain.user.User.class.getName()).getLoadCount();
+        org.junit.jupiter.api.Assertions.assertEquals(1, userLoads,
+                "the filter loads the user once and CurrentUserService reuses it (no extra query)");
+    }
 }

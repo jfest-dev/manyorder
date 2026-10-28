@@ -50,7 +50,7 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}          # 24 hours (default / not-remembered)
-    remember-expiration-ms: ${JWT_REMEMBER_EXPIRATION_MS:2592000000}  # 30 days (remember me)
+    remember-expiration-ms: ${JWT_REMEMBER_EXPIRATION_MS:604800000}  # 7 days (remember me)
   google:
     # Leave unset to disable Google sign-in (the button hides itself in the SPA).
     client-id: ${GOOGLE_CLIENT_ID:}

@@ -30,7 +30,7 @@ class RememberMeIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void unchecked24h_checked30d_adminAlways24h() throws Exception {
+    void unchecked24h_checked7d_adminAlways24h() throws Exception {
         String email = "remember-me@test.com";
         registerAndGetToken(email, "MERCHANT", null);
 
@@ -40,10 +40,10 @@ class RememberMeIntegrationTest extends IntegrationTestBase {
         assertTrue(notRemembered > HOUR / 2 && notRemembered < 2 * DAY,
                 "unchecked is short-lived, was " + notRemembered + "s");
 
-        // Remembered is the 30-day lifetime, clearly far longer.
+        // Remembered is the 7-day lifetime, clearly far longer than the short one.
         long remembered = ttlSeconds(email, "password123", true);
-        assertTrue(remembered > 25 * DAY && remembered < 31 * DAY,
-                "checked lasts about 30 days, was " + remembered + "s");
+        assertTrue(remembered > 6 * DAY && remembered < 8 * DAY,
+                "checked lasts about 7 days, was " + remembered + "s");
 
         // A platform admin stays short-lived even when remember is ticked.
         long adminRemembered = ttlSeconds("admin@manyorder.app", SEED_DEMO_PASSWORD, true);

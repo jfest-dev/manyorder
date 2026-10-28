@@ -148,7 +148,7 @@ class SignInThrottleTest {
 
         clock.advance(Duration.ofMinutes(16));
         when(jwtUtil.generateToken(org.mockito.ArgumentMatchers.nullable(Long.class), anyString(), anyString(),
-                org.mockito.ArgumentMatchers.anyBoolean())).thenReturn("token");
+                org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyInt())).thenReturn("token");
         assertNotNull(authService.login(req("known@test.com", "correct")), "succeeds once the window lapses");
     }
 
@@ -156,7 +156,7 @@ class SignInThrottleTest {
     void successResetsTheCounterSoThrottlingRestartsFromZero() {
         existingMerchant("known@test.com");
         when(jwtUtil.generateToken(org.mockito.ArgumentMatchers.nullable(Long.class), anyString(), anyString(),
-                org.mockito.ArgumentMatchers.anyBoolean())).thenReturn("token");
+                org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyInt())).thenReturn("token");
 
         for (int i = 0; i < 4; i++) attempt("known@test.com", "wrong");
         assertNotNull(authService.login(req("known@test.com", "correct")), "4 failures then a success");

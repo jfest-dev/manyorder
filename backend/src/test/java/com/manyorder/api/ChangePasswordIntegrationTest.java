@@ -1,26 +1,30 @@
 package com.manyorder.api;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
 
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Change Password for the signed-in account — Module: Settings / Account. */
 class ChangePasswordIntegrationTest extends IntegrationTestBase {
 
-    /** POST /account/change-password with the given body, asserting the status. */
-    private void changePassword(String token, String current, String next, int expected) throws Exception {
-        Map<String, Object> body = new java.util.HashMap<>();
+    /** POST /account/change-password with the given body, asserting the status; returns the result. */
+    private MvcResult changePassword(String token, String current, String next, int expected) throws Exception {
+        Map<String, Object> body = new HashMap<>();
         body.put("currentPassword", current);
         body.put("newPassword", next);
-        mockMvc.perform(post("/account/change-password")
+        return mockMvc.perform(post("/account/change-password")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(body)))
-                .andExpect(status().is(expected));
+                .andExpect(status().is(expected))
+                .andReturn();
     }
 
     @Test
@@ -28,7 +32,7 @@ class ChangePasswordIntegrationTest extends IntegrationTestBase {
         String email = "cp-happy@test.com";
         String token = registerAndGetToken(email, "MERCHANT", null);
 
-        changePassword(token, "password123", "newpass456", 204);
+        changePassword(token, "password123", "newpass456", 200);
 
         // The new password logs in; the old one no longer does.
         loginAndGetToken(email, "newpass456");
@@ -40,13 +44,17 @@ class ChangePasswordIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void changePassword_keepsCurrentSessionValid() throws Exception {
-        String token = registerAndGetToken("cp-session@test.com", "MERCHANT", null);
+    void changePassword_returnsFreshToken_signsOutOldToken() throws Exception {
+        String email = "cp-session@test.com";
+        String oldToken = registerAndGetToken(email, "MERCHANT", null);
 
-        changePassword(token, "password123", "newpass456", 204);
+        MvcResult result = changePassword(oldToken, "password123", "newpass456", 200);
+        String newToken = json(result).get("token").asText();
 
-        // The already-issued JWT still authorizes requests (stateless, no revocation).
-        getWithToken("/merchant/stores", token, 200);
+        assertNotEquals(oldToken, newToken, "a fresh token is issued");
+        // The old token is now rejected (version bumped), the fresh one works.
+        getWithToken("/merchant/stores", newToken, 200);
+        getWithToken("/merchant/stores", oldToken, 401);
     }
 
     @Test
@@ -72,21 +80,17 @@ class ChangePasswordIntegrationTest extends IntegrationTestBase {
 
         changePassword(token, "password123", "123", 400);
 
-        // Old password still works.
         loginAndGetToken(email, "password123");
     }
 
     @Test
     void changePassword_withBlankCurrent_returns400() throws Exception {
         String token = registerAndGetToken("cp-blank@test.com", "MERCHANT", null);
-
         changePassword(token, "", "newpass456", 400);
     }
 
     @Test
     void changePassword_unauthenticated_isRejected() throws Exception {
-        // No token: Spring Security blocks the anonymous request at the filter
-        // chain with 401 (not authenticated) before it can reach the controller.
         mockMvc.perform(post("/account/change-password")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(

@@ -8,10 +8,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.manyorder.api.domain.auth.AuthService;
+import com.manyorder.api.domain.auth.LoginResponse;
 import com.manyorder.api.domain.user.User;
 import com.manyorder.api.domain.user.UserRepository;
 import com.manyorder.api.security.CurrentUserService;
@@ -29,13 +30,16 @@ public class AccountController {
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthService authService;
 
     public AccountController(CurrentUserService currentUserService,
                             UserRepository userRepository,
-                            PasswordEncoder passwordEncoder) {
+                            PasswordEncoder passwordEncoder,
+                            AuthService authService) {
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.authService = authService;
     }
 
     /** The signed-in user's own account details (name, email, phone, verified). */
@@ -66,16 +70,15 @@ public class AccountController {
     }
 
     /**
-     * Change the signed-in user's password. Verification is atomic with the
-     * change: resolve the user, confirm the current password (403 on mismatch,
-     * nothing changes), then encode and persist the new one. The session uses a
-     * stateless JWT, so this does not revoke any already-issued token — the
-     * current device stays signed in.
+     * Change the signed-in user's password. Verification is atomic with the change:
+     * resolve the user, confirm the current password (403 on mismatch, nothing
+     * changes), then encode and persist the new one. The token version is bumped so
+     * every other device is signed out, and a fresh token is returned so THIS device
+     * stays signed in.
      */
     @PostMapping("/change-password")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void changePassword(@Valid @RequestBody ChangePasswordRequest request,
-                               Authentication authentication) {
+    public LoginResponse changePassword(@Valid @RequestBody ChangePasswordRequest request,
+                                        Authentication authentication) {
         User user = currentUserService.require(authentication);
         com.manyorder.api.common.Passwords.requireNoWhitespace(request.getNewPassword());
         com.manyorder.api.common.Passwords.requireWithinMaxLength(request.getNewPassword());
@@ -85,6 +88,21 @@ public class AccountController {
         }
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        user.bumpTokenVersion();
         userRepository.save(user);
+        return authService.toLoginResponse(user);
+    }
+
+    /**
+     * Sign out every other device: bump the token version so all previously issued
+     * tokens stop verifying, and return a fresh token so the current device keeps
+     * working.
+     */
+    @PostMapping("/sign-out-everywhere")
+    public LoginResponse signOutEverywhere(Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        user.bumpTokenVersion();
+        userRepository.save(user);
+        return authService.toLoginResponse(user);
     }
 }

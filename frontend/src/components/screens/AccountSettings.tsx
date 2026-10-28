@@ -5,7 +5,7 @@ import { FieldInput } from '../Field';
 import { PasswordField } from '../PasswordField';
 import { PhoneField } from '../PhoneField';
 import { Toast } from '../Toast';
-import { accountApi, authApi, ApiError } from '../../lib/api';
+import { accountApi, authApi, ApiError, replaceToken } from '../../lib/api';
 import { validatePassword, PASSWORD_RULE_TEXT } from '../../lib/password';
 import { useAuth } from '../../context/AuthContext';
 
@@ -95,7 +95,9 @@ export function AccountSettings() {
     if (trimmedNew !== confirmPassword.trim()) { setPwError('New passwords do not match.'); return; }
     setPwSaving(true);
     try {
-      await accountApi.changePassword(currentPassword.trim(), trimmedNew);
+      // The change signs out other devices and returns a fresh token for this one.
+      const res = await accountApi.changePassword(currentPassword.trim(), trimmedNew);
+      replaceToken(res.token);
       setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
       setPwSaved(true);
       window.setTimeout(() => setPwSaved(false), 4000);
@@ -104,6 +106,19 @@ export function AccountSettings() {
         : e instanceof ApiError ? e.message : 'Could not update password');
     } finally {
       setPwSaving(false);
+    }
+  };
+
+  const [signOutState, setSignOutState] = useState<'idle' | 'working' | 'done'>('idle');
+  const signOutEverywhere = async () => {
+    setSignOutState('working');
+    try {
+      const res = await accountApi.signOutEverywhere();
+      replaceToken(res.token); // keep this device signed in
+      setSignOutState('done');
+      window.setTimeout(() => setSignOutState('idle'), 4000);
+    } catch {
+      setSignOutState('idle');
     }
   };
 
@@ -177,6 +192,19 @@ export function AccountSettings() {
           </Button>
           {pwSaved && <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Password updated</span>}
           {pwError && <span className="text-small" style={{ color: 'var(--error-color)' }}>{pwError}</span>}
+        </div>
+      </div>
+
+      <div style={sectionCard}>
+        <p className="text-small" style={{ fontWeight: 600, marginBottom: '4px' }}>Sign out everywhere</p>
+        <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          Signs you out on all other devices.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <Button variant="secondary" onClick={signOutEverywhere} disabled={signOutState === 'working'}>
+            {signOutState === 'working' ? 'Signing out…' : 'Sign out everywhere'}
+          </Button>
+          {signOutState === 'done' && <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Other devices signed out</span>}
         </div>
       </div>
 

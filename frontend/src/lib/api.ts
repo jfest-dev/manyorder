@@ -29,6 +29,18 @@ export function getToken(): string | null {
   return s ? s.getItem(TOKEN_KEY) : null;
 }
 
+/**
+ * Replace just the token in whichever storage currently holds this tab's session,
+ * keeping the stored user as-is. Used after an action that reissues the token for
+ * the current device (password change, sign out everywhere).
+ */
+export function replaceToken(token: string) {
+  try {
+    const s = tokenStorage() ?? sessionStorage;
+    s.setItem(TOKEN_KEY, token);
+  } catch { /* storage unavailable */ }
+}
+
 /** The stored user JSON from the SAME storage as the token (paired read). */
 export function getStoredUserJson(): string | null {
   const s = tokenStorage();
@@ -527,15 +539,19 @@ export const accountApi = {
 
   /**
    * Change the signed-in user's password. The server re-verifies the current
-   * password (403 "Incorrect password" on mismatch) and enforces the same
-   * minimum length as registration. Returns 204; the current session stays
-   * valid (stateless JWT - no server-side revocation).
+   * password (403 "Incorrect password" on mismatch) and enforces the same minimum
+   * length as registration. Every other device is signed out; the response carries
+   * a fresh token for THIS device, which the caller must store.
    */
   changePassword: (currentPassword: string, newPassword: string) =>
-    request<void>('/account/change-password', {
+    request<LoginResponse>('/account/change-password', {
       method: 'POST',
       body: { currentPassword, newPassword },
     }),
+
+  /** Sign out of all other devices. Returns a fresh token for the current device. */
+  signOutEverywhere: () =>
+    request<LoginResponse>('/account/sign-out-everywhere', { method: 'POST' }),
 };
 
 export const storesApi = {

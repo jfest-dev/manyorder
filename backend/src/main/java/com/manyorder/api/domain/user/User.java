@@ -86,6 +86,16 @@ public class User {
     @Column(nullable = true)
     private LocalDateTime lockedNoticeSentAt;
 
+    /**
+     * Session-invalidation counter, carried as a claim in every issued token. The
+     * auth filter rejects a token whose claimed version is lower than this. Bumped on
+     * a password change, a password reset, and an explicit "sign out everywhere".
+     * Nullable, where null means 0, so tokens issued before this existed (and rows
+     * never bumped) still verify.
+     */
+    @Column(nullable = true)
+    private Integer tokenVersion;
+
     protected User() {
         // JPA only
     }
@@ -119,4 +129,10 @@ public class User {
     public void setLockedUntil(LocalDateTime lockedUntil) { this.lockedUntil = lockedUntil; }
     public LocalDateTime getLockedNoticeSentAt() { return lockedNoticeSentAt; }
     public void setLockedNoticeSentAt(LocalDateTime v) { this.lockedNoticeSentAt = v; }
+    public Integer getTokenVersion() { return tokenVersion; }
+    public void setTokenVersion(Integer tokenVersion) { this.tokenVersion = tokenVersion; }
+    /** Current token version, treating null as 0. */
+    public int tokenVersion() { return tokenVersion == null ? 0 : tokenVersion; }
+    /** Invalidate every previously issued token by advancing the version. */
+    public void bumpTokenVersion() { this.tokenVersion = tokenVersion() + 1; }
 }

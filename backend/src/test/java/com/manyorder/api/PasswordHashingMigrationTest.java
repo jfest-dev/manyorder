@@ -76,7 +76,7 @@ class PasswordHashingMigrationTest extends IntegrationTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "currentPassword", "password123", "newPassword", "changed-pass1"))))
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk());
         assertTrue(hashOf(email).startsWith("{argon2"), "changed password is Argon2id");
     }
 

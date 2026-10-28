@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.clearInvocations;
@@ -76,7 +77,7 @@ class AuthServiceLockoutTest {
         when(passwordEncoder.encode(anyString())).thenReturn("DUMMY");
         when(passwordEncoder.matches("correct", "HASH")).thenReturn(true);
         when(passwordEncoder.matches("wrong", "HASH")).thenReturn(false);
-        when(jwtUtil.generateToken(nullable(Long.class), anyString(), anyString(), anyBoolean()))
+        when(jwtUtil.generateToken(nullable(Long.class), anyString(), anyString(), anyBoolean(), anyInt()))
                 .thenReturn("token");
 
         clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -130,7 +131,7 @@ class AuthServiceLockoutTest {
         assertEquals(HttpStatus.TOO_MANY_REQUESTS, e.getStatusCode(), "locked -> 429");
         assertEquals(TOO_MANY, e.getReason());
         assertNotNull(u.getLockedUntil(), "still locked");
-        verify(jwtUtil, never()).generateToken(nullable(Long.class), anyString(), anyString(), anyBoolean());
+        verify(jwtUtil, never()).generateToken(nullable(Long.class), anyString(), anyString(), anyBoolean(), anyInt());
     }
 
     @Test

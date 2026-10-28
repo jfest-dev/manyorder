@@ -22,6 +22,13 @@ public class CurrentUserService {
         if (authentication == null || authentication.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Not authenticated");
         }
+        // The JwtFilter already loaded and version-checked the user; reuse it rather
+        // than querying again (keeps one user load per authenticated request).
+        if (authentication.getDetails() instanceof User cached
+                && cached.getEmail() != null
+                && cached.getEmail().equals(authentication.getName())) {
+            return cached;
+        }
         return userRepository.findByEmail(authentication.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
     }
