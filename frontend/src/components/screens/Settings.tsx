@@ -5,8 +5,8 @@ import { FieldInput, FieldSelect } from '../Field';
 import { Checkbox } from '../Checkbox';
 import { PasswordField } from '../PasswordField';
 import { storesApi, uploadsApi, ordersApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
-import { cloudinaryImage } from '../../lib/cloudinary';
-import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
+import { cloudinaryImage, cloudinarySrcSet } from '../../lib/cloudinary';
+import { validatePickedImage, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { useConfirm } from '../ConfirmDialog';
 import { AccountSettings } from './AccountSettings';
 import { PhoneField } from '../PhoneField';
@@ -321,7 +321,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
     e.target.value = ''; // allow re-selecting the same file after an error
     if (!file) return;
 
-    const invalid = validateImageFile(file);
+    const invalid = validatePickedImage(file);
     if (invalid) {
       setLogoError(invalid);
       return;
@@ -427,7 +427,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
               }}
             >
               {logoPreview || form.logoUrl ? (
-                <img src={cloudinaryImage(logoPreview || form.logoUrl || '', 144)} alt="Store logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <img src={cloudinaryImage(logoPreview || form.logoUrl || '', 144, 'logo')} srcSet={cloudinarySrcSet(logoPreview || form.logoUrl || '', 144, 'logo')} width={144} height={144} alt="Store logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 initials
               )}
@@ -465,7 +465,7 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
                 </p>
               ) : (
                 <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '6px' }}>
-                  {IMAGE_RULE_TEXT} Square images work best.
+                  {IMAGE_RULE_TEXT}
                 </p>
               )}
             </div>

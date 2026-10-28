@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Package, ShoppingBag, Plus, MapPin, Clock, Search, X, Share2, Check, Tag, ChevronDown } from 'lucide-react';
 import { WhatsAppIcon } from '../icons/WhatsAppIcon';
 import { formatMoney } from '../../lib/currency';
-import { cloudinaryImage } from '../../lib/cloudinary';
+import { cloudinaryImage, cloudinarySrcSet } from '../../lib/cloudinary';
 import { formatPreorderReady } from '../../lib/datetime';
 import { bestsellerProductIds } from '../../lib/bestsellers';
 import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from '../../lib/offers';
@@ -203,7 +203,7 @@ export function StorefrontView({
             }}
           >
             {store.logoUrl
-              ? <img src={cloudinaryImage(store.logoUrl, 128)} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ? <img src={cloudinaryImage(store.logoUrl, 128, 'logo')} srcSet={cloudinarySrcSet(store.logoUrl, 128, 'logo')} width={128} height={128} alt={store.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : initialsOf(store.name)}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -407,7 +407,7 @@ export function StorefrontView({
                 {/* Square photo with the floating add / options control at its corner. */}
                 <div style={{ position: 'relative', width: '100%', aspectRatio: '1', background: '#E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                   {p.photoUrl
-                    ? <img src={cloudinaryImage(p.photoUrl, 400)} alt={p.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img src={cloudinaryImage(p.photoUrl, 400)} srcSet={cloudinarySrcSet(p.photoUrl, 400)} width={400} height={400} alt={p.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     : <Package size={28} style={{ color: '#9CA3AF' }} />}
 
                   {/* Products with options: opens the PDP/decision sheet, showing the total

@@ -11,7 +11,7 @@ import { CategorySelect } from '../CategorySelect';
 import { ModifierGroupsEditor } from '../ModifierGroupsEditor';
 import { formatMoney, priceLimits } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
-import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
+import { validatePickedImage, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { editorGroupsToInputs, validateEditorGroups, type EditorGroup } from '../../lib/modifiers';
 import { productsApi, CreateProductPayload, ApiError } from '../../lib/api';
 import { useConfirm } from '../ConfirmDialog';
@@ -142,7 +142,7 @@ export function AddProducts({
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    const invalid = validateImageFile(file);
+    const invalid = validatePickedImage(file);
     if (invalid) { setFormError((s) => ({ ...s, [id]: invalid })); return; }
     setFormError((s) => { const n = { ...s }; delete n[id]; return n; });
     setProducts((prev) => prev.map((p) => {

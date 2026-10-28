@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.cloudinary.Cloudinary;
+import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
 
 /**
@@ -44,6 +45,12 @@ public class CloudinaryImageService {
     private final Cloudinary cloudinary; // null when unconfigured
     private final String rootFolder;
 
+    /** Safety-net caps on the STORED original's longest side (the browser already
+     *  shrinks to smaller than these). Applied as an incoming transformation at
+     *  upload time so the browser is not the only guard. */
+    private static final int LOGO_MAX_STORED_WIDTH = 1200;
+    private static final int PRODUCT_MAX_STORED_WIDTH = 2000;
+
     public CloudinaryImageService(
             @Value("${app.cloudinary.cloud-name:}") String cloudName,
             @Value("${app.cloudinary.api-key:}") String apiKey,
@@ -75,7 +82,7 @@ public class CloudinaryImageService {
      * @param merchantId the owning account's user id (the logo is not store-scoped)
      */
     public String uploadLogo(byte[] imageBytes, long merchantId) {
-        return uploadToFolder(imageBytes, rootFolder + "/" + merchantId + "/logo");
+        return uploadToFolder(imageBytes, rootFolder + "/" + merchantId + "/logo", LOGO_MAX_STORED_WIDTH);
     }
 
     /**
@@ -86,18 +93,22 @@ public class CloudinaryImageService {
      */
     public String uploadProductPhoto(byte[] imageBytes, long merchantId, long storeId, long productId) {
         return uploadToFolder(imageBytes,
-                rootFolder + "/" + merchantId + "/" + storeId + "/products/" + productId);
+                rootFolder + "/" + merchantId + "/" + storeId + "/products/" + productId,
+                PRODUCT_MAX_STORED_WIDTH);
     }
 
-    private String uploadToFolder(byte[] imageBytes, String folder) {
+    private String uploadToFolder(byte[] imageBytes, String folder, int maxStoredWidth) {
         if (cloudinary == null) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Image uploads are not available right now.");
         }
         try {
+            // Incoming transformation: cap the longest side of the STORED asset so an
+            // oversized upload can't balloon storage even if the browser shrink is skipped.
             Map<?, ?> result = cloudinary.uploader().upload(imageBytes, ObjectUtils.asMap(
                     "folder", folder,
-                    "resource_type", "image"));
+                    "resource_type", "image",
+                    "transformation", new Transformation().width(maxStoredWidth).crop("limit")));
             String url = (String) result.get("secure_url");
             if (isBlank(url)) {
                 throw new IllegalStateException("Upload response had no secure_url");

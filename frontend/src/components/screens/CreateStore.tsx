@@ -6,7 +6,7 @@ import { Upload, LogOut, Store, X, Loader2 } from 'lucide-react';
 import { storeInitials } from '../../lib/initials';
 import { PhoneField } from '../PhoneField';
 import { BUSINESS_TYPES, CURRENCIES, STORE_FIELD_TEXT } from '../../lib/storeFields';
-import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
+import { validatePickedImage, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { useSlugAvailability } from '../../lib/useSlugAvailability';
 import { PALETTE } from '../../lib/palette';
 
@@ -126,7 +126,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
     e.target.value = ''; // allow re-selecting the same file after an error
     if (!file) return;
 
-    const invalid = validateImageFile(file);
+    const invalid = validatePickedImage(file);
     if (invalid) {
       setLogoError(invalid);
       return;
@@ -260,7 +260,7 @@ export function CreateStore({ onComplete, onNavigate, onSignOut, initialLogoFile
                   </p>
                 ) : (
                   <p className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px' }}>
-                    {IMAGE_RULE_TEXT} Square images work best.
+                    {IMAGE_RULE_TEXT}
                   </p>
                 )}
               </div>

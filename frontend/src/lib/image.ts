@@ -1,37 +1,56 @@
-// Shared client-side image validation, mirrored by the server (which re-checks
-// type, size, and the real magic bytes - this check is advisory UX only, never
-// the security boundary). Constants match the backend's ImageValidation.
+// Client-side image handling for uploads. The browser shrinks and re-encodes a
+// picked photo to WebP before upload; the server re-checks type, magic bytes and
+// the 5 MB limit on the shrunk file (that is the real boundary, never this).
 
 export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const ALLOWED_IMAGE_ACCEPT = ALLOWED_IMAGE_TYPES.join(',');
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
-export const IMAGE_RULE_TEXT = 'JPG, PNG, or WebP, up to 5 MB.';
 
-/** Returns an error message to show the user, or null when the file is acceptable. */
-export function validateImageFile(file: File): string | null {
+/** Server limit, applied to the SHRUNK output (never the original). */
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
+/** Largest original a user may pick; bigger inputs are refused before shrinking. */
+export const MAX_PICK_BYTES = 20 * 1024 * 1024; // 20 MB
+
+/** The only line shown under an upload box. */
+export const IMAGE_RULE_TEXT = 'JPG, PNG or WebP';
+
+/** The only two errors the UI ever shows for a picked image. */
+export const ERR_NOT_A_PICTURE = "That file isn't a picture. Please use a JPG, PNG or WebP.";
+export const ERR_UNREADABLE = "We couldn't read that photo. Try a different one.";
+
+/** Shrink targets: product photos and logos, longest side in px and WebP quality. */
+export const PRODUCT_MAX_DIM = 1600;
+export const PRODUCT_QUALITY = 0.85;
+export const LOGO_MAX_DIM = 600;
+export const LOGO_QUALITY = 0.92;
+
+/**
+ * Validate a freshly picked file. Checks the declared type and refuses an original
+ * larger than the pick ceiling. Returns an error message to show, or null when the
+ * file is acceptable to try shrinking.
+ */
+export function validatePickedImage(file: File): string | null {
   if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-    return 'Please upload a JPG, PNG, or WebP image.';
+    return ERR_NOT_A_PICTURE;
   }
-  if (file.size > MAX_IMAGE_BYTES) {
-    return 'Image must be under 5 MB.';
+  if (file.size > MAX_PICK_BYTES) {
+    return ERR_UNREADABLE;
   }
   return null;
 }
 
 /**
- * Downscale + re-encode an image in the browser before upload, so a multi-MB
- * phone photo becomes a small WebP. Cuts upload time (and the browser→server→
- * Cloudinary double hop) dramatically. WebP preserves transparency and is
- * accepted server-side. Falls back to the original file on any failure or when
- * re-encoding wouldn't help.
+ * Downscale + re-encode a picked image to WebP (which keeps transparency and is
+ * accepted server-side), capping the longest side at {@code maxDim}. Throws
+ * {@link ERR_UNREADABLE} when the image cannot be decoded/encoded or when the
+ * shrunk output is still over the 5 MB server limit. The stored original is the
+ * shrunk file; nothing here upscales.
  */
-export async function downscaleImage(file: File, maxDim: number, quality = 0.82): Promise<File> {
-  if (!file.type.startsWith('image/')) return file;
+export async function prepareImageForUpload(file: File, maxDim: number, quality: number): Promise<File> {
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file);
   } catch {
-    return file; // decoder unavailable / unsupported - upload as-is
+    throw new Error(ERR_UNREADABLE);
   }
   try {
     const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
@@ -42,13 +61,12 @@ export async function downscaleImage(file: File, maxDim: number, quality = 0.82)
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return file;
+    if (!ctx) throw new Error(ERR_UNREADABLE);
     ctx.drawImage(bitmap, 0, 0, w, h);
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', quality));
-    if (!blob) return file;
-    // Keep the original if it was already smaller and we didn't shrink dimensions.
-    if (scale === 1 && blob.size >= file.size) return file;
+    if (!blob) throw new Error(ERR_UNREADABLE);
+    if (blob.size > MAX_UPLOAD_BYTES) throw new Error(ERR_UNREADABLE);
 
     const name = file.name.replace(/\.\w+$/, '') + '.webp';
     return new File([blob], name, { type: 'image/webp' });

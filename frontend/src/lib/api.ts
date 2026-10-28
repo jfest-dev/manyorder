@@ -1,6 +1,6 @@
 // REST client for the ManyOrder Spring Boot API (replaces Supabase).
 
-import { downscaleImage } from './image';
+import { prepareImageForUpload, LOGO_MAX_DIM, LOGO_QUALITY, PRODUCT_MAX_DIM, PRODUCT_QUALITY } from './image';
 
 export const API_BASE: string =
   (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8080';
@@ -575,7 +575,7 @@ export const uploadsApi = {
    */
   logo: async (file: File): Promise<{ url: string }> => {
     // Shrink before upload: a logo never needs a multi-MB original.
-    const upload = await downscaleImage(file, 512);
+    const upload = await prepareImageForUpload(file, LOGO_MAX_DIM, LOGO_QUALITY);
     const formData = new FormData();
     formData.append('file', upload);
 
@@ -700,7 +700,7 @@ export const productsApi = {
    * stores it under the product's folder; the caller then PATCHes photoUrl.
    */
   uploadPhoto: async (storeId: number, productId: number, file: File): Promise<{ url: string }> => {
-    const upload = await downscaleImage(file, 1024); // product photos: larger cap than logos
+    const upload = await prepareImageForUpload(file, PRODUCT_MAX_DIM, PRODUCT_QUALITY);
     const formData = new FormData();
     formData.append('file', upload);
     const headers: Record<string, string> = {};

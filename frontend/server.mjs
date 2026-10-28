@@ -18,6 +18,8 @@ const PORT = process.env.PORT || 3000;
 const API_BASE = process.env.VITE_API_BASE || process.env.API_BASE || 'http://localhost:8080';
 const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://manyorder.app';
 const CACHE_TTL_MS = 60_000;
+// Generic link-card preview for a shop that has no logo, so the card is never imageless.
+const GENERIC_PREVIEW = `${SITE_ORIGIN}/manyorder-logo.png`;
 
 // First path segments that are app routes or assets, never shop slugs.
 const RESERVED = new Set([
@@ -68,10 +70,12 @@ function headTags(store, slug) {
   const addr = showAddress ? (store.address || store.city || '') : '';
   const description = addr ? `${base} · ${addr}` : base;
   const url = `${SITE_ORIGIN}/${slug}`;
-  const img = bannerUrl(store);
-  const imgTags = img
-    ? `\n    <meta property="og:image" content="${esc(img)}" />\n    <meta name="twitter:image" content="${esc(img)}" />\n    <meta name="twitter:card" content="summary_large_image" />`
-    : `\n    <meta name="twitter:card" content="summary" />`;
+  const banner = bannerUrl(store);
+  // A shop with a logo gets a wide banner; one without still gets a generic image
+  // (shown as a small summary card) so the link preview is never blank.
+  const img = banner || GENERIC_PREVIEW;
+  const card = banner ? 'summary_large_image' : 'summary';
+  const imgTags = `\n    <meta property="og:image" content="${esc(img)}" />\n    <meta name="twitter:image" content="${esc(img)}" />\n    <meta name="twitter:card" content="${card}" />`;
   return `<title>${esc(name)}</title>
     <meta name="description" content="${esc(description)}" />
     <link rel="canonical" href="${esc(url)}" />

@@ -9,10 +9,10 @@ import { Card } from '../Card';
 import { CategorySelect } from '../CategorySelect';
 import { ModifierGroupsEditor } from '../ModifierGroupsEditor';
 import { formatMoney, priceLimits } from '../../lib/currency';
-import { cloudinaryImage } from '../../lib/cloudinary';
+import { cloudinaryImage, cloudinarySrcSet } from '../../lib/cloudinary';
 import { formatPreorderReady } from '../../lib/datetime';
 import { ToggleSwitch } from '../ToggleSwitch';
-import { validateImageFile, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
+import { validatePickedImage, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { editorGroupsFromViews, editorGroupsToInputs, validateEditorGroups, type EditorGroup } from '../../lib/modifiers';
 import { productsApi, UpdateProductPayload, ApiError } from '../../lib/api';
 import { UnsavedChangesDialog, useConfirm } from '../ConfirmDialog';
@@ -197,7 +197,7 @@ export function EditProduct({
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    const invalid = validateImageFile(file);
+    const invalid = validatePickedImage(file);
     if (invalid) { setPhotoError(invalid); return; }
     setPhotoError(null);
     setPhotoFile(file);
@@ -342,7 +342,7 @@ export function EditProduct({
                 >
                   {shownPhoto ? (
                     <>
-                      <img src={cloudinaryImage(shownPhoto, 400)} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={cloudinaryImage(shownPhoto, 400)} srcSet={cloudinarySrcSet(shownPhoto, 400)} width={400} height={400} alt="Product" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       <button
                         onClick={(e) => { e.stopPropagation(); removePhoto(); }}
                         style={{ position: 'absolute', top: '8px', right: '8px', padding: '6px', background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer', display: 'inline-flex' }}
@@ -355,7 +355,7 @@ export function EditProduct({
                     <>
                       <Upload size={32} style={{ color: 'var(--text-muted)' }} />
                       <span className="text-small" style={{ color: 'var(--text-muted)' }}>Click to upload a photo</span>
-                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{IMAGE_RULE_TEXT} Square works best.</span>
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{IMAGE_RULE_TEXT}</span>
                     </>
                   )}
                 </div>
@@ -463,7 +463,7 @@ export function EditProduct({
               </div>
               <div style={{ flex: 1, background: 'white', padding: '12px', overflowY: 'auto' }}>
                 <div style={{ padding: '10px', background: '#F9FAFB', borderRadius: '6px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  {shownPhoto && <img src={cloudinaryImage(shownPhoto, 120)} alt={name} style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
+                  {shownPhoto && <img src={cloudinaryImage(shownPhoto, 120)} srcSet={cloudinarySrcSet(shownPhoto, 120)} width={60} height={60} alt={name} style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '13px', fontWeight: 500, color: '#111827', marginBottom: '2px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{name || 'Product Name'}</div>
                     <div style={{ fontSize: '10px', color: '#6B7280', marginBottom: '4px' }}>{description || 'No description'}</div>

@@ -5,7 +5,7 @@ import { ToggleSwitch } from '../ToggleSwitch';
 import { ReorderableList } from '../ReorderableList';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { productsApi, adminApi, storesApi, ProductResponse, ApiError } from '../../lib/api';
-import { cloudinaryImage } from '../../lib/cloudinary';
+import { cloudinaryImage, cloudinarySrcSet } from '../../lib/cloudinary';
 import { formatMoney } from '../../lib/currency';
 import { useConfirmReason } from '../ConfirmDialog';
 import { LOW_STOCK_AT } from '../storefront/storefrontTypes';
@@ -285,7 +285,7 @@ export function ProductsList({ storeId, currency, onNavigate, onEditProduct, adm
       }}
     >
       {p.photoUrl ? (
-        <img src={cloudinaryImage(p.photoUrl, 96)} alt={p.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <img src={cloudinaryImage(p.photoUrl, 96)} srcSet={cloudinarySrcSet(p.photoUrl, 96)} width={96} height={96} alt={p.name} loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (
         <Package size={18} style={{ color: 'var(--text-muted)' }} />
       )}
