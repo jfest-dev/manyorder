@@ -527,6 +527,7 @@ export interface AccountDetails {
   phone: string | null;
   staffStoreId: number | null;
   demo: boolean;
+  hasPassword: boolean;
 }
 
 export const accountApi = {
@@ -553,6 +554,11 @@ export const accountApi = {
   /** Sign out of all other devices. Returns a fresh token for the current device. */
   signOutEverywhere: () =>
     request<LoginResponse>('/account/sign-out-everywhere', { method: 'POST' }),
+
+  /** Email a reset link to the signed-in account's own address, so a Google account
+   *  with no usable password can set one. */
+  setPasswordLink: () =>
+    request<void>('/account/password-reset-link', { method: 'POST' }),
 };
 
 export const storesApi = {

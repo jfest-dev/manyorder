@@ -38,8 +38,8 @@ class GoogleSignInLinkingTest {
 
         assertEquals(existing.getId(), resolved.getId(), "links to the same account");
         assertTrue(resolved.isVerified(), "now verified");
-        assertFalse(passwordEncoder.matches(squatterPassword, resolved.getPasswordHash()),
-                "the squatter's old password no longer works");
+        assertFalse(com.manyorder.api.common.Passwords.hasUsablePassword(resolved.getPasswordHash()),
+                "no usable password after takeover, so the squatter's old password no longer works");
     }
 
     @Test

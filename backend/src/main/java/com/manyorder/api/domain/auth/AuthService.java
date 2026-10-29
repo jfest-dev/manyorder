@@ -3,7 +3,6 @@ package com.manyorder.api.domain.auth;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -112,7 +111,7 @@ public class AuthService {
         }
 
         boolean passwordOk = user != null
-                && passwordEncoder.matches(request.getPassword().trim(), user.getPasswordHash());
+                && Passwords.matches(passwordEncoder, request.getPassword().trim(), user.getPasswordHash());
         if (user == null) {
             // Unknown email: throwaway hash comparison so the timing matches a wrong
             // password and no timing oracle reveals that the account is missing.
@@ -308,15 +307,17 @@ public class AuthService {
     User resolveGoogleUser(String email, String name) {
         return userRepository.findByEmail(email).map(existing -> {
             if (!existing.isVerified()) {
-                existing.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+                // Take over the unverified account: no usable password (Google only),
+                // which also locks out whoever registered but never confirmed it.
+                existing.setPasswordHash(Passwords.NO_PASSWORD);
                 existing.setVerified(true);
                 userRepository.save(existing);
             }
             return existing;
         }).orElseGet(() -> {
-            // Google already confirmed this address (email_verified checked above),
-            // so the account starts verified and needs no confirmation email.
-            User created = new User(name, email, passwordEncoder.encode(UUID.randomUUID().toString()), UserRole.MERCHANT);
+            // Google already confirmed this address (email_verified checked above), so
+            // the account starts verified, with no usable password until the owner sets one.
+            User created = new User(name, email, Passwords.NO_PASSWORD, UserRole.MERCHANT);
             created.setVerified(true);
             return userRepository.save(created);
         });

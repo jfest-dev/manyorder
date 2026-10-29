@@ -196,7 +196,7 @@ public class MerchantStoreController {
         }
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
 
-        if (!passwordEncoder.matches(request.getPassword().trim(), user.getPasswordHash())) {
+        if (!com.manyorder.api.common.Passwords.matches(passwordEncoder, request.getPassword().trim(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Incorrect password");
         }
 

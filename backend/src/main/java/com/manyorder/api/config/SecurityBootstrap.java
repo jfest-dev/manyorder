@@ -122,7 +122,9 @@ public class SecurityBootstrap implements CommandLineRunner {
 
     private void rotate(String email) {
         userRepository.findByEmail(email).ifPresent(user -> {
-            if (!passwordEncoder.matches(demoPassword, user.getPasswordHash())) {
+            // Rotate when the stored password differs from DEMO_PASSWORD. A no-password
+            // sentinel counts as "differs" (and is never handed to the encoder).
+            if (!com.manyorder.api.common.Passwords.matches(passwordEncoder, demoPassword, user.getPasswordHash())) {
                 user.setPasswordHash(passwordEncoder.encode(demoPassword));
                 userRepository.save(user);
                 log.info("Rotated the stored password for a seeded demo account.");

@@ -14,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.manyorder.api.config.DemoAccount;
 import com.manyorder.api.domain.auth.AuthService;
 import com.manyorder.api.domain.auth.LoginResponse;
+import com.manyorder.api.domain.passwordreset.PasswordResetService;
 import com.manyorder.api.domain.user.User;
 import com.manyorder.api.domain.user.UserRepository;
 import com.manyorder.api.security.CurrentUserService;
@@ -33,17 +34,20 @@ public class AccountController {
     private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
     private final DemoAccount demoAccount;
+    private final PasswordResetService passwordResetService;
 
     public AccountController(CurrentUserService currentUserService,
                             UserRepository userRepository,
                             PasswordEncoder passwordEncoder,
                             AuthService authService,
-                            DemoAccount demoAccount) {
+                            DemoAccount demoAccount,
+                            PasswordResetService passwordResetService) {
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authService = authService;
         this.demoAccount = demoAccount;
+        this.passwordResetService = passwordResetService;
     }
 
     /** The signed-in user's own account details (name, email, phone, verified, demo). */
@@ -91,7 +95,7 @@ public class AccountController {
         com.manyorder.api.common.Passwords.requireNoWhitespace(request.getNewPassword());
         com.manyorder.api.common.Passwords.requireWithinMaxLength(request.getNewPassword());
 
-        if (!passwordEncoder.matches(request.getCurrentPassword().trim(), user.getPasswordHash())) {
+        if (!com.manyorder.api.common.Passwords.matches(passwordEncoder, request.getCurrentPassword().trim(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Incorrect password");
         }
 
@@ -112,5 +116,16 @@ public class AccountController {
         user.bumpTokenVersion();
         userRepository.save(user);
         return authService.toLoginResponse(user);
+    }
+
+    /**
+     * Email a password-reset link to the signed-in account's own verified address, so
+     * an account created via Google (no usable password) can set one. Always returns
+     * 200; the demo account is silently skipped by the reset service.
+     */
+    @PostMapping("/password-reset-link")
+    public void sendPasswordResetLink(Authentication authentication) {
+        User user = currentUserService.require(authentication);
+        passwordResetService.requestReset(user.getEmail());
     }
 }

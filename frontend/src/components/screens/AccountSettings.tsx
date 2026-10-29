@@ -38,6 +38,9 @@ export function AccountSettings() {
   // A protected demo account cannot change its password; the password actions are
   // hidden and a note is shown instead (the server enforces this regardless).
   const [demo, setDemo] = useState(false);
+  // An account created via Google has no usable password until it sets one.
+  const [hasPassword, setHasPassword] = useState(true);
+  const [setPwState, setSetPwState] = useState<'idle' | 'working' | 'sent'>('idle');
 
   // Change password (moved here from the store settings).
   const [currentPassword, setCurrentPassword] = useState('');
@@ -53,7 +56,7 @@ export function AccountSettings() {
       .then((a) => {
         if (cancelled) return;
         setEmail(a.email); setVerified(a.verified); setName(a.fullName);
-        setPhone(a.phone ?? ''); setDemo(a.demo);
+        setPhone(a.phone ?? ''); setDemo(a.demo); setHasPassword(a.hasPassword);
       })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof ApiError ? e.message : 'Could not load your account'); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -109,6 +112,16 @@ export function AccountSettings() {
         : e instanceof ApiError ? e.message : 'Could not update password');
     } finally {
       setPwSaving(false);
+    }
+  };
+
+  const sendSetPasswordLink = async () => {
+    setSetPwState('working');
+    try {
+      await accountApi.setPasswordLink();
+      setSetPwState('sent');
+    } catch {
+      setSetPwState('idle');
     }
   };
 
@@ -188,6 +201,7 @@ export function AccountSettings() {
         </div>
       ) : (
         <>
+          {hasPassword ? (
           <div style={sectionCard}>
             <p className="text-small" style={{ fontWeight: 600, marginBottom: '12px' }}>Change Password</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '420px' }}>
@@ -206,6 +220,20 @@ export function AccountSettings() {
               {pwError && <span className="text-small" style={{ color: 'var(--error-color)' }}>{pwError}</span>}
             </div>
           </div>
+          ) : (
+          <div style={sectionCard}>
+            <p className="text-small" style={{ fontWeight: 600, marginBottom: '4px' }}>You sign in with Google.</p>
+            <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              Set a password to also sign in with your email.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Button variant="secondary" onClick={sendSetPasswordLink} disabled={setPwState === 'working'}>
+                {setPwState === 'working' ? 'Sending…' : 'Set a password'}
+              </Button>
+              {setPwState === 'sent' && <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Check your email for a link.</span>}
+            </div>
+          </div>
+          )}
 
           <div style={sectionCard}>
             <p className="text-small" style={{ fontWeight: 600, marginBottom: '4px' }}>Sign out everywhere</p>
