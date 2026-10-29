@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 import { Checkbox } from '../Checkbox';
@@ -92,6 +92,17 @@ export function SignIn() {
     }
   };
 
+  // Stable across renders so typing in the fields never changes the Google button's
+  // props (it stays memoized and is drawn only once).
+  const handleGoogleCredential = useCallback(async (idToken: string) => {
+    try {
+      await loginWithGoogle(idToken);
+      navigate('/app');
+    } catch (e: any) {
+      setError(e?.message || 'Google sign-in failed');
+    }
+  }, [loginWithGoogle, navigate]);
+
   return (
     <AuthLayout
       title="Sign in to ManyOrder"
@@ -107,6 +118,7 @@ export function SignIn() {
         <FieldInput
           label="Email Address"
           type="email"
+          autoComplete="email"
           placeholder="you@example.com"
           value={email}
           onChange={setEmail}
@@ -118,6 +130,7 @@ export function SignIn() {
           placeholder="Enter your password"
           value={password}
           onChange={setPassword}
+          autoComplete="current-password"
           required
         />
 
@@ -155,16 +168,7 @@ export function SignIn() {
           </span>
         </Button>
 
-        <GoogleSignInButton
-          onCredential={async (idToken) => {
-            try {
-              await loginWithGoogle(idToken);
-              navigate('/app');
-            } catch (e: any) {
-              setError(e?.message || 'Google sign-in failed');
-            }
-          }}
-        />
+        <GoogleSignInButton onCredential={handleGoogleCredential} />
 
         <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px', textAlign: 'center' }}>
           <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '10px' }}>

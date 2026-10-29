@@ -1,20 +1,23 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
 const login = vi.fn();
 const logout = vi.fn();
+const loginWithGoogle = vi.fn(); // stable across renders (module-level)
 let authUser: { email: string } | null = null;
 
 vi.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ user: authUser, login, loginWithGoogle: vi.fn(), logout }),
+  useAuth: () => ({ user: authUser, login, loginWithGoogle, logout }),
 }));
-// The Google button fetches /auth/config on mount; report no client id so it renders nothing.
+// The Google button fetches /auth/config on mount; configMock drives the client id
+// (empty by default so the button renders nothing).
+const configMock = vi.fn();
 vi.mock('../../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api')>();
-  return { ...actual, authApi: { ...actual.authApi, config: () => Promise.resolve({ googleClientId: '' }) } };
+  return { ...actual, authApi: { ...actual.authApi, config: () => configMock() } };
 });
 
 import { SignIn } from './SignIn';
@@ -24,7 +27,12 @@ function renderSignIn() {
   render(<MemoryRouter><SignIn /></MemoryRouter>);
 }
 
-beforeEach(() => { cleanup(); login.mockReset(); logout.mockReset(); authUser = null; sessionStorage.clear(); });
+beforeEach(() => {
+  cleanup();
+  login.mockReset(); logout.mockReset(); loginWithGoogle.mockReset();
+  configMock.mockReset().mockResolvedValue({ googleClientId: '' });
+  authUser = null; sessionStorage.clear();
+});
 
 describe('SignIn', () => {
   it('marks the sign-in page noindex', () => {
@@ -105,5 +113,36 @@ describe('SignIn', () => {
     expect(screen.getByText('You were signed out because your session changed. Please sign in again.')).toBeTruthy();
     // Shown in the signed-out form (fields present).
     expect(screen.getByPlaceholderText('you@example.com')).toBeTruthy();
+  });
+
+  it('draws the Google button once and never re-draws or resizes it while typing', async () => {
+    const user = userEvent.setup();
+    configMock.mockResolvedValue({ googleClientId: 'test-client-id' });
+    const renderButton = vi.fn();
+    (window as any).google = { accounts: { id: { initialize: vi.fn(), renderButton } } };
+    try {
+      renderSignIn();
+      // Drawn exactly once, after the client id resolves.
+      await waitFor(() => expect(renderButton).toHaveBeenCalledTimes(1));
+      const container = renderButton.mock.calls[0][0] as HTMLElement;
+      const widthBefore = container.style.width;
+      expect(widthBefore).toBe('356px');
+
+      await user.type(screen.getByPlaceholderText('you@example.com'), 'a@b.com');
+      await user.type(screen.getByPlaceholderText('Enter your password'), 'password123');
+
+      // Typing never re-initializes/redraws the button, and its box never resizes.
+      expect(renderButton).toHaveBeenCalledTimes(1);
+      expect(container.style.width).toBe(widthBefore);
+    } finally {
+      delete (window as any).google;
+    }
+  });
+
+  it('gives the email and password fields standard autocomplete attributes', async () => {
+    renderSignIn();
+    const email = await screen.findByPlaceholderText('you@example.com');
+    expect(email.getAttribute('autocomplete')).toBe('email');
+    expect(screen.getByPlaceholderText('Enter your password').getAttribute('autocomplete')).toBe('current-password');
   });
 });

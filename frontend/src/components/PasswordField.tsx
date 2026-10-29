@@ -11,6 +11,7 @@ interface PasswordFieldProps {
   error?: string;
   required?: boolean;
   style?: React.CSSProperties;
+  autoComplete?: string;
 }
 
 /** Password input with an in-field eye icon to toggle visibility.
@@ -24,6 +25,7 @@ export function PasswordField({
   error,
   required,
   style,
+  autoComplete,
 }: PasswordFieldProps) {
   const [show, setShow] = useState(false);
   // Passwords may not contain whitespace. We strip it from whatever arrives
@@ -50,6 +52,7 @@ export function PasswordField({
       error={shownError}
       required={required}
       style={style}
+      autoComplete={autoComplete}
       type={show ? 'text' : 'password'}
       suffix={
         <button

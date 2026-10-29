@@ -23,6 +23,7 @@ interface FieldInputProps {
   rows?: number;
   style?: React.CSSProperties;
   inputMode?: 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url' | 'none';
+  autoComplete?: string;
   onFocus?: () => void;
   onBlur?: () => void;
 }
@@ -49,6 +50,7 @@ export function FieldInput({
   rows = 2,
   style,
   inputMode,
+  autoComplete,
   onFocus,
   onBlur,
 }: FieldInputProps) {
@@ -121,6 +123,7 @@ export function FieldInput({
           <input
             type={type}
             inputMode={inputMode}
+            autoComplete={autoComplete}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
