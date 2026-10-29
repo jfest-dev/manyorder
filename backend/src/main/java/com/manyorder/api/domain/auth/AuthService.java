@@ -36,6 +36,7 @@ public class AuthService {
     private final Clock clock;
     private final AccountSecurityMailer accountSecurityMailer;
     private final SignInAttemptTracker attemptTracker;
+    private final com.manyorder.api.config.DemoAccount demoAccount;
     private final RestClient restClient = RestClient.create();
 
     /** Lock an account after this many consecutive wrong passwords. Platform admin
@@ -67,7 +68,8 @@ public class AuthService {
                        @Value("${app.support.email:support@manyorder.app}") String supportEmail,
                        Clock clock,
                        AccountSecurityMailer accountSecurityMailer,
-                       SignInAttemptTracker attemptTracker) {
+                       SignInAttemptTracker attemptTracker,
+                       com.manyorder.api.config.DemoAccount demoAccount) {
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
         this.passwordEncoder = passwordEncoder;
@@ -78,6 +80,7 @@ public class AuthService {
         this.clock = clock;
         this.accountSecurityMailer = accountSecurityMailer;
         this.attemptTracker = attemptTracker;
+        this.demoAccount = demoAccount;
         this.dummyHash = passwordEncoder.encode("sign-in-timing-equalizer");
     }
 
@@ -91,17 +94,20 @@ public class AuthService {
         User user = userRepository.findByEmail(email).orElse(null);
         int threshold = (user != null && user.getRole() == UserRole.PLATFORM_ADMIN)
                 ? MAX_FAILED_ATTEMPTS_ADMIN : MAX_FAILED_ATTEMPTS;
+        // The shared demo account is exempt from the per-email lock and 429 throttle
+        // (many people sign in to it), relying on the per-IP rate limit instead.
+        boolean demo = demoAccount.is(email);
 
         // Already over the per-email failure threshold: refuse with 429 on the same
         // path for an existing and an unknown email, so the response can't reveal
         // which. This is checked before anything else, including a correct password.
-        if (attemptTracker.isThrottled(email, threshold, now)) {
+        if (!demo && attemptTracker.isThrottled(email, threshold, now)) {
             throw tooManyAttempts(attemptTracker.retryAfterSeconds(email, now));
         }
         // An existing account under a database lock is refused the same way. This is
         // the durable, cross-restart guard; a correct password during the lock is
         // still rejected with the identical 429 response.
-        if (user != null && isLocked(user, now)) {
+        if (!demo && user != null && isLocked(user, now)) {
             throw tooManyAttempts(secondsUntil(user.getLockedUntil(), now));
         }
 
@@ -114,14 +120,18 @@ public class AuthService {
         }
 
         if (!passwordOk) {
-            // Existing accounts also get the durable database lock + owner email.
-            if (user != null) {
-                registerFailedAttempt(user, now);
-            }
-            // Every attempt (existing or unknown) is counted in memory per email.
-            int count = attemptTracker.recordFailure(email, now);
-            if (count >= threshold) {
-                throw tooManyAttempts(attemptTracker.retryAfterSeconds(email, now));
+            // The demo account is never locked or throttled by email; a wrong password
+            // is a plain 401 and the per-IP limit bounds abuse.
+            if (!demo) {
+                // Existing accounts also get the durable database lock + owner email.
+                if (user != null) {
+                    registerFailedAttempt(user, now);
+                }
+                // Every attempt (existing or unknown) is counted in memory per email.
+                int count = attemptTracker.recordFailure(email, now);
+                if (count >= threshold) {
+                    throw tooManyAttempts(attemptTracker.retryAfterSeconds(email, now));
+                }
             }
             throw signInFailed();
         }
@@ -138,8 +148,10 @@ public class AuthService {
         }
         requireNotSuspended(user);
         // Remember me extends the session to the longer lifetime, except a platform
-        // admin always gets the standard (short) lifetime whatever the box says.
-        boolean longLived = request.isRemember() && user.getRole() != UserRole.PLATFORM_ADMIN;
+        // admin (and the demo account) always get the standard (short) lifetime.
+        boolean longLived = request.isRemember()
+                && user.getRole() != UserRole.PLATFORM_ADMIN
+                && !demo;
         return toLoginResponse(user, longLived);
     }
 

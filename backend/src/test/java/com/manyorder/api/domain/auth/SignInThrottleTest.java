@@ -72,7 +72,7 @@ class SignInThrottleTest {
         clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
         authService = new AuthService(userRepository, merchantRepository, passwordEncoder, jwtUtil,
                 emailVerificationService, "", "support@manyorder.app", clock, mailer,
-                new SignInAttemptTracker());
+                new SignInAttemptTracker(), new com.manyorder.api.config.DemoAccount("", "manyorder.app@gmail.com"));
     }
 
     private User existingMerchant(String email) {

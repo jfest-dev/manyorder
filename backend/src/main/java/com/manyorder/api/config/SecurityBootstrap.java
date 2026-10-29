@@ -41,17 +41,20 @@ public class SecurityBootstrap implements CommandLineRunner {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final DemoAccount demoAccount;
     private final String adminEmail;
     private final String adminPassword;
     private final String demoPassword;
 
     public SecurityBootstrap(UserRepository userRepository,
                              PasswordEncoder passwordEncoder,
+                             DemoAccount demoAccount,
                              @Value("${app.admin.email:}") String adminEmail,
                              @Value("${app.admin.password:}") String adminPassword,
                              @Value("${app.demo.password:}") String demoPassword) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.demoAccount = demoAccount;
         this.adminEmail = adminEmail == null ? "" : adminEmail.trim();
         this.adminPassword = adminPassword == null ? "" : adminPassword;
         this.demoPassword = demoPassword == null ? "" : demoPassword;
@@ -110,6 +113,11 @@ public class SecurityBootstrap implements CommandLineRunner {
         }
         rotate(DEMO_MERCHANT_EMAIL);
         rotate(DEMO_STAFF_EMAIL);
+        // Also rotate the configured demo account, so rotation still reaches it after
+        // the startup rename moved it off the historical merchant email.
+        if (demoAccount.isEnabled()) {
+            rotate(demoAccount.email());
+        }
     }
 
     private void rotate(String email) {

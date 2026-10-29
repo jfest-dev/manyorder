@@ -63,6 +63,7 @@ public class DataSeeder implements CommandLineRunner {
     private final PasswordEncoder passwordEncoder;
     private final boolean seedDemo;
     private final String demoPassword;
+    private final DemoAccount demoAccount;
 
     public DataSeeder(UserRepository userRepository,
                       MerchantRepository merchantRepository,
@@ -73,7 +74,8 @@ public class DataSeeder implements CommandLineRunner {
                       OrderItemRepository orderItemRepository,
                       PasswordEncoder passwordEncoder,
                       @Value("${app.demo.seed:false}") boolean seedDemo,
-                      @Value("${app.demo.password:}") String demoPassword) {
+                      @Value("${app.demo.password:}") String demoPassword,
+                      DemoAccount demoAccount) {
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
         this.categoryRepository = categoryRepository;
@@ -84,6 +86,7 @@ public class DataSeeder implements CommandLineRunner {
         this.passwordEncoder = passwordEncoder;
         this.seedDemo = seedDemo;
         this.demoPassword = demoPassword == null ? "" : demoPassword;
+        this.demoAccount = demoAccount;
     }
 
     private static final String CLOUD = "https://res.cloudinary.com/tvdpnfdn/image/upload/";
@@ -105,14 +108,19 @@ public class DataSeeder implements CommandLineRunner {
                     + "Set DEMO_PASSWORD to a value of 12 or more characters with no spaces "
                     + "(the value is never logged).");
         }
-        if (userRepository.existsByEmail("manyorder.app@gmail.com")) {
-            return; // already seeded
+        // Already seeded if the demo merchant exists under either its historical email
+        // or the configured DEMO_EMAIL (so a reseed never duplicates it).
+        if (userRepository.existsByEmail(demoAccount.emailFrom())
+                || (demoAccount.isEnabled() && userRepository.existsByEmail(demoAccount.email()))) {
+            return;
         }
 
         String hash = passwordEncoder.encode(demoPassword);
 
+        // A fresh seed uses DEMO_EMAIL when set, else the historical from-address.
+        String demoMerchantEmail = demoAccount.seedEmail();
         // Demo accounts ship pre-verified so recruiters never see the nag banner.
-        User merchantUser = new User("Alex Tan", "manyorder.app@gmail.com", hash, UserRole.MERCHANT);
+        User merchantUser = new User("Alex Tan", demoMerchantEmail, hash, UserRole.MERCHANT);
         merchantUser.setVerified(true);
         merchantUser = userRepository.save(merchantUser);
 

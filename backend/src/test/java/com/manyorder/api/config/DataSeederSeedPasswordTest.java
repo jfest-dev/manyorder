@@ -15,7 +15,8 @@ class DataSeederSeedPasswordTest {
 
     /** Seeder with the given flags and no collaborators: run() must decide before touching any. */
     private static DataSeeder seeder(boolean seedDemo, String demoPassword) {
-        return new DataSeeder(null, null, null, null, null, null, null, null, seedDemo, demoPassword);
+        return new DataSeeder(null, null, null, null, null, null, null, null, seedDemo, demoPassword,
+                new DemoAccount("", "manyorder.app@gmail.com"));
     }
 
     @Test

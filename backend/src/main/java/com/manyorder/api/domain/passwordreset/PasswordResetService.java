@@ -52,6 +52,7 @@ public class PasswordResetService {
     private final PasswordResetTokenRepository tokenRepository;
     private final PasswordResetMailer mailer;
     private final PasswordEncoder passwordEncoder;
+    private final com.manyorder.api.config.DemoAccount demoAccount;
     private final String frontendBaseUrl;
 
     private final SecureRandom secureRandom = new SecureRandom();
@@ -61,11 +62,13 @@ public class PasswordResetService {
                                 PasswordResetTokenRepository tokenRepository,
                                 PasswordResetMailer mailer,
                                 PasswordEncoder passwordEncoder,
+                                com.manyorder.api.config.DemoAccount demoAccount,
                                 @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.mailer = mailer;
         this.passwordEncoder = passwordEncoder;
+        this.demoAccount = demoAccount;
         // Trim a trailing slash so URL building is predictable.
         this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
                 ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
@@ -80,6 +83,11 @@ public class PasswordResetService {
     @Transactional
     public String requestReset(String rawEmail) {
         String email = rawEmail == null ? "" : rawEmail.trim();
+
+        // The demo account cannot use password reset; stay silent like any skip.
+        if (demoAccount.is(email)) {
+            return GENERIC_MESSAGE;
+        }
 
         userRepository.findByEmail(email).ifPresent(user -> {
             LocalDateTime windowStart = LocalDateTime.now().minusMinutes(RATE_WINDOW_MINUTES);
@@ -115,6 +123,10 @@ public class PasswordResetService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_TOKEN_MESSAGE));
 
         User user = token.getUser();
+        // The demo account is never resettable, even via a token issued earlier.
+        if (demoAccount.is(user)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_TOKEN_MESSAGE);
+        }
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         // A successful reset also clears any sign-in lockout, so the owner can log
         // in immediately with the new password.

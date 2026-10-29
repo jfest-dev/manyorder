@@ -38,6 +38,7 @@ public class MerchantStoreController {
     private final CloudinaryImageService imageService;
     private final com.manyorder.api.domain.storeemailverification.StoreEmailVerificationService storeEmailVerificationService;
     private final SlugService slugService;
+    private final com.manyorder.api.config.DemoAccount demoAccount;
     private final String supportEmail;
 
     public MerchantStoreController(MerchantRepository merchantRepository,
@@ -48,6 +49,7 @@ public class MerchantStoreController {
                                    CloudinaryImageService imageService,
                                    com.manyorder.api.domain.storeemailverification.StoreEmailVerificationService storeEmailVerificationService,
                                    SlugService slugService,
+                                   com.manyorder.api.config.DemoAccount demoAccount,
                                    @org.springframework.beans.factory.annotation.Value("${app.support.email:support@manyorder.app}") String supportEmail) {
         this.merchantRepository = merchantRepository;
         this.currentUserService = currentUserService;
@@ -57,6 +59,7 @@ public class MerchantStoreController {
         this.imageService = imageService;
         this.storeEmailVerificationService = storeEmailVerificationService;
         this.slugService = slugService;
+        this.demoAccount = demoAccount;
         this.supportEmail = supportEmail;
     }
 
@@ -188,6 +191,9 @@ public class MerchantStoreController {
                              @Valid @RequestBody ArchiveStoreRequest request,
                              Authentication authentication) {
         User user = requireMerchant(authentication);
+        if (demoAccount.is(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This is a demo account.");
+        }
         Merchant merchant = storeAccessService.requireOwnedStore(user, storeId);
 
         if (!passwordEncoder.matches(request.getPassword().trim(), user.getPasswordHash())) {

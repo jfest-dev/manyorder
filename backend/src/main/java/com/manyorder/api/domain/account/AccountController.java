@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.manyorder.api.config.DemoAccount;
 import com.manyorder.api.domain.auth.AuthService;
 import com.manyorder.api.domain.auth.LoginResponse;
 import com.manyorder.api.domain.user.User;
@@ -31,21 +32,25 @@ public class AccountController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthService authService;
+    private final DemoAccount demoAccount;
 
     public AccountController(CurrentUserService currentUserService,
                             UserRepository userRepository,
                             PasswordEncoder passwordEncoder,
-                            AuthService authService) {
+                            AuthService authService,
+                            DemoAccount demoAccount) {
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authService = authService;
+        this.demoAccount = demoAccount;
     }
 
-    /** The signed-in user's own account details (name, email, phone, verified). */
+    /** The signed-in user's own account details (name, email, phone, verified, demo). */
     @GetMapping
     public AccountResponse me(Authentication authentication) {
-        return AccountResponse.from(currentUserService.require(authentication));
+        User user = currentUserService.require(authentication);
+        return AccountResponse.from(user, demoAccount.is(user));
     }
 
     /**
@@ -66,7 +71,7 @@ public class AccountController {
         user.setFullName(name);
         user.setPhone(phone.isEmpty() ? null : phone);
         userRepository.save(user);
-        return AccountResponse.from(user);
+        return AccountResponse.from(user, demoAccount.is(user));
     }
 
     /**
@@ -80,6 +85,9 @@ public class AccountController {
     public LoginResponse changePassword(@Valid @RequestBody ChangePasswordRequest request,
                                         Authentication authentication) {
         User user = currentUserService.require(authentication);
+        if (demoAccount.is(user)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This is a demo account.");
+        }
         com.manyorder.api.common.Passwords.requireNoWhitespace(request.getNewPassword());
         com.manyorder.api.common.Passwords.requireWithinMaxLength(request.getNewPassword());
 

@@ -11,12 +11,14 @@ public record AccountResponse(
         UserRole role,
         boolean verified,
         String phone,
-        Long staffStoreId) {
+        Long staffStoreId,
+        boolean demo) {
 
-    public static AccountResponse from(User user) {
+    public static AccountResponse from(User user, boolean demo) {
         return new AccountResponse(
                 user.getId(), user.getFullName(), user.getEmail(), user.getRole(),
                 user.isVerified(), user.getPhone(),
-                user.getStaffStore() == null ? null : user.getStaffStore().getId());
+                user.getStaffStore() == null ? null : user.getStaffStore().getId(),
+                demo);
     }
 }

@@ -35,6 +35,9 @@ export function AccountSettings() {
   const [toast, setToast] = useState<string | null>(null);
 
   const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent'>('idle');
+  // A protected demo account cannot change its password; the password actions are
+  // hidden and a note is shown instead (the server enforces this regardless).
+  const [demo, setDemo] = useState(false);
 
   // Change password (moved here from the store settings).
   const [currentPassword, setCurrentPassword] = useState('');
@@ -50,7 +53,7 @@ export function AccountSettings() {
       .then((a) => {
         if (cancelled) return;
         setEmail(a.email); setVerified(a.verified); setName(a.fullName);
-        setPhone(a.phone ?? '');
+        setPhone(a.phone ?? ''); setDemo(a.demo);
       })
       .catch((e) => { if (!cancelled) setLoadError(e instanceof ApiError ? e.message : 'Could not load your account'); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -176,37 +179,48 @@ export function AccountSettings() {
         </div>
       </div>
 
-      <div style={sectionCard}>
-        <p className="text-small" style={{ fontWeight: 600, marginBottom: '12px' }}>Change Password</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '420px' }}>
-          <PasswordField label="Current Password" value={currentPassword}
-            onChange={(v) => { setCurrentPassword(v); if (pwError) setPwError(''); }} placeholder="Your current password" />
-          <PasswordField label="New Password" value={newPassword}
-            onChange={(v) => { setNewPassword(v); if (pwError) setPwError(''); }} placeholder={PASSWORD_RULE_TEXT} />
-          <PasswordField label="Confirm New Password" value={confirmPassword}
-            onChange={(v) => { setConfirmPassword(v); if (pwError) setPwError(''); }} placeholder="Repeat your password" />
+      {demo ? (
+        <div style={sectionCard}>
+          <p className="text-small" style={{ fontWeight: 600 }}>This is a demo account.</p>
+          <p className="text-small" style={{ color: 'var(--text-secondary)', marginTop: '6px' }}>
+            Password and sign-out actions are disabled for the demo.
+          </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '20px' }}>
-          <Button variant="primary" onClick={changePassword} disabled={pwSaving || !canChangePassword}>
-            {pwSaving ? 'Updating…' : 'Update password'}
-          </Button>
-          {pwSaved && <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Password updated</span>}
-          {pwError && <span className="text-small" style={{ color: 'var(--error-color)' }}>{pwError}</span>}
-        </div>
-      </div>
+      ) : (
+        <>
+          <div style={sectionCard}>
+            <p className="text-small" style={{ fontWeight: 600, marginBottom: '12px' }}>Change Password</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '420px' }}>
+              <PasswordField label="Current Password" value={currentPassword}
+                onChange={(v) => { setCurrentPassword(v); if (pwError) setPwError(''); }} placeholder="Your current password" />
+              <PasswordField label="New Password" value={newPassword}
+                onChange={(v) => { setNewPassword(v); if (pwError) setPwError(''); }} placeholder={PASSWORD_RULE_TEXT} />
+              <PasswordField label="Confirm New Password" value={confirmPassword}
+                onChange={(v) => { setConfirmPassword(v); if (pwError) setPwError(''); }} placeholder="Repeat your password" />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '20px' }}>
+              <Button variant="primary" onClick={changePassword} disabled={pwSaving || !canChangePassword}>
+                {pwSaving ? 'Updating…' : 'Update password'}
+              </Button>
+              {pwSaved && <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Password updated</span>}
+              {pwError && <span className="text-small" style={{ color: 'var(--error-color)' }}>{pwError}</span>}
+            </div>
+          </div>
 
-      <div style={sectionCard}>
-        <p className="text-small" style={{ fontWeight: 600, marginBottom: '4px' }}>Sign out everywhere</p>
-        <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
-          Signs you out on all other devices.
-        </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Button variant="secondary" onClick={signOutEverywhere} disabled={signOutState === 'working'}>
-            {signOutState === 'working' ? 'Signing out…' : 'Sign out everywhere'}
-          </Button>
-          {signOutState === 'done' && <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Other devices signed out</span>}
-        </div>
-      </div>
+          <div style={sectionCard}>
+            <p className="text-small" style={{ fontWeight: 600, marginBottom: '4px' }}>Sign out everywhere</p>
+            <p className="text-small" style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              Signs you out on all other devices.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Button variant="secondary" onClick={signOutEverywhere} disabled={signOutState === 'working'}>
+                {signOutState === 'working' ? 'Signing out…' : 'Sign out everywhere'}
+              </Button>
+              {signOutState === 'done' && <span className="text-small" style={{ color: SUCCESS_GREEN, fontWeight: 500 }}>Other devices signed out</span>}
+            </div>
+          </div>
+        </>
+      )}
 
       {toast && <Toast message={toast} />}
     </div>

@@ -77,6 +77,13 @@ app:
   demo:
     seed: ${SEED_DEMO:false}
     password: ${DEMO_PASSWORD:}
+    # Optional protected demo account. Empty = feature off. When set, this account
+    # cannot change its password/email, archive a store or use password reset, always
+    # gets a 24h session, and is exempt from the per-email sign-in lock/throttle (the
+    # per-IP limit still applies). email-from is the previously seeded demo email that
+    # a one-time startup rename moves to email.
+    email: ${DEMO_EMAIL:}
+    email-from: ${DEMO_EMAIL_FROM:manyorder.app@gmail.com}
   frontend:
     # Base URL the emailed reset link points back to.
     base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}

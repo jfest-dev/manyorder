@@ -40,9 +40,9 @@ public class SignInAttemptTracker {
 
     private final Clock clock;
     private final int maxEntries;
-    private final LinkedHashMap<String, Entry> entries;
+    private final LinkedHashMap<String, Window> entries;
 
-    private static final class Entry {
+    private static final class Window {
         int count;
         LocalDateTime expiresAt;
     }
@@ -55,7 +55,7 @@ public class SignInAttemptTracker {
         this.entries = new LinkedHashMap<>(256, 0.75f, false) {
             private static final long serialVersionUID = 1L;
             @Override
-            protected boolean removeEldestEntry(Map.Entry<String, Entry> eldest) {
+            protected boolean removeEldestEntry(Map.Entry<String, Window> eldest) {
                 return size() > SignInAttemptTracker.this.maxEntries;
             }
         };
@@ -84,7 +84,7 @@ public class SignInAttemptTracker {
     /** True when this email has reached the threshold and the window has not lapsed. */
     boolean isThrottled(String email, int threshold, LocalDateTime now) {
         synchronized (entries) {
-            Entry e = entries.get(hash(email));
+            Window e = entries.get(hash(email));
             return e != null && now.isBefore(e.expiresAt) && e.count >= threshold;
         }
     }
@@ -95,9 +95,9 @@ public class SignInAttemptTracker {
     int recordFailure(String email, LocalDateTime now) {
         String key = hash(email);
         synchronized (entries) {
-            Entry e = entries.remove(key);
+            Window e = entries.remove(key);
             if (e == null || !now.isBefore(e.expiresAt)) {
-                e = new Entry();
+                e = new Window();
             }
             e.count++;
             e.expiresAt = now.plusMinutes(WINDOW_MINUTES);
@@ -109,7 +109,7 @@ public class SignInAttemptTracker {
     /** Whole seconds until the current window lapses (0 when there is no live entry). */
     long retryAfterSeconds(String email, LocalDateTime now) {
         synchronized (entries) {
-            Entry e = entries.get(hash(email));
+            Window e = entries.get(hash(email));
             if (e == null || !now.isBefore(e.expiresAt)) {
                 return 0;
             }

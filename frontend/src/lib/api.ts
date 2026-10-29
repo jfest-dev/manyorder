@@ -526,6 +526,7 @@ export interface AccountDetails {
   verified: boolean;
   phone: string | null;
   staffStoreId: number | null;
+  demo: boolean;
 }
 
 export const accountApi = {

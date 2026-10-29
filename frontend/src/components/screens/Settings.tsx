@@ -4,7 +4,7 @@ import { Button } from '../Button';
 import { FieldInput, FieldSelect } from '../Field';
 import { Checkbox } from '../Checkbox';
 import { PasswordField } from '../PasswordField';
-import { storesApi, uploadsApi, ordersApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
+import { storesApi, uploadsApi, ordersApi, accountApi, StoreResponse, UpdateStorePayload, ApiError } from '../../lib/api';
 import { cloudinaryImage, cloudinarySrcSet } from '../../lib/cloudinary';
 import { validatePickedImage, IMAGE_RULE_TEXT, ALLOWED_IMAGE_ACCEPT } from '../../lib/image';
 import { useConfirm } from '../ConfirmDialog';
@@ -111,6 +111,16 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [resendIn, setResendIn] = useState(0);
   const [emailToast, setEmailToast] = useState<string | null>(null);
+  // A protected demo account cannot delete/archive a store; the action is hidden
+  // (the server enforces this regardless).
+  const [demo, setDemo] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try { const a = await accountApi.me(); if (!cancelled) setDemo(a.demo); } catch { /* non-fatal */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Tick the resend cooldown down to zero.
   useEffect(() => {
@@ -728,9 +738,13 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
             This permanently deletes the store, including all its orders, products, and customers.
             This action cannot be undone.
           </p>
-          <Button variant="secondary" onClick={() => setShowArchive(true)}>
-            <span style={{ color: 'var(--error-color)', fontWeight: 600 }}>Delete this store</span>
-          </Button>
+          {demo ? (
+            <p className="text-small" style={{ fontWeight: 600 }}>This is a demo account.</p>
+          ) : (
+            <Button variant="secondary" onClick={() => setShowArchive(true)}>
+              <span style={{ color: 'var(--error-color)', fontWeight: 600 }}>Delete this store</span>
+            </Button>
+          )}
         </div>
       </div>
       )}

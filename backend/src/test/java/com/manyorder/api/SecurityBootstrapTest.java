@@ -26,7 +26,9 @@ class SecurityBootstrapTest {
     private final UserRepository userRepository = mock(UserRepository.class);
 
     private SecurityBootstrap bootstrap(String adminEmail, String adminPassword, String demoPassword) {
-        return new SecurityBootstrap(userRepository, encoder, adminEmail, adminPassword, demoPassword);
+        return new SecurityBootstrap(userRepository, encoder,
+                new com.manyorder.api.config.DemoAccount("", "manyorder.app@gmail.com"),
+                adminEmail, adminPassword, demoPassword);
     }
 
     @Test
