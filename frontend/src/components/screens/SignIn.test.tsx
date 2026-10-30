@@ -125,15 +125,17 @@ describe('SignIn', () => {
       // Drawn exactly once, after the client id resolves.
       await waitFor(() => expect(renderButton).toHaveBeenCalledTimes(1));
       const container = renderButton.mock.calls[0][0] as HTMLElement;
-      const widthBefore = container.style.width;
-      expect(widthBefore).toBe('356px');
+      // Fixed box: full width capped at 356, so a draw never reflows the card.
+      expect(container.style.maxWidth).toBe('356px');
+      expect(container.style.height).toBe('44px');
+      const boxBefore = { width: container.style.width, maxWidth: container.style.maxWidth, height: container.style.height };
 
       await user.type(screen.getByPlaceholderText('you@example.com'), 'a@b.com');
       await user.type(screen.getByPlaceholderText('Enter your password'), 'password123');
 
       // Typing never re-initializes/redraws the button, and its box never resizes.
       expect(renderButton).toHaveBeenCalledTimes(1);
-      expect(container.style.width).toBe(widthBefore);
+      expect({ width: container.style.width, maxWidth: container.style.maxWidth, height: container.style.height }).toEqual(boxBefore);
     } finally {
       delete (window as any).google;
     }
