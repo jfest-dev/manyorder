@@ -714,12 +714,15 @@ body {
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
-/* Zoom lock. touch-action: manipulation removes the double-tap-to-zoom delay and
-   gesture; the viewport meta + gesture listeners (installZoomLock) handle pinch.
-   Form controls are forced to 16px on phones so iOS Safari does not zoom the page
-   when a field gains focus. This is a deliberate accessibility trade-off (see the
+/* Zoom lock. touch-action: pan-x pan-y keeps one-finger scrolling but disables
+   pinch-zoom and double-tap zoom; the two-finger touch guard + viewport meta
+   (installZoomLock) enforce it on Safari, with a visualViewport reset if a zoom
+   still slips through. Form controls are 16px on phones so iOS Safari does not zoom
+   the page on focus; input[class] out-specifies the 13px .text-small utility, so no
+   !important is needed. This is a deliberate accessibility trade-off (see the
    private-docs note). */
-html { touch-action: manipulation; }
+html, body { touch-action: pan-x pan-y; }
 @media (max-width: 767px) {
-  input, select, textarea { font-size: 16px !important; }
+  input, select, textarea,
+  input[class], select[class], textarea[class] { font-size: 16px; }
 }
