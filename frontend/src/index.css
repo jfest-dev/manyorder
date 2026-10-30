@@ -717,11 +717,18 @@ body {
 /* Zoom lock. touch-action: pan-x pan-y keeps one-finger scrolling but disables
    pinch-zoom and double-tap zoom; the two-finger touch guard + viewport meta
    (installZoomLock) enforce it on Safari, with a visualViewport reset if a zoom
-   still slips through. Form controls are 16px on phones so iOS Safari does not zoom
-   the page on focus; input[class] out-specifies the 13px .text-small utility, so no
-   !important is needed. This is a deliberate accessibility trade-off (see the
+   still slips through. This is a deliberate accessibility trade-off (see the
    private-docs note). */
 html, body { touch-action: pan-x pan-y; }
+
+/* WORKAROUND (not a per-component fix): phones get 16px form controls so iOS Safari
+   does not zoom the page on focus. The root cause is that native input/select/textarea
+   carry the 13px .text-small typography utility, and that is applied directly at ~40
+   call sites across ~25 files (not only via a shared Field component), so fixing it "by
+   design" in the components would miss raw inputs and risk reintroducing the zoom. This
+   single element-level rule covers every form control; input[class] out-specifies the
+   .text-small utility (0,1,1 vs 0,1,0) so no !important is needed. Revisit if the form
+   inputs are ever unified behind one component. */
 @media (max-width: 767px) {
   input, select, textarea,
   input[class], select[class], textarea[class] { font-size: 16px; }
