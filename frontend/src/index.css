@@ -713,3 +713,13 @@ body {
    offers carousel). Applied via className="no-scrollbar". */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Zoom lock. touch-action: manipulation removes the double-tap-to-zoom delay and
+   gesture; the viewport meta + gesture listeners (installZoomLock) handle pinch.
+   Form controls are forced to 16px on phones so iOS Safari does not zoom the page
+   when a field gains focus. This is a deliberate accessibility trade-off (see the
+   private-docs note). */
+html { touch-action: manipulation; }
+@media (max-width: 767px) {
+  input, select, textarea { font-size: 16px !important; }
+}

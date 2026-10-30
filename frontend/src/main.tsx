@@ -4,9 +4,11 @@ import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { loadCloudflareAnalytics } from './lib/analytics';
+import { installZoomLock } from './lib/zoomLock';
 import './index.css';
 
 loadCloudflareAnalytics();
+installZoomLock();
 
 createRoot(document.getElementById('root')!).render(
   <BrowserRouter>
