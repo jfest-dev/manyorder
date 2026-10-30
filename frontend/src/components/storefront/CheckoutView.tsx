@@ -4,10 +4,12 @@ import { formatMoney } from '../../lib/currency';
 import { formatPreorderReady } from '../../lib/datetime';
 import { DEFAULT_DELIVERY_TBC_MESSAGE } from '../../lib/delivery';
 import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from '../../lib/offers';
+import { reasonText, offerUnmetReasons } from '../../lib/discountReasons';
 import { NoteBlock } from '../NoteBlock';
 import {
   storefrontApi, ApiError,
   type PublicStoreResponse, type GuestCheckoutResult, type FulfilmentMethod, type PublicOffer,
+  type DiscountReason,
 } from '../../lib/api';
 import type { CartLine } from './storefrontTypes';
 import { cartLineToCheckoutItem } from '../../lib/cart';
@@ -65,7 +67,10 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
 
   const [code, setCode] = useState('');
   const [applied, setApplied] = useState<{ code: string; amount: number; freeDelivery: boolean; deliveryDiscount: number } | null>(null);
-  const [discountError, setDiscountError] = useState<string | null>(null);
+  // Every unmet condition for the code the customer just tried (empty when none).
+  const [reasons, setReasons] = useState<DiscountReason[]>([]);
+  // A one-line notice when an applied code stopped applying after a cart/fulfilment change.
+  const [codeNotice, setCodeNotice] = useState<string | null>(null);
   const [checkingCode, setCheckingCode] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
@@ -94,15 +99,24 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
   const deliveryWaived = applied?.deliveryDiscount ?? 0;
   const total = Math.max(0, subtotal + deliveryFee - discount - deliveryWaived);
 
+  // The cart as the server sees it; a stable signature drives re-evaluation of an
+  // applied code whenever the cart changes (add/remove/quantity/modifiers).
+  const checkoutItems = useMemo(() => items.map(cartLineToCheckoutItem), [items]);
+  const itemsSignature = useMemo(() => JSON.stringify(checkoutItems), [checkoutItems]);
+  const cartProductIds = useMemo(() => items.map((l) => l.product.id), [items]);
+
   const applyCode = async (raw?: string) => {
     const entered = (raw ?? code).trim();
     if (!entered) return;
     setCheckingCode(true);
-    setDiscountError(null);
+    setReasons([]);
+    setCodeNotice(null);
     try {
       // Send the cart items (not a subtotal) so the server prices them and a
       // product-specific code is measured against exactly its matching lines.
-      const res = await storefrontApi.validateDiscount({
+      // Evaluate (not validate): a 200 with every unmet condition, so all reasons
+      // show at once rather than one-at-a-time rejections.
+      const res = await storefrontApi.evaluateDiscount({
         merchantId: store.id,
         code: entered,
         fulfilmentMethod: fulfilment,
@@ -110,18 +124,60 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
         // real history; blank is tolerated (assumed first-order, enforced at submit).
         customerPhone: phone.trim() || undefined,
         customerEmail: email.trim() || undefined,
-        items: items.map(cartLineToCheckoutItem),
+        items: checkoutItems,
       });
-      setApplied({ code: res.code, amount: res.discountAmount, freeDelivery: res.freeDelivery, deliveryDiscount: res.deliveryDiscount });
-    } catch (e) {
+      if (res.status === 'APPLIED') {
+        setApplied({ code: res.code ?? entered, amount: res.discountAmount, freeDelivery: res.freeDelivery, deliveryDiscount: res.deliveryDiscount });
+        setReasons([]);
+      } else {
+        setApplied(null);
+        // INVALID carries no reasons; show the single "isn't valid" line.
+        setReasons(res.reasons.length > 0 ? res.reasons : [{ code: 'INVALID', amount: null, productName: null }]);
+      }
+    } catch {
+      // Network/unexpected error - treat as not applicable, show the generic line.
       setApplied(null);
-      setDiscountError(e instanceof ApiError ? e.message : 'Could not apply that code.');
+      setReasons([{ code: 'INVALID', amount: null, productName: null }]);
     } finally {
       setCheckingCode(false);
     }
   };
 
-  const clearCode = () => { setApplied(null); setCode(''); setDiscountError(null); };
+  const clearCode = () => { setApplied(null); setCode(''); setReasons([]); setCodeNotice(null); };
+
+  // Re-evaluate the applied code when the cart or fulfilment changes. If it stops
+  // applying (e.g. the subtotal drops below the minimum, or the customer switches
+  // to pickup with a delivery code), drop it and say why - the server is still the
+  // final check at submit, this just keeps the shown total honest. Depends on the
+  // code STRING (not the applied object) so refreshing its amount can't loop.
+  const appliedCode = applied?.code ?? null;
+  useEffect(() => {
+    if (!appliedCode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await storefrontApi.evaluateDiscount({
+          merchantId: store.id,
+          code: appliedCode,
+          fulfilmentMethod: fulfilment,
+          customerPhone: phone.trim() || undefined,
+          customerEmail: email.trim() || undefined,
+          items: checkoutItems,
+        });
+        if (cancelled) return;
+        if (res.status === 'APPLIED') {
+          setApplied({ code: res.code ?? appliedCode, amount: res.discountAmount, freeDelivery: res.freeDelivery, deliveryDiscount: res.deliveryDiscount });
+          setCodeNotice(null);
+        } else {
+          setApplied(null);
+          const why = res.reasons.map((r) => reasonText(r, currency)).join('. ');
+          setCodeNotice(`${appliedCode} no longer applies${why ? `: ${why}` : ''}.`);
+        }
+      } catch { /* leave the applied code as-is; submit re-checks */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedCode, itemsSignature, fulfilment]);
 
   // Tap a public offer to apply it like any code (validated the same way, no typing).
   const applyOffer = (o: PublicOffer) => {
@@ -260,7 +316,14 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
               </button>
             </div>
           )}
-          {discountError && <p style={{ fontSize: '12px', color: '#B91C1C', marginTop: '6px' }}>{discountError}</p>}
+          {codeNotice && <p style={{ fontSize: '12px', color: '#92400E', marginTop: '6px' }}>{codeNotice}</p>}
+          {reasons.length > 0 && (
+            <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              {reasons.map((r, i) => (
+                <p key={`${r.code}-${i}`} style={{ fontSize: '12px', color: '#B91C1C', margin: 0 }}>{reasonText(r, currency)}</p>
+              ))}
+            </div>
+          )}
 
           {/* Available offers: the store's public codes, shown inline right under the
               promo field. Tap Apply to apply one (validated like any code, no typing).
@@ -280,6 +343,11 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
                   const conditions = offerConditions(o, currency) || 'No conditions';
                   const expiry = offerExpiry(o) || 'No expiry';
                   const isApplied = applied?.code?.toUpperCase() === o.code.toUpperCase();
+                  // Why this offer doesn't apply to the current cart (min spend,
+                  // pickup vs delivery-only, missing product). Re-computed every
+                  // render, so it tracks cart/fulfilment changes live.
+                  const unmet = isApplied ? [] : offerUnmetReasons(o, { subtotal, delivery: isDelivery, productIds: cartProductIds });
+                  const blocked = unmet.length > 0;
                   return (
                     <div key={o.code} style={{ border: '1px solid var(--border-subtle)', borderRadius: '10px', padding: '10px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -296,12 +364,21 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
                         </button>
                         <button
                           onClick={() => applyOffer(o)}
-                          disabled={checkingCode || isApplied}
-                          style={{ flexShrink: 0, padding: '0 14px', height: '34px', borderRadius: '8px', border: 'none', cursor: checkingCode || isApplied ? 'default' : 'pointer', background: isApplied ? 'var(--border-subtle)' : accent, color: isApplied ? 'var(--text-secondary)' : 'white', fontSize: '13px', fontWeight: 600 }}
+                          disabled={checkingCode || isApplied || blocked}
+                          style={{ flexShrink: 0, padding: '0 14px', height: '34px', borderRadius: '8px', border: 'none', cursor: checkingCode || isApplied || blocked ? 'default' : 'pointer', background: isApplied ? 'var(--border-subtle)' : blocked ? 'var(--border-subtle)' : accent, color: isApplied || blocked ? 'var(--text-secondary)' : 'white', fontSize: '13px', fontWeight: 600 }}
                         >
                           {isApplied ? 'Applied' : 'Apply'}
                         </button>
                       </div>
+                      {/* Why it can't be applied yet, under the row (greyed, always
+                          visible, not hidden behind the accordion). */}
+                      {blocked && (
+                        <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                          {unmet.map((r, i) => (
+                            <span key={`${r.code}-${i}`} className="text-xs" style={{ color: 'var(--text-muted)' }}>{reasonText(r, currency)}</span>
+                          ))}
+                        </div>
+                      )}
                       {expanded && (
                         <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
                           <span>{offerScopeLabel(o)} · {conditions}</span>

@@ -487,6 +487,53 @@ public class GuestCheckoutController {
                                              boolean freeDelivery, BigDecimal deliveryDiscount) {}
 
     /**
+     * Evaluate a code against the current cart WITHOUT rejecting: always 200, with a
+     * status (APPLIED / NOT_AVAILABLE / INVALID) and, when not available, every unmet
+     * condition as a structured reason the storefront renders into its own wording.
+     * This powers the richer apply UI (all reasons at once, re-evaluated as the cart
+     * or fulfilment changes); {@code /validate} stays the throwing form, and the real
+     * redeem at checkout is still the final gate.
+     */
+    @PostMapping("/discounts/evaluate")
+    @Transactional(readOnly = true)
+    public DiscountEvaluationResponse evaluateDiscount(@Valid @RequestBody DiscountValidationRequest request) {
+        Merchant merchant = merchantRepository.findById(request.getMerchantId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found"));
+        if (merchant.isArchived()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Store not found");
+        }
+        List<DiscountService.LineAmount> lines = resolveLineAmounts(merchant, request.getItems());
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (DiscountService.LineAmount l : lines) subtotal = subtotal.add(l.lineTotal());
+        OrderType orderType = "DELIVERY".equalsIgnoreCase(request.getFulfilmentMethod())
+                ? OrderType.DELIVERY : OrderType.PICKUP;
+        DeliveryQuote quote = computeDeliveryFee(merchant, orderType, subtotal);
+        DiscountService.DeliveryContext ctx = new DiscountService.DeliveryContext(
+                orderType == OrderType.DELIVERY, quote.fee(), quote.pending());
+        boolean firstOrder = orderService.isFirstOrderForContact(
+                merchant, request.getCustomerEmail(), request.getCustomerPhone());
+
+        DiscountService.Evaluation e =
+                discountService.evaluate(merchant, request.getCode(), lines, ctx, firstOrder);
+        List<DiscountReason> reasons = e.reasons().stream()
+                .map(r -> new DiscountReason(r.code().name(), r.amount(), r.productName()))
+                .toList();
+        return new DiscountEvaluationResponse(
+                e.status().name(), e.code(), e.amount(), e.freeDelivery(), e.deliveryDiscount(), reasons);
+    }
+
+    /** One structured reason for the storefront to render (code + optional amount /
+     *  product label). The client formats money in the store's currency. */
+    public record DiscountReason(String code, BigDecimal amount, String productName) {}
+
+    /** status is APPLIED / NOT_AVAILABLE / INVALID. On APPLIED, discountAmount /
+     *  freeDelivery / deliveryDiscount describe the effect; otherwise reasons lists
+     *  why (empty for INVALID - nothing is revealed about an unknown code). */
+    public record DiscountEvaluationResponse(String status, String code, BigDecimal discountAmount,
+                                             boolean freeDelivery, BigDecimal deliveryDiscount,
+                                             List<DiscountReason> reasons) {}
+
+    /**
      * Public order lookup by order number + phone, scoped to the store. Lets a
      * customer who navigated away pull their confirmation back up (and re-open the
      * WhatsApp hand-off). A wrong phone, a foreign store, or a missing order all

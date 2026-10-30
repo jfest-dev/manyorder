@@ -3,8 +3,10 @@ package com.manyorder.api.domain.discount;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.http.HttpStatus;
@@ -372,6 +374,100 @@ public class DiscountService {
     public record Redemption(String code, BigDecimal amount, boolean storeWide, Set<Long> productIds,
                              boolean freeDelivery, BigDecimal deliveryDiscount, boolean canStackWithSale,
                              boolean partialDelivery) {}
+
+    // ---------- evaluation (non-throwing, all reasons at once) ----------
+
+    /** Whether a code applies, could apply, or isn't a real code at all. */
+    public enum EvalStatus { APPLIED, NOT_AVAILABLE, INVALID }
+
+    /** One structured reason a code doesn't apply. {@code amount} carries the
+     *  MIN_SPEND shortfall (how much more to spend); {@code productName} carries
+     *  the PRODUCT_SCOPE label. Both null for reasons that need no parameter. */
+    public record Reason(DiscountReasonCode code, BigDecimal amount, String productName) {
+        public static Reason of(DiscountReasonCode code) { return new Reason(code, null, null); }
+    }
+
+    /**
+     * The full picture for one code against one cart, computed WITHOUT throwing so
+     * the storefront can show every unmet condition at once (and auto-drop a code
+     * that has stopped applying). APPLIED carries the concrete effect (product
+     * amount, or a free/partial delivery waiver); NOT_AVAILABLE carries one or more
+     * reasons; INVALID means no such code (the only thing revealed for an unknown
+     * code, so private codes stay hidden until typed correctly). This mirrors the
+     * gates in {@link #resolve} and {@link #requireRedeemable} exactly, so a preview
+     * and the final redeem at checkout always agree.
+     */
+    public record Evaluation(EvalStatus status, String code, BigDecimal amount,
+                             boolean freeDelivery, BigDecimal deliveryDiscount, List<Reason> reasons) {}
+
+    @Transactional(readOnly = true)
+    public Evaluation evaluate(Merchant merchant, String rawCode, List<LineAmount> lines,
+                               DeliveryContext delivery, boolean firstOrder) {
+        Optional<Discount> found = discountRepository
+                .findByMerchantAndCodeIgnoreCase(merchant, normalizeCode(rawCode));
+        if (found.isEmpty()) {
+            return new Evaluation(EvalStatus.INVALID, null, BigDecimal.ZERO, false, BigDecimal.ZERO, List.of());
+        }
+        Discount d = found.get();
+
+        // Lifecycle gates are terminal: an off/not-yet/expired/used-up code is a
+        // single plain reason, not combined with eligibility hints.
+        LocalDateTime now = LocalDateTime.now();
+        if (!d.isActive()) return terminal(d, DiscountReasonCode.INACTIVE);
+        if (d.getStartsAt() != null && now.isBefore(d.getStartsAt())) return terminal(d, DiscountReasonCode.NOT_STARTED);
+        if (d.getEndsAt() != null && now.isAfter(d.getEndsAt())) return terminal(d, DiscountReasonCode.EXPIRED);
+        if (d.getUsageLimit() != null && d.getUsedCount() >= d.getUsageLimit()) return terminal(d, DiscountReasonCode.USAGE_LIMIT);
+
+        // Eligibility gates, gathered together so several can show at once.
+        List<Reason> reasons = new ArrayList<>();
+        if (d.isFirstOrderOnly() && !firstOrder) reasons.add(Reason.of(DiscountReasonCode.FIRST_ORDER_ONLY));
+
+        BigDecimal fullSubtotal = BigDecimal.ZERO;
+        for (LineAmount line : lines) fullSubtotal = fullSubtotal.add(line.lineTotal());
+        if (d.getMinSpend() != null && fullSubtotal.compareTo(d.getMinSpend()) < 0) {
+            reasons.add(new Reason(DiscountReasonCode.MIN_SPEND, d.getMinSpend().subtract(fullSubtotal), null));
+        }
+
+        if (d.getType() == DiscountType.FREE_DELIVERY || d.isAppliesToDelivery()) {
+            boolean full = d.getType() == DiscountType.FREE_DELIVERY;
+            if (delivery == null || !delivery.delivery()) {
+                reasons.add(Reason.of(DiscountReasonCode.DELIVERY_ONLY));
+            } else if (!full && delivery.pending()) {
+                reasons.add(Reason.of(DiscountReasonCode.DELIVERY_PENDING));
+            } else if (!delivery.pending() && delivery.fee().signum() == 0) {
+                reasons.add(Reason.of(DiscountReasonCode.DELIVERY_ALREADY_FREE));
+            }
+        } else {
+            // Product discount: scope + sale-stacking checks on the matching lines.
+            BigDecimal inScope = BigDecimal.ZERO;
+            BigDecimal discountable = BigDecimal.ZERO;
+            boolean excludedSaleLine = false;
+            for (LineAmount line : lines) {
+                if (!(d.isStoreWide() || d.getProductIds().contains(line.productId()))) continue;
+                inScope = inScope.add(line.lineTotal());
+                if (line.onSale() && !d.isCanStackWithSale()) { excludedSaleLine = true; continue; }
+                discountable = discountable.add(line.lineTotal());
+            }
+            if (!d.isStoreWide() && inScope.signum() == 0) {
+                reasons.add(new Reason(DiscountReasonCode.PRODUCT_SCOPE, null, scopeLabelFor(merchant, d)));
+            } else if (discountable.signum() == 0 && excludedSaleLine) {
+                reasons.add(Reason.of(DiscountReasonCode.SALE_CONFLICT));
+            }
+        }
+
+        if (!reasons.isEmpty()) {
+            return new Evaluation(EvalStatus.NOT_AVAILABLE, d.getCode(), BigDecimal.ZERO, false, BigDecimal.ZERO, reasons);
+        }
+        // Every gate passed, so resolve() computes the effect without throwing.
+        Redemption r = resolve(d, lines, delivery, firstOrder);
+        return new Evaluation(EvalStatus.APPLIED, d.getCode(), r.amount(),
+                r.freeDelivery(), r.deliveryDiscount(), List.of());
+    }
+
+    private Evaluation terminal(Discount d, DiscountReasonCode code) {
+        return new Evaluation(EvalStatus.NOT_AVAILABLE, d.getCode(), BigDecimal.ZERO, false,
+                BigDecimal.ZERO, List.of(Reason.of(code)));
+    }
 
     // ---------- helpers ----------
 

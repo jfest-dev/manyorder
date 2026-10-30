@@ -1062,6 +1062,31 @@ export interface DiscountValidationResult {
   deliveryDiscount: number;
 }
 
+/** Mirrors the server's DiscountReasonCode (see discountReasons.ts for wording). */
+export type DiscountReasonCode =
+  | 'INACTIVE' | 'NOT_STARTED' | 'EXPIRED' | 'USAGE_LIMIT' | 'FIRST_ORDER_ONLY'
+  | 'MIN_SPEND' | 'PRODUCT_SCOPE' | 'SALE_CONFLICT'
+  | 'DELIVERY_ONLY' | 'DELIVERY_PENDING' | 'DELIVERY_ALREADY_FREE' | 'INVALID';
+
+/** One structured reason a code does not apply. */
+export interface DiscountReason {
+  code: DiscountReasonCode;
+  /** MIN_SPEND: how much more to spend (store currency, major units). */
+  amount: number | null;
+  /** PRODUCT_SCOPE: the item/category/"N products" label to add. */
+  productName: string | null;
+}
+
+/** Non-throwing evaluation of a code against the current cart. */
+export interface DiscountEvaluation {
+  status: 'APPLIED' | 'NOT_AVAILABLE' | 'INVALID';
+  code: string | null;
+  discountAmount: number;
+  freeDelivery: boolean;
+  deliveryDiscount: number;
+  reasons: DiscountReason[];
+}
+
 /** A public offer as shown on the storefront (only what's needed to label + apply). */
 export interface PublicOffer {
   code: string;
@@ -1107,6 +1132,19 @@ export const storefrontApi = {
     items: { productId: number; quantity: number; modifierOptionIds?: number[] }[];
   }) =>
     request<DiscountValidationResult>(`/public/discounts/validate`, { method: 'POST', body: payload, auth: false }),
+
+  /** Evaluate a code without rejecting: always resolves with a status and, when not
+   *  available, every unmet condition as a structured reason. Powers the apply UI
+   *  that shows all reasons at once and re-evaluates as the cart/fulfilment change. */
+  evaluateDiscount: (payload: {
+    merchantId: number;
+    code: string;
+    fulfilmentMethod: FulfilmentMethod;
+    customerPhone?: string;
+    customerEmail?: string;
+    items: { productId: number; quantity: number; modifierOptionIds?: number[] }[];
+  }) =>
+    request<DiscountEvaluation>(`/public/discounts/evaluate`, { method: 'POST', body: payload, auth: false }),
 
   /** Re-open a saved order (and its split siblings) by number + phone. */
   lookupOrder: (slug: string, payload: { orderId: number; phone: string }) =>
