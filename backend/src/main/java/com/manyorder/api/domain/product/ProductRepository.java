@@ -21,6 +21,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /** Active, non-pre-order products with stock in [min, max] (the low-stock band). */
     long countByMerchantAndIsActiveTrueAndPreOrderFalseAndStockBetween(Merchant merchant, int min, int max);
 
+    /** Platform-wide out-of-stock snapshot: active, non-pre-order products at zero stock.
+     *  Point-in-time (not range-scoped), for the admin analytics snapshot figure. */
+    long countByIsActiveTrueAndPreOrderFalseAndStock(int stock);
+
     /** The subset of the given ids that are products owned by this store (used to
      *  validate a discount's product scope). */
     List<Product> findByMerchantAndIdIn(Merchant merchant, Collection<Long> ids);

@@ -1,7 +1,11 @@
 package com.manyorder.api.domain.admin;
 
+import java.time.LocalDate;
+
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Starter metrics for the admin dashboard. PLATFORM_ADMIN-only via SecurityConfig. */
@@ -10,9 +14,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminMetricsController {
 
     private final AdminMerchantService adminMerchantService;
+    private final AdminAnalyticsService adminAnalyticsService;
 
-    public AdminMetricsController(AdminMerchantService adminMerchantService) {
+    public AdminMetricsController(AdminMerchantService adminMerchantService,
+                                  AdminAnalyticsService adminAnalyticsService) {
         this.adminMerchantService = adminMerchantService;
+        this.adminAnalyticsService = adminAnalyticsService;
     }
 
     @GetMapping
@@ -24,5 +31,20 @@ public class AdminMetricsController {
     @GetMapping("/overview")
     public AdminOverviewResponse overview() {
         return adminMerchantService.overview();
+    }
+
+    /**
+     * Range-scoped analytics. Either a named {@code range} (today|yesterday|7d|30d|all)
+     * or a custom range via {@code from}/{@code to} (inclusive SGT calendar dates).
+     * {@code compare=true} adds the equal-length previous period. The server resolves
+     * all day boundaries in Asia/Singapore and echoes the window back.
+     */
+    @GetMapping("/analytics")
+    public AdminAnalyticsResponse analytics(
+            @RequestParam(required = false) String range,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false, defaultValue = "false") boolean compare) {
+        return adminAnalyticsService.analytics(range, from, to, compare);
     }
 }

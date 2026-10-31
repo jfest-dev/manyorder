@@ -4,10 +4,11 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const overview = vi.fn();
+const analytics = vi.fn();
 
 vi.mock('../../lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../lib/api')>();
-  return { ...actual, adminApi: { ...actual.adminApi, overview: () => overview() } };
+  return { ...actual, adminApi: { ...actual.adminApi, overview: () => overview(), analytics: () => analytics() } };
 });
 
 import { AdminOverview } from './AdminOverview';
@@ -27,22 +28,32 @@ const DATA = {
   recentActions: [{ id: 1, actorEmail: 'admin@manyorder.app', actorName: 'Dana Admin', action: 'SUSPEND_MERCHANT', targetType: 'MERCHANT', targetId: 5, merchantId: 5, detail: null, createdAt: '2026-10-02T09:00:00', storeName: 'Kiri Brew' }],
 };
 
+// Minimal range-analytics payload so the embedded <AdminAnalytics> renders without a network call.
+const ANALYTICS = {
+  window: { range: '30d', fromDate: '2026-09-01', toDate: '2026-09-30', fromUtc: '2026-08-31T16:00:00Z', toUtc: '2026-09-30T16:00:00Z', compare: false, prevFromUtc: null, prevToUtc: null },
+  orders: { total: 0, previousTotal: null, byCurrency: [], byDay: [], byStatus: {}, delivery: 0, pickup: 0, guest: 0, cancelled: 0, withDiscount: 0, topStores: [] },
+  stores: { newInRange: 0, previousNewInRange: null, active: 0, suspended: 0, archived: 0, firstProductInRange: 0, firstOrderInRange: 0 },
+  funnel: { steps: [{ step: 'signed_up', count: 0, retentionFromPrev: null }] },
+  snapshot: { outOfStockProducts: 0 },
+  timingsMs: { total: 1 },
+};
+
 beforeEach(() => {
   cleanup();
   overview.mockReset().mockResolvedValue(DATA);
+  analytics.mockReset().mockResolvedValue(ANALYTICS);
 });
 
 describe('AdminOverview', () => {
-  it('renders value, top stores, attention, newest and recent actions', async () => {
+  it('renders the range analytics section plus attention, newest and recent actions', async () => {
     render(<AdminOverview onOpenStore={vi.fn()} />);
 
-    expect(await screen.findByText("Order value recorded by merchants. ManyOrder doesn't process payments.")).toBeTruthy();
-    expect(screen.getByText('Top stores by orders (last 30 days)')).toBeTruthy();
+    // The range analytics section (its own selector + funnel panel) is present.
+    expect(await screen.findByRole('group', { name: 'Time range' })).toBeTruthy();
+    expect(await screen.findByText(/Signup funnel/)).toBeTruthy();
+
+    // Operational panels remain.
     expect(screen.getByText('Owners not verified')).toBeTruthy();
-    // Chart heading carries the 30-day total (sum of i%3 over 30 days = 30).
-    expect(screen.getByText('30 orders in the last 30 days')).toBeTruthy();
-    // Order value: symbol-only amount, with a muted "N orders - CUR" line under it.
-    expect(screen.getByText('7 orders - SGD')).toBeTruthy();
     expect(screen.getByText('Fresh Store')).toBeTruthy();
     expect(screen.getByText('Pat Owner')).toBeTruthy();
     // Recent actions show the readable name (shared with Activity), not the raw code,
@@ -60,7 +71,7 @@ describe('AdminOverview', () => {
     const user = userEvent.setup();
     render(<AdminOverview onOpenStore={onOpenStore} />);
 
-    // "Kiri Brew" links from both top stores and the attention list; either opens store 5.
+    // "Kiri Brew" links from the attention list; clicking opens store 5.
     const links = await screen.findAllByRole('button', { name: 'Kiri Brew' });
     await user.click(links[0]);
     await waitFor(() => expect(onOpenStore).toHaveBeenCalledWith(5));

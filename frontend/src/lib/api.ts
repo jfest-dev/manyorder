@@ -1283,9 +1283,70 @@ export interface AdminOverview {
   recentActions: AdminAuditLogEntry[];
 }
 
+// --- Range-scoped admin analytics (GET /admin/metrics/analytics) ---
+
+export type AdminAnalyticsRange = 'today' | 'yesterday' | '7d' | '30d' | 'all' | 'custom';
+
+export interface AdminAnalyticsWindow {
+  range: string;
+  fromDate: string;   // inclusive first SGT day (yyyy-MM-dd)
+  toDate: string;     // inclusive last SGT day
+  fromUtc: string;    // half-open [fromUtc, toUtc) as ISO instants
+  toUtc: string;
+  compare: boolean;
+  prevFromUtc: string | null;
+  prevToUtc: string | null;
+}
+export interface AdminAnalyticsCurrencyValue {
+  currency: string; orders: number; value: number; averageOrderValue: number;
+  previousOrders: number | null; previousValue: number | null;
+}
+export interface AdminAnalyticsDayCount { date: string; count: number; }
+export interface AdminAnalyticsTopStore { id: number; name: string; slug: string; currency: string; orders: number; value: number; }
+export interface AdminAnalyticsOrders {
+  total: number; previousTotal: number | null;
+  byCurrency: AdminAnalyticsCurrencyValue[];
+  byDay: AdminAnalyticsDayCount[];
+  byStatus: Record<string, number>;
+  delivery: number; pickup: number; guest: number; cancelled: number; withDiscount: number;
+  topStores: AdminAnalyticsTopStore[];
+}
+export interface AdminAnalyticsStores {
+  newInRange: number; previousNewInRange: number | null;
+  active: number; suspended: number; archived: number;
+  firstProductInRange: number; firstOrderInRange: number;
+}
+export interface AdminAnalyticsFunnelStep { step: string; count: number; retentionFromPrev: number | null; }
+export interface AdminAnalytics {
+  window: AdminAnalyticsWindow;
+  orders: AdminAnalyticsOrders;
+  stores: AdminAnalyticsStores;
+  funnel: { steps: AdminAnalyticsFunnelStep[] };
+  snapshot: { outOfStockProducts: number };
+  timingsMs: Record<string, number>;
+}
+
+export interface AdminAnalyticsParams {
+  range?: AdminAnalyticsRange;
+  from?: string; // yyyy-MM-dd, for a custom range
+  to?: string;
+  compare?: boolean;
+}
+
 export const adminApi = {
   metrics: () => request<AdminMetrics>('/admin/metrics'),
   overview: () => request<AdminOverview>('/admin/metrics/overview'),
+  analytics: (params: AdminAnalyticsParams = {}) => {
+    const qs = new URLSearchParams();
+    if (params.range && params.range !== 'custom') qs.set('range', params.range);
+    if (params.range === 'custom') {
+      if (params.from) qs.set('from', params.from);
+      if (params.to) qs.set('to', params.to);
+    }
+    if (params.compare) qs.set('compare', 'true');
+    const q = qs.toString();
+    return request<AdminAnalytics>(`/admin/metrics/analytics${q ? `?${q}` : ''}`);
+  },
   listMerchants: () => request<AdminMerchantSummary[]>('/admin/merchants'),
   businessTypes: () => request<string[]>('/admin/merchants/business-types'),
   searchMerchants: (params: AdminMerchantSearchParams = {}) => {

@@ -113,4 +113,17 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<TopStoreRow> topStoresSince(@Param("statuses") Collection<OrderStatus> statuses,
                                      @Param("since") LocalDateTime since,
                                      Pageable pageable);
+
+    // --- Range-scoped admin analytics: one half-open [from, to) scan, grouped in memory. ---
+
+    /** Per-order facts for orders created in the half-open range, for the range analytics. */
+    @Query("""
+            SELECT o.createdAt AS createdAt, o.status AS status, o.orderType AS orderType,
+                   o.source AS source, o.merchant.currency AS currency, o.totalAmount AS totalAmount,
+                   o.discountCode AS discountCode, o.merchant.id AS merchantId,
+                   o.merchant.name AS merchantName, o.merchant.slug AS merchantSlug
+            FROM Order o
+            WHERE o.createdAt >= :from AND o.createdAt < :to
+            """)
+    List<OrderFactRow> findOrderFactsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

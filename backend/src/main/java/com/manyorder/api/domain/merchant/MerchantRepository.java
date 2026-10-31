@@ -36,6 +36,27 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long> {
     long countBySuspendedAtIsNotNull();                   // suspended
     long countByArchivedAtIsNotNull();                    // archived
     long countByCreatedAtAfter(java.time.LocalDateTime cutoff);
+
+    // --- Range-scoped admin analytics (half-open [from, to)). ---
+
+    /** Stores created within the range. */
+    long countByCreatedAtGreaterThanEqualAndCreatedAtLessThan(LocalDateTime from, LocalDateTime to);
+
+    /** Stores whose earliest product landed within the range (first-product-in-range). */
+    @Query("""
+            SELECT COUNT(m) FROM Merchant m
+            WHERE (SELECT MIN(p.createdAt) FROM Product p WHERE p.merchant = m) >= :from
+              AND (SELECT MIN(p.createdAt) FROM Product p WHERE p.merchant = m) < :to
+            """)
+    long countWithFirstProductBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Stores whose earliest order landed within the range (first-order-in-range). */
+    @Query("""
+            SELECT COUNT(m) FROM Merchant m
+            WHERE (SELECT MIN(o.createdAt) FROM Order o WHERE o.merchant = m) >= :from
+              AND (SELECT MIN(o.createdAt) FROM Order o WHERE o.merchant = m) < :to
+            """)
+    long countWithFirstOrderBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
     java.util.List<Merchant> findAllByOrderByCreatedAtDesc();
 
     // --- Admin Overview ---

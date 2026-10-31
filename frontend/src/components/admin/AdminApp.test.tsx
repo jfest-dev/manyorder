@@ -15,6 +15,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
     adminApi: {
       metrics: () => metricsMock(),
       overview: () => Promise.resolve(OVERVIEW),
+      analytics: () => Promise.resolve(ANALYTICS_MIN),
       listMerchants: () => Promise.resolve([]),
       businessTypes: () => Promise.resolve([]),
       searchMerchants: () => searchMock(),
@@ -51,6 +52,16 @@ const OVERVIEW = {
     noOrders30Days: { count: 0, items: [] }, suspended: { count: 0, items: [] },
   },
   newestStores: [], recentActions: [],
+};
+
+// Minimal range-analytics payload for the embedded <AdminAnalytics> in the Overview.
+const ANALYTICS_MIN = {
+  window: { range: '30d', fromDate: '2026-09-01', toDate: '2026-09-30', fromUtc: '2026-08-31T16:00:00Z', toUtc: '2026-09-30T16:00:00Z', compare: false, prevFromUtc: null, prevToUtc: null },
+  orders: { total: 0, previousTotal: null, byCurrency: [], byDay: [], byStatus: {}, delivery: 0, pickup: 0, guest: 0, cancelled: 0, withDiscount: 0, topStores: [] },
+  stores: { newInRange: 0, previousNewInRange: null, active: 0, suspended: 0, archived: 0, firstProductInRange: 0, firstOrderInRange: 0 },
+  funnel: { steps: [] },
+  snapshot: { outOfStockProducts: 0 },
+  timingsMs: { total: 0 },
 };
 
 function renderAdmin() {

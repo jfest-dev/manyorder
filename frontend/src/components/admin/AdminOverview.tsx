@@ -1,21 +1,19 @@
 import { useEffect, useState } from 'react';
 import {
   adminApi, ApiError, AdminOverview as AdminOverviewData,
-  AdminOverviewAttentionGroup, AdminOverviewCurrencyValue,
+  AdminOverviewAttentionGroup,
 } from '../../lib/api';
-import { formatMoney } from '../../lib/currency';
 import { ADMIN_FONT } from './adminTokens';
 import { readableAction } from './adminActions';
-import { formatDate, formatDateTime, formatShortDate } from '../../lib/adminDatetime';
+import { formatDate, formatDateTime } from '../../lib/adminDatetime';
+import { AdminAnalytics } from './AdminAnalytics';
 
 interface Props {
   /** Open a store's drill-down from any link in the Overview. */
   onOpenStore: (id: number) => void;
 }
 
-const PAYMENT_NOTE = "Order value recorded by merchants. ManyOrder doesn't process payments.";
-
-/** Admin Overview: order value, orders-per-day bars, top stores, attention, newest, recent actions. */
+/** Admin Overview: range-scoped analytics plus current-state attention, newest, recent actions. */
 export function AdminOverview({ onOpenStore }: Props) {
   const [data, setData] = useState<AdminOverviewData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,9 +31,9 @@ export function AdminOverview({ onOpenStore }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 20 }}>
-      <OrderValue last30={data.valueLast30Days} allTime={data.valueAllTime} />
-      <OrdersPerDay days={data.ordersPerDay} />
-      <TopStores stores={data.topStores} onOpenStore={onOpenStore} />
+      {/* Range-scoped analytics (value, orders-by-day, breakdown, funnel, stores) with its
+          own range selector; everything below is current-state operational context. */}
+      <AdminAnalytics onOpenStore={onOpenStore} />
       <NeedsAttention attention={data.needsAttention} onOpenStore={onOpenStore} />
       <NewestStores stores={data.newestStores} onOpenStore={onOpenStore} />
       <RecentActions actions={data.recentActions} />
@@ -58,91 +56,6 @@ function StoreLink({ id, name, onOpenStore }: { id: number; name: string; onOpen
       style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, fontSize: ADMIN_FONT.body, textAlign: 'left' }}>
       {name}
     </button>
-  );
-}
-
-function OrderValue({ last30, allTime }: { last30: AdminOverviewCurrencyValue[]; allTime: AdminOverviewCurrencyValue[] }) {
-  const block = (label: string, rows: AdminOverviewCurrencyValue[]) => (
-    <div style={{ flex: '1 1 220px', minWidth: 200 }}>
-      <div className="text-xs" style={{ color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 10 }}>{label}</div>
-      {rows.length === 0 ? (
-        <div className="text-small" style={{ color: 'var(--text-muted)' }}>No recorded value yet.</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {rows.map((r) => (
-            <div key={r.currency}>
-              {/* Symbol-only amount, large; the currency code lives in the muted line below. */}
-              <div style={{ fontSize: ADMIN_FONT.metric, fontWeight: 800, lineHeight: 1.15 }}>{formatMoney(r.total, r.currency)}</div>
-              <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 3 }}>
-                {r.orders} {r.orders === 1 ? 'order' : 'orders'} - {r.currency}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-  return (
-    <Panel title="Order value">
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32 }}>
-        {block('Last 30 days', last30)}
-        {block('All time', allTime)}
-      </div>
-      <p className="text-xs" style={{ color: 'var(--text-muted)', margin: '16px 0 0' }}>{PAYMENT_NOTE}</p>
-    </Panel>
-  );
-}
-
-function OrdersPerDay({ days }: { days: { date: string; count: number }[] }) {
-  const max = Math.max(1, ...days.map((d) => d.count));
-  const total = days.reduce((sum, d) => sum + d.count, 0);
-  const peak = days.reduce((p, d) => (d.count > p ? d.count : p), 0);
-  // Label only the first day that hits the peak, so one count floats above the chart.
-  const peakIndex = peak > 0 ? days.findIndex((d) => d.count === peak) : -1;
-  return (
-    <Panel title={`${total} ${total === 1 ? 'order' : 'orders'} in the last 30 days`}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 128 }}>
-        {days.map((d, i) => (
-          <div key={d.date} title={`${formatShortDate(d.date)}: ${d.count} ${d.count === 1 ? 'order' : 'orders'}`}
-            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-end', height: '100%' }}>
-            {i === peakIndex && (
-              <div className="text-xs" style={{ textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 2 }}>{d.count}</div>
-            )}
-            {d.count > 0 ? (
-              <div style={{ height: `${Math.max(4, (d.count / max) * 100)}%`, background: 'var(--primary-solid)', borderRadius: '2px 2px 0 0' }} />
-            ) : (
-              // Zero days still get a thin baseline marker so the row never looks broken.
-              <div style={{ height: 2, background: 'var(--border-strong)' }} />
-            )}
-          </div>
-        ))}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 6 }}>
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatShortDate(days[0]?.date)}</span>
-        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatShortDate(days[days.length - 1]?.date)}</span>
-      </div>
-    </Panel>
-  );
-}
-
-function TopStores({ stores, onOpenStore }: { stores: AdminOverviewData['topStores']; onOpenStore: (id: number) => void }) {
-  return (
-    <Panel title="Top stores by orders (last 30 days)">
-      {stores.length === 0 ? (
-        <div className="text-small" style={{ color: 'var(--text-muted)' }}>No orders in the last 30 days.</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {stores.map((s) => (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-              <StoreLink id={s.id} name={s.name} onOpenStore={onOpenStore} />
-              <span className="text-xs" style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                {s.orders} {s.orders === 1 ? 'order' : 'orders'} · {formatMoney(s.value, s.currency)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
   );
 }
 
