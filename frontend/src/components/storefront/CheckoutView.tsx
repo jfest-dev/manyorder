@@ -5,6 +5,7 @@ import { formatPreorderReady } from '../../lib/datetime';
 import { DEFAULT_DELIVERY_TBC_MESSAGE } from '../../lib/delivery';
 import { offerValueLabel, offerConditions, offerExpiry, offerScopeLabel } from '../../lib/offers';
 import { reasonText, offerUnmetReasons } from '../../lib/discountReasons';
+import { useDebounced } from '../../lib/useDebounced';
 import { NoteBlock } from '../NoteBlock';
 import {
   storefrontApi, ApiError,
@@ -149,8 +150,11 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
   // applying (e.g. the subtotal drops below the minimum, or the customer switches
   // to pickup with a delivery code), drop it and say why - the server is still the
   // final check at submit, this just keeps the shown total honest. Depends on the
-  // code STRING (not the applied object) so refreshing its amount can't loop.
+  // code STRING (not the applied object) so refreshing its amount can't loop, and on
+  // a DEBOUNCED cart/fulfilment signature so a burst of quick changes sends one
+  // request at the end, not one per change (the evaluate endpoint is rate limited).
   const appliedCode = applied?.code ?? null;
+  const evalTrigger = useDebounced(`${itemsSignature}|${fulfilment}`, 350);
   useEffect(() => {
     if (!appliedCode) return;
     let cancelled = false;
@@ -177,7 +181,7 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appliedCode, itemsSignature, fulfilment]);
+  }, [appliedCode, evalTrigger]);
 
   // Tap a public offer to apply it like any code (validated the same way, no typing).
   const applyOffer = (o: PublicOffer) => {

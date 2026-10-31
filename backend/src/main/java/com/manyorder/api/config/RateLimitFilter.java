@@ -165,6 +165,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * STRICT: public POSTs that send email or create accounts (low legit frequency,
      * high abuse cost). STANDARD: brute-force / order-spam POSTs. READS: everything
      * else public (GETs, low risk). Any unmatched public POST is treated as STANDARD.
+     *
+     * <p>The discount EVALUATE preview is a read-only check that happens to POST a
+     * cart: the storefront calls it every time the cart or fulfilment changes while
+     * a code is applied. It creates nothing, so it belongs in READS, not the tight
+     * STANDARD order bucket - otherwise a customer re-checking a code could both be
+     * cut off and starve the shared budget the real checkout POST draws from.
      */
     private static Tier resolveTier(String method, String path) {
         if (!"POST".equals(method)) {
@@ -174,6 +180,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 || path.equals("/auth/resend-verification")
                 || path.equals("/auth/register")) {
             return Tier.STRICT;
+        }
+        if (path.equals("/public/discounts/evaluate")) {
+            return Tier.READS;
         }
         return Tier.STANDARD;
     }

@@ -71,6 +71,26 @@ class RateLimitIntegrationTest extends IntegrationTestBase {
         assertEquals(TOO_MANY, blocked, "3rd strict request is rate limited");
     }
 
+    private int postEvaluate(String ip) throws Exception {
+        return mockMvc.perform(post("/public/discounts/evaluate").with(ip(ip))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"merchantId\":1,\"code\":\"NOPE\",\"fulfilmentMethod\":\"PICKUP\",\"items\":[]}"))
+                .andReturn().getResponse().getStatus();
+    }
+
+    @Test
+    void evaluatePreview_isReadsTier_notStandard() throws Exception {
+        // The discount evaluate preview is a read, not an order: it must use the
+        // READS tier (10 here), not STANDARD (3). The storefront re-checks a code as
+        // the cart/fulfilment changes, so four quick previews must all pass - under
+        // the STANDARD tier the fourth would be a 429, which would also eat into the
+        // bucket the real checkout POST needs. (Four stays under the GLOBAL 5 here.)
+        String ip = "10.0.0.9";
+        for (int i = 0; i < 4; i++) {
+            assertNotEquals(TOO_MANY, postEvaluate(ip), "evaluate " + (i + 1) + " within the reads tier");
+        }
+    }
+
     @Test
     void globalBackstop_blocksAcrossEndpoints_belowAnyTierLimit() throws Exception {
         String ip = "10.0.0.3";
