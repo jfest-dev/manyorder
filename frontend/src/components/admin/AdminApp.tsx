@@ -3,6 +3,7 @@ import { Menu, X } from 'lucide-react';
 import { adminApi, AdminMetrics, AdminMerchantSummary, ApiError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { PAGE_PAD_PHONE } from '../../lib/layout';
 import { useConfirmReason } from '../ConfirmDialog';
 import { Button } from '../Button';
 import { Toast } from '../Toast';
@@ -187,7 +188,7 @@ export function AdminApp() {
           </nav>
         )}
 
-        <main style={{ flex: 1, minWidth: 0, padding: isMobile ? '16px' : '20px' }}>
+        <main data-app-content style={{ flex: 1, minWidth: 0, padding: isMobile ? `${PAGE_PAD_PHONE}px` : '20px' }}>
           {loading && <p style={{ ...adminText.body, color: 'var(--text-secondary)' }}>Loading…</p>}
           {error && <p style={{ ...adminText.body, color: 'var(--error-color)' }}>{error}</p>}
 

@@ -152,7 +152,9 @@ export function Dashboard({ store, onNavigate, adminMerchantId }: DashboardProps
   const c = store.currency;
 
   return (
-    <div style={{ padding: '24px' }}>
+    // No side padding of its own: the shared app frame (AppShell) owns the page
+    // side gap, so the dashboard lines up with Orders, Products and the rest.
+    <div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '6px' }}>Overview</h1>

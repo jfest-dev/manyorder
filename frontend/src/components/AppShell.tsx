@@ -3,6 +3,7 @@ import { Toast } from './Toast';
 import { Menu, X, Eye, Link2, MailWarning } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useMediaQuery } from '../hooks/useMediaQuery';
+import { pagePadding } from '../lib/layout';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../lib/api';
 import logoImage from '../assets/manyorder-logo.png';
@@ -36,6 +37,8 @@ export function AppShell({
   unseenCounts,
 }: AppShellProps) {
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  // One responsive side gap for the whole app frame; screens must not add their own.
+  const PAGE_PAD = pagePadding(isDesktop);
   const { user } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -390,12 +393,13 @@ export function AppShell({
             a wide table in its own overflow-x:auto wrapper) scroll horizontally.
             overflowY stays auto for normal vertical scrolling + sticky headers. */}
         <div
+          data-app-content
           style={{
             flex: 1,
             overflowY: 'auto',
             overflowX: 'hidden',
             background: 'var(--bg-app)',
-            padding: '24px',
+            padding: PAGE_PAD,
           }}
         >
           {showVerifyNag && (
