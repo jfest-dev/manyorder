@@ -11,6 +11,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, normalize } from 'node:path';
+import { brotliCompressSync, gzipSync, constants as zlibConstants } from 'node:zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BUILD_DIR = join(__dirname, 'build');
@@ -42,7 +43,34 @@ const MIME = {
   '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.png': 'image/png',
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
   '.webp': 'image/webp', '.woff': 'font/woff', '.woff2': 'font/woff2', '.map': 'application/json',
+  '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml', '.webmanifest': 'application/manifest+json',
 };
+
+// Text-ish types worth compressing; already-compressed binaries (images, woff2)
+// are left as-is. Checked by MIME prefix/substring so charset suffixes still match.
+function isCompressible(type) {
+  return /^text\/|application\/(javascript|json|xml|manifest)|image\/svg/.test(type);
+}
+
+// Best encoding the client accepts, preferring Brotli, then gzip, then none.
+function pickEncoding(req) {
+  const ae = String(req.headers['accept-encoding'] || '');
+  if (/\bbr\b/.test(ae)) return 'br';
+  if (/\bgzip\b/.test(ae)) return 'gzip';
+  return null;
+}
+
+const br = (buf) => brotliCompressSync(buf, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11 } });
+const gz = (buf) => gzipSync(buf, { level: 9 });
+
+// Cache-Control by path: hashed build assets never change, so cache them for a
+// year immutably; the SPA shell must always be revalidated; other public files
+// (logo, card, icons, robots) get a short shared cache.
+function cacheControlFor(rel) {
+  if (rel === 'index.html') return 'no-cache';
+  if (rel.startsWith('assets/')) return 'public, max-age=31536000, immutable';
+  return 'public, max-age=3600';
+}
 
 let indexHtmlCache = null;
 async function indexHtml() {
@@ -158,16 +186,57 @@ async function headForSlug(slug) {
   return head;
 }
 
-async function serveStatic(res, pathname) {
-  const rel = normalize(pathname).replace(/^(\.\.[/\\])+/, '');
+// Raw + precompressed bytes per file, built once on first hit and kept in memory
+// (cleared on redeploy, since the process restarts). Keyed by absolute file path.
+const staticCache = new Map();
+
+async function serveStatic(res, req, pathname) {
+  // Strip any leading-up traversal and leading slashes, so `rel` is a clean path
+  // like "assets/index-ABC.js" (what cacheControlFor matches on).
+  const rel = normalize(pathname).replace(/^(\.\.[/\\])+/, '').replace(/^[/\\]+/, '');
   const file = join(BUILD_DIR, rel);
   if (!file.startsWith(BUILD_DIR)) { res.writeHead(403).end(); return true; }
-  try {
-    const body = await readFile(file);
-    res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream' });
-    res.end(body);
-    return true;
-  } catch { return false; }
+  let entry = staticCache.get(file);
+  if (!entry) {
+    let raw;
+    try { raw = await readFile(file); } catch { return false; }
+    const type = MIME[extname(file)] || 'application/octet-stream';
+    entry = { raw, type, br: null, gzip: null };
+    if (isCompressible(type)) { entry.br = br(raw); entry.gzip = gz(raw); }
+    staticCache.set(file, entry);
+  }
+  sendBytes(res, req, entry, cacheControlFor(rel));
+  return true;
+}
+
+// Send a cached entry with the best encoding the client accepts.
+function sendBytes(res, req, entry, cacheControl) {
+  const enc = entry.br || entry.gzip ? pickEncoding(req) : null;
+  const body = enc === 'br' ? entry.br : enc === 'gzip' ? entry.gzip : entry.raw;
+  const headers = { 'content-type': entry.type, 'cache-control': cacheControl, 'content-length': body.length };
+  if (enc && body !== entry.raw) {
+    headers['content-encoding'] = enc;
+    headers['vary'] = 'Accept-Encoding';
+  }
+  res.writeHead(200, headers);
+  res.end(body);
+}
+
+// Compressed HTML sender for the SPA shell and crawler previews. The unmodified
+// shell is compressed once and memoised; per-shop crawler HTML is compressed on
+// the fly (crawler hits are rare) and never memoised under the shell key.
+let shellCompressed = null;
+function sendHtml(res, req, html, cacheControl, memoiseShell = false) {
+  const type = 'text/html; charset=utf-8';
+  let entry;
+  if (memoiseShell && shellCompressed && shellCompressed.raw.equals(Buffer.from(html))) {
+    entry = shellCompressed;
+  } else {
+    const raw = Buffer.from(html);
+    entry = { raw, type, br: br(raw), gzip: gz(raw) };
+    if (memoiseShell) shellCompressed = entry;
+  }
+  sendBytes(res, req, entry, cacheControl);
 }
 
 const server = createServer(async (req, res) => {
@@ -176,22 +245,22 @@ const server = createServer(async (req, res) => {
     const pathname = decodeURIComponent(url.pathname);
     const first = pathname.split('/').filter(Boolean)[0] || '';
 
-    // Static asset (has an extension) -> serve from build.
-    if (extname(pathname)) { if (await serveStatic(res, pathname)) return; }
+    // Static asset (has an extension) -> serve from build with long/short caching.
+    if (extname(pathname)) { if (await serveStatic(res, req, pathname)) return; }
 
     const ua = req.headers['user-agent'] || '';
     const isShopPath = first && !RESERVED.has(first) && !extname(pathname);
     if (isShopPath && CRAWLER.test(ua)) {
       const head = await headForSlug(first);
       const html = head ? injectHead(await indexHtml(), head) : await indexHtml();
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=60' });
-      res.end(html);
+      // Short cache: the preview is derived from shop data that can change.
+      sendHtml(res, req, html, 'public, max-age=60');
       return;
     }
 
-    // Everyone else (and all SPA routes): the unmodified SPA shell.
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(await indexHtml());
+    // Everyone else (and all SPA routes): the unmodified SPA shell, always
+    // revalidated so a deploy's new asset hashes are picked up immediately.
+    sendHtml(res, req, await indexHtml(), 'no-cache', true);
   } catch (e) {
     res.writeHead(500, { 'content-type': 'text/plain' });
     res.end('server error');
@@ -203,4 +272,4 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   server.listen(PORT, () => console.log(`frontend server on :${PORT} (api ${API_BASE})`));
 }
 
-export { headTags, bannerUrl, logolessBanner, injectHead, shorten };
+export { headTags, bannerUrl, logolessBanner, injectHead, shorten, cacheControlFor, isCompressible, pickEncoding };
