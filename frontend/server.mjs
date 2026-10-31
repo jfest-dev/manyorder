@@ -18,8 +18,17 @@ const PORT = process.env.PORT || 3000;
 const API_BASE = process.env.VITE_API_BASE || process.env.API_BASE || 'http://localhost:8080';
 const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://manyorder.app';
 const CACHE_TTL_MS = 60_000;
-// Generic link-card preview for a shop that has no logo, so the card is never imageless.
-const GENERIC_PREVIEW = `${SITE_ORIGIN}/manyorder-logo.png`;
+// Site-wide default card: a 600x600 brand logo (small, <200KB), used when there is
+// nothing shop-specific to show. Replaces the old 4500x4500 square.
+const GENERIC_PREVIEW = `${SITE_ORIGIN}/manyorder-card.png`;
+const GENERIC_PREVIEW_SIZE = 600;
+// Wide link-card dimensions (Open Graph recommends 1200x630).
+const BANNER_W = 1200;
+const BANNER_H = 630;
+// A branded 1200x630 card for a shop with NO logo is built by drawing the shop
+// name onto a base image via Cloudinary's text overlay, when a base image is
+// configured (env CARD_BANNER_BASE, a Cloudinary upload URL). When unset, a
+// logoless shop falls back to the small square default above. Read at call time.
 
 // First path segments that are app routes or assets, never shop slugs.
 const RESERVED = new Set([
@@ -57,10 +66,24 @@ function bannerUrl(store) {
   if (!logo) return '';
   if (logo.includes('/upload/')) {
     const bg = (store.themeColor || '#111111').replace('#', '');
-    const t = `w_1200,h_630,c_pad,b_rgb:${bg},f_auto,q_auto`;
+    const t = `w_${BANNER_W},h_${BANNER_H},c_pad,b_rgb:${bg},f_auto,q_auto`;
     return logo.replace('/upload/', `/upload/${t}/`);
   }
   return /^https?:\/\//.test(logo) ? logo : '';
+}
+
+// A 1200x630 branded banner for a logoless shop: the shop name drawn onto the
+// configured Cloudinary base image. Returns '' when no base is configured (the
+// caller then uses the small square default). Cloudinary draws the name as a
+// white text layer near the bottom of the base card.
+function logolessBanner(store) {
+  const base = process.env.CARD_BANNER_BASE || '';
+  if (!base.includes('/upload/')) return '';
+  const name = String(store.name || 'ManyOrder').slice(0, 40);
+  const text = encodeURIComponent(name); // encodes spaces, commas and slashes
+  const t = `w_${BANNER_W},h_${BANNER_H},c_fill,f_auto,q_auto`
+    + `/l_text:Arial_72_bold:${text},co_white,g_south,y_72`;
+  return base.replace('/upload/', `/upload/${t}/`);
 }
 
 function headTags(store, slug) {
@@ -70,12 +93,20 @@ function headTags(store, slug) {
   const addr = showAddress ? (store.address || store.city || '') : '';
   const description = addr ? `${base} · ${addr}` : base;
   const url = `${SITE_ORIGIN}/${slug}`;
-  const banner = bannerUrl(store);
-  // A shop with a logo gets a wide banner; one without still gets a generic image
-  // (shown as a small summary card) so the link preview is never blank.
+  // A shop with a logo gets a wide banner padded on its theme colour; a logoless
+  // shop gets a wide banner with its name drawn on the brand card (when a base is
+  // configured); otherwise the small square default, so the preview is never blank.
+  const banner = bannerUrl(store) || logolessBanner(store);
   const img = banner || GENERIC_PREVIEW;
-  const card = banner ? 'summary_large_image' : 'summary';
-  const imgTags = `\n    <meta property="og:image" content="${esc(img)}" />\n    <meta name="twitter:image" content="${esc(img)}" />\n    <meta name="twitter:card" content="${card}" />`;
+  const wide = Boolean(banner);
+  const card = wide ? 'summary_large_image' : 'summary';
+  const w = wide ? BANNER_W : GENERIC_PREVIEW_SIZE;
+  const h = wide ? BANNER_H : GENERIC_PREVIEW_SIZE;
+  const imgTags = `\n    <meta property="og:image" content="${esc(img)}" />`
+    + `\n    <meta property="og:image:width" content="${w}" />`
+    + `\n    <meta property="og:image:height" content="${h}" />`
+    + `\n    <meta name="twitter:image" content="${esc(img)}" />`
+    + `\n    <meta name="twitter:card" content="${card}" />`;
   return `<title>${esc(name)}</title>
     <meta name="description" content="${esc(description)}" />
     <link rel="canonical" href="${esc(url)}" />
@@ -88,7 +119,12 @@ function headTags(store, slug) {
 
 const GENERIC_NOINDEX = `<title>ManyOrder</title>
     <meta name="description" content="Online ordering for small shops." />
-    <meta name="robots" content="noindex" />`;
+    <meta name="robots" content="noindex" />
+    <meta property="og:image" content="${GENERIC_PREVIEW}" />
+    <meta property="og:image:width" content="${GENERIC_PREVIEW_SIZE}" />
+    <meta property="og:image:height" content="${GENERIC_PREVIEW_SIZE}" />
+    <meta name="twitter:image" content="${GENERIC_PREVIEW}" />
+    <meta name="twitter:card" content="summary" />`;
 
 function injectHead(html, headBlock) {
   // Strip the build's site-wide title/description/canonical/OG/Twitter tags so the
@@ -167,4 +203,4 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   server.listen(PORT, () => console.log(`frontend server on :${PORT} (api ${API_BASE})`));
 }
 
-export { headTags, bannerUrl, injectHead, shorten };
+export { headTags, bannerUrl, logolessBanner, injectHead, shorten };
