@@ -83,6 +83,33 @@ class AdminMetricsRangeTest {
     }
 
     @Test
+    void today_atAYearEnd_rollsIntoTheNextSgtYear() {
+        // 2026-12-31 16:30 UTC = 2027-01-01 00:30 SGT, so the SGT day is New Year's Day.
+        Instant yearEnd = Instant.parse("2026-12-31T16:30:00Z");
+        Window w = AdminMetricsRange.resolve(Named.TODAY, yearEnd);
+        assertEquals(LocalDateTime.of(2026, 12, 31, 16, 0), w.fromUtc()); // SGT 2027-01-01 00:00
+        assertEquals(LocalDateTime.of(2027, 1, 1, 16, 0), w.toUtc());     // SGT 2027-01-02 00:00
+        assertEquals(LocalDateTime.of(2026, 12, 30, 16, 0), w.prevFromUtc());
+    }
+
+    @Test
+    void today_atAMonthEnd_rollsIntoTheNextSgtMonth() {
+        // 2026-03-31 16:30 UTC = 2026-04-01 00:30 SGT, so the SGT day is the 1st of April.
+        Instant monthEnd = Instant.parse("2026-03-31T16:30:00Z");
+        Window w = AdminMetricsRange.resolve(Named.TODAY, monthEnd);
+        assertEquals(LocalDateTime.of(2026, 3, 31, 16, 0), w.fromUtc()); // SGT 2026-04-01 00:00
+        assertEquals(LocalDateTime.of(2026, 4, 1, 16, 0), w.toUtc());    // SGT 2026-04-02 00:00
+    }
+
+    @Test
+    void custom_spanningAMonthAndYearEnd_hasCorrectBounds() {
+        Window w = AdminMetricsRange.resolveCustom(LocalDate.of(2026, 12, 30), LocalDate.of(2027, 1, 2));
+        assertEquals(LocalDateTime.of(2026, 12, 29, 16, 0), w.fromUtc()); // SGT 2026-12-30 00:00
+        assertEquals(LocalDateTime.of(2027, 1, 2, 16, 0), w.toUtc());     // SGT 2027-01-03 00:00 (end-inclusive)
+        assertEquals(4 * 24, java.time.Duration.between(w.fromUtc(), w.toUtc()).toHours());
+    }
+
+    @Test
     void parse_acceptsTheNamedTokens() {
         assertEquals(Named.TODAY, AdminMetricsRange.parse("today"));
         assertEquals(Named.D7, AdminMetricsRange.parse("7d"));

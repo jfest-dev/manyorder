@@ -22,7 +22,11 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "orders", indexes = @Index(name = "idx_orders_tracking_token", columnList = "tracking_token"))
+@Table(name = "orders", indexes = {
+        @Index(name = "idx_orders_tracking_token", columnList = "tracking_token"),
+        // Range scans for the admin analytics filter on created_at over the whole table.
+        @Index(name = "idx_orders_created_at", columnList = "created_at"),
+})
 public class Order {
 
     @Id
