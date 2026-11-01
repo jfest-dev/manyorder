@@ -49,6 +49,7 @@ public class EmailVerificationService {
     private final UserRepository userRepository;
     private final EmailVerificationTokenRepository tokenRepository;
     private final EmailVerificationMailer mailer;
+    private final com.manyorder.api.domain.authevent.AuthEventService authEventService;
     private final String frontendBaseUrl;
 
     private final SecureRandom secureRandom = new SecureRandom();
@@ -57,10 +58,12 @@ public class EmailVerificationService {
     public EmailVerificationService(UserRepository userRepository,
                                     EmailVerificationTokenRepository tokenRepository,
                                     EmailVerificationMailer mailer,
+                                    com.manyorder.api.domain.authevent.AuthEventService authEventService,
                                     @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.mailer = mailer;
+        this.authEventService = authEventService;
         // Trim a trailing slash so URL building is predictable.
         this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
                 ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
@@ -105,8 +108,12 @@ public class EmailVerificationService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, INVALID_TOKEN_MESSAGE));
 
         User user = token.getUser();
+        boolean wasUnverified = !user.isVerified();
         user.setVerified(true);
         userRepository.save(user);
+        if (wasUnverified) {
+            authEventService.recordEmailVerified(user.getId());
+        }
 
         LocalDateTime now = LocalDateTime.now();
         token.setUsedAt(now);

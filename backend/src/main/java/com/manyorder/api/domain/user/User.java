@@ -63,6 +63,14 @@ public class User {
     private LocalDateTime createdAt;
 
     /**
+     * When the account last signed in successfully. Nullable (null means no sign-in
+     * since the column was added). Updated on each successful sign-in; feeds a
+     * point-in-time "active in the last N days" figure without scanning auth_events.
+     */
+    @Column(name = "last_login_at", nullable = true)
+    private LocalDateTime lastLoginAt;
+
+    /**
      * Consecutive failed sign-in attempts since the last success. Nullable (treated
      * as zero when null) so the column can be added to a table that already has
      * rows. Only counted for existing accounts; reset on a successful sign-in or a
@@ -123,6 +131,8 @@ public class User {
     public Merchant getStaffStore() { return staffStore; }
     public void setStaffStore(Merchant staffStore) { this.staffStore = staffStore; }
     public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getLastLoginAt() { return lastLoginAt; }
+    public void setLastLoginAt(LocalDateTime lastLoginAt) { this.lastLoginAt = lastLoginAt; }
     public Integer getFailedLoginAttempts() { return failedLoginAttempts; }
     public void setFailedLoginAttempts(Integer failedLoginAttempts) { this.failedLoginAttempts = failedLoginAttempts; }
     public LocalDateTime getLockedUntil() { return lockedUntil; }

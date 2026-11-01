@@ -53,6 +53,7 @@ public class PasswordResetService {
     private final PasswordResetMailer mailer;
     private final PasswordEncoder passwordEncoder;
     private final com.manyorder.api.config.DemoAccount demoAccount;
+    private final com.manyorder.api.domain.authevent.AuthEventService authEventService;
     private final String frontendBaseUrl;
 
     private final SecureRandom secureRandom = new SecureRandom();
@@ -63,12 +64,14 @@ public class PasswordResetService {
                                 PasswordResetMailer mailer,
                                 PasswordEncoder passwordEncoder,
                                 com.manyorder.api.config.DemoAccount demoAccount,
+                                com.manyorder.api.domain.authevent.AuthEventService authEventService,
                                 @Value("${app.frontend.base-url:http://localhost:3000}") String frontendBaseUrl) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.mailer = mailer;
         this.passwordEncoder = passwordEncoder;
         this.demoAccount = demoAccount;
+        this.authEventService = authEventService;
         // Trim a trailing slash so URL building is predictable.
         this.frontendBaseUrl = frontendBaseUrl.endsWith("/")
                 ? frontendBaseUrl.substring(0, frontendBaseUrl.length() - 1)
@@ -101,6 +104,7 @@ public class PasswordResetService {
             PasswordResetToken token = new PasswordResetToken(
                     user, sha256Hex(rawToken), LocalDateTime.now().plusMinutes(TOKEN_TTL_MINUTES));
             tokenRepository.save(token);
+            authEventService.recordPasswordResetRequested(user.getId());
 
             String resetUrl = frontendBaseUrl + "/reset-password?token=" + rawToken;
             mailer.sendResetLink(user.getEmail(), resetUrl);

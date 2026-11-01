@@ -84,7 +84,8 @@ class AuthServiceLockoutTest {
         mailer = mock(AccountSecurityMailer.class);
         authService = new AuthService(userRepository, merchantRepository, passwordEncoder, jwtUtil,
                 emailVerificationService, "", "support@manyorder.app", clock, mailer,
-                new SignInAttemptTracker(), new com.manyorder.api.config.DemoAccount("", "manyorder.app@gmail.com"));
+                new SignInAttemptTracker(), new com.manyorder.api.config.DemoAccount("", "manyorder.app@gmail.com"),
+                mock(com.manyorder.api.domain.authevent.AuthEventService.class));
     }
 
     private User existing(UserRole role) {

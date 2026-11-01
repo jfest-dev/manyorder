@@ -72,6 +72,7 @@ export function AdminAnalytics({ onOpenStore }: Props) {
           <OrdersByDay days={data.orders.byDay} range={data.window.range} />
           <Breakdown orders={data.orders} />
           <TopStores stores={data.orders.topStores} onOpenStore={onOpenStore} />
+          <PeoplePanel people={data.people} />
           <Funnel steps={data.funnel.steps} />
           <StoresPanel stores={data.stores} compare={data.window.compare} snapshot={data.snapshot} />
         </div>
@@ -302,6 +303,29 @@ function Funnel({ steps }: { steps: AdminAnalyticsData['funnel']['steps'] }) {
             </span>
           </div>
         ))}
+      </div>
+    </Panel>
+  );
+}
+
+function PeoplePanel({ people }: { people: AdminAnalyticsData['people'] }) {
+  const methods = Object.entries(people.signUpsByMethod);
+  return (
+    <Panel title="People">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24 }}>
+        <Figures title="In this range" rows={[
+          ['Sign-ins (distinct)', people.signIns],
+          ['Sign-ups', people.signUps],
+          ['Email verified', people.emailVerified],
+          ['Failed sign-ins', people.failedSignIns],
+          ['Accounts locked', people.accountsLocked],
+          ['Password resets', people.passwordResetsRequested],
+        ]} />
+        <Figures title="Sign-ups by method" rows={methods.length ? methods.map(([m, n]) => [titleCase(m), n]) : [['None', 0]]} />
+        <Figures title="Active owners (now)" rows={[
+          ['Last 7 days', people.activeOwners7d],
+          ['Last 30 days', people.activeOwners30d],
+        ]} />
       </div>
     </Panel>
   );

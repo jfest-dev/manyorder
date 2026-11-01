@@ -26,8 +26,10 @@ import com.manyorder.api.domain.admin.AdminAnalyticsResponse.Orders;
 import com.manyorder.api.domain.admin.AdminAnalyticsResponse.Snapshot;
 import com.manyorder.api.domain.admin.AdminAnalyticsResponse.Stores;
 import com.manyorder.api.domain.admin.AdminAnalyticsResponse.TopStore;
-import com.manyorder.api.domain.admin.AdminMetricsRange.Named;
+import com.manyorder.api.domain.admin.AdminAnalyticsResponse.People;
 import com.manyorder.api.domain.admin.AdminMetricsRange.Window;
+import com.manyorder.api.domain.authevent.AuthEventRepository;
+import com.manyorder.api.domain.authevent.AuthEventType;
 import com.manyorder.api.domain.merchant.MerchantRepository;
 import com.manyorder.api.domain.order.OrderFactRow;
 import com.manyorder.api.domain.order.OrderRepository;
@@ -56,6 +58,7 @@ public class AdminAnalyticsService {
     private final MerchantRepository merchantRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final AuthEventRepository authEventRepository;
 
     /** 60-second response cache, keyed by the resolved range + compare flag. */
     private final Cache<String, AdminAnalyticsResponse> cache =
@@ -64,11 +67,13 @@ public class AdminAnalyticsService {
     private final AtomicLong computeCount = new AtomicLong();
 
     public AdminAnalyticsService(OrderRepository orderRepository, MerchantRepository merchantRepository,
-                                 ProductRepository productRepository, UserRepository userRepository) {
+                                 ProductRepository productRepository, UserRepository userRepository,
+                                 AuthEventRepository authEventRepository) {
         this.orderRepository = orderRepository;
         this.merchantRepository = merchantRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
+        this.authEventRepository = authEventRepository;
     }
 
     /** For tests: how many times a full computation ran (a cache hit does not add to this). */
@@ -108,17 +113,48 @@ public class AdminAnalyticsService {
         timings.put("stores", millisSince(m1));
 
         long m2 = System.nanoTime();
-        Funnel funnel = buildFunnel(window.fromUtc(), window.toUtc());
-        timings.put("funnel", millisSince(m2));
+        People people = buildPeople(window);
+        timings.put("people", millisSince(m2));
 
         long m3 = System.nanoTime();
+        Funnel funnel = buildFunnel(window.fromUtc(), window.toUtc());
+        timings.put("funnel", millisSince(m3));
+
+        long m4 = System.nanoTime();
         Snapshot snapshot = new Snapshot(productRepository.countByIsActiveTrueAndPreOrderFalseAndStock(0));
-        timings.put("snapshot", millisSince(m3));
+        timings.put("snapshot", millisSince(m4));
 
         Orders orders = buildOrders(window, current, previous);
         timings.put("total", millisSince(t0));
 
-        return new AdminAnalyticsResponse(describe(label, window, compare), orders, stores, funnel, snapshot, timings);
+        return new AdminAnalyticsResponse(describe(label, window, compare), orders, stores, people, funnel, snapshot, timings);
+    }
+
+    // --- People (from auth_events tracking) ---
+
+    private People buildPeople(Window window) {
+        LocalDateTime from = window.fromUtc();
+        LocalDateTime to = window.toUtc();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        Map<String, Long> byMethod = new LinkedHashMap<>();
+        authEventRepository.countByMethod(AuthEventType.SIGNUP, from, to)
+                .forEach(r -> byMethod.merge(r.getMethod() == null ? "UNKNOWN" : r.getMethod().name(), r.getCount(), Long::sum));
+
+        return new People(
+                authEventRepository.countDistinctUsers(AuthEventType.LOGIN, from, to),
+                countType(AuthEventType.SIGNUP, true, from, to),
+                byMethod,
+                countType(AuthEventType.EMAIL_VERIFIED, true, from, to),
+                countType(AuthEventType.LOGIN_FAILED, false, from, to),
+                countType(AuthEventType.ACCOUNT_LOCKED, true, from, to),
+                countType(AuthEventType.PASSWORD_RESET_REQUESTED, true, from, to),
+                authEventRepository.countDistinctUsers(AuthEventType.LOGIN, now.minusDays(7), now),
+                authEventRepository.countDistinctUsers(AuthEventType.LOGIN, now.minusDays(30), now));
+    }
+
+    private long countType(AuthEventType type, boolean success, LocalDateTime from, LocalDateTime to) {
+        return authEventRepository.countByEventTypeAndSuccessAndOccurredAtGreaterThanEqualAndOccurredAtLessThan(type, success, from, to);
     }
 
     // --- Orders ---

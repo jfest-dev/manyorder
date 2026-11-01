@@ -22,6 +22,7 @@ const PAYLOAD = {
     delivery: 7, pickup: 5, guest: 4, cancelled: 1, withDiscount: 3, topStores: [{ id: 9, name: 'Kiri Brew', slug: 'kiri', currency: 'SGD', orders: 5, value: 150 }],
   },
   stores: { newInRange: 3, previousNewInRange: null, active: 10, suspended: 1, archived: 2, firstProductInRange: 2, firstOrderInRange: 1 },
+  people: { signIns: 8, signUps: 3, signUpsByMethod: { PASSWORD: 2, GOOGLE: 1 }, emailVerified: 2, failedSignIns: 5, accountsLocked: 1, passwordResetsRequested: 1, activeOwners7d: 4, activeOwners30d: 9 },
   funnel: { steps: [
     { step: 'signed_up', count: 4, retentionFromPrev: null },
     { step: 'first_order', count: 1, retentionFromPrev: 0.25 },

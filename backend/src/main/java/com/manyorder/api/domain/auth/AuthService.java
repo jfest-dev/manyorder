@@ -13,6 +13,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.manyorder.api.common.Passwords;
 import com.manyorder.api.config.JwtUtil;
+import com.manyorder.api.domain.authevent.AuthEventService;
+import com.manyorder.api.domain.authevent.AuthMethod;
 import com.manyorder.api.domain.emailverification.EmailVerificationService;
 import com.manyorder.api.domain.merchant.Merchant;
 import com.manyorder.api.domain.merchant.MerchantRepository;
@@ -36,6 +38,7 @@ public class AuthService {
     private final AccountSecurityMailer accountSecurityMailer;
     private final SignInAttemptTracker attemptTracker;
     private final com.manyorder.api.config.DemoAccount demoAccount;
+    private final AuthEventService authEventService;
     private final RestClient restClient = RestClient.create();
 
     /** Lock an account after this many consecutive wrong passwords. Platform admin
@@ -68,7 +71,8 @@ public class AuthService {
                        Clock clock,
                        AccountSecurityMailer accountSecurityMailer,
                        SignInAttemptTracker attemptTracker,
-                       com.manyorder.api.config.DemoAccount demoAccount) {
+                       com.manyorder.api.config.DemoAccount demoAccount,
+                       AuthEventService authEventService) {
         this.userRepository = userRepository;
         this.merchantRepository = merchantRepository;
         this.passwordEncoder = passwordEncoder;
@@ -80,6 +84,7 @@ public class AuthService {
         this.accountSecurityMailer = accountSecurityMailer;
         this.attemptTracker = attemptTracker;
         this.demoAccount = demoAccount;
+        this.authEventService = authEventService;
         this.dummyHash = passwordEncoder.encode("sign-in-timing-equalizer");
     }
 
@@ -132,6 +137,8 @@ public class AuthService {
                     throw tooManyAttempts(attemptTracker.retryAfterSeconds(email, now));
                 }
             }
+            // Record the failed attempt with no user id and no email (privacy).
+            authEventService.recordLoginFailed(AuthMethod.PASSWORD);
             throw signInFailed();
         }
 
@@ -146,6 +153,11 @@ public class AuthService {
             userRepository.save(user);
         }
         requireNotSuspended(user);
+        // Record the successful sign-in and stamp last_login_at for the "active in last
+        // N days" figure. The save is one update on the user row we already loaded.
+        user.setLastLoginAt(now);
+        userRepository.save(user);
+        authEventService.recordLoginSuccess(user.getId(), AuthMethod.PASSWORD);
         // Remember me extends the session to the longer lifetime, except a platform
         // admin (and the demo account) always get the standard (short) lifetime.
         boolean longLived = request.isRemember()
@@ -172,11 +184,16 @@ public class AuthService {
         }
         attempts++;
         user.setFailedLoginAttempts(attempts);
+        boolean newlyLocked = false;
         if (attempts >= failedAttemptThreshold(user)) {
             user.setLockedUntil(now.plusMinutes(LOCK_MINUTES));
             maybeSendLockedEmail(user, now);
+            newlyLocked = true;
         }
         userRepository.save(user);
+        if (newlyLocked) {
+            authEventService.recordAccountLocked(user.getId());
+        }
     }
 
     /** Email the owner that their account just locked, capped to one per hour.
@@ -244,6 +261,7 @@ public class AuthService {
         User user = new User(request.getFullName(), request.getEmail(), hashed, role);
         user.setStaffStore(staffStore);
         userRepository.save(user);
+        authEventService.recordSignup(user.getId(), AuthMethod.PASSWORD);
 
         // Fire the confirmation email. No-ops when Resend is unconfigured and
         // never throws, so a send issue can't fail the registration.
@@ -293,6 +311,9 @@ public class AuthService {
 
         User user = resolveGoogleUser(email, name);
         requireNotSuspended(user);
+        user.setLastLoginAt(LocalDateTime.now(clock));
+        userRepository.save(user);
+        authEventService.recordLoginSuccess(user.getId(), AuthMethod.GOOGLE);
         return toLoginResponse(user);
     }
 
@@ -319,7 +340,9 @@ public class AuthService {
             // the account starts verified, with no usable password until the owner sets one.
             User created = new User(name, email, Passwords.NO_PASSWORD, UserRole.MERCHANT);
             created.setVerified(true);
-            return userRepository.save(created);
+            User saved = userRepository.save(created);
+            authEventService.recordSignup(saved.getId(), AuthMethod.GOOGLE);
+            return saved;
         });
     }
 

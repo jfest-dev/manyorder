@@ -1317,10 +1317,16 @@ export interface AdminAnalyticsStores {
   firstProductInRange: number; firstOrderInRange: number;
 }
 export interface AdminAnalyticsFunnelStep { step: string; count: number; retentionFromPrev: number | null; }
+export interface AdminAnalyticsPeople {
+  signIns: number; signUps: number; signUpsByMethod: Record<string, number>;
+  emailVerified: number; failedSignIns: number; accountsLocked: number;
+  passwordResetsRequested: number; activeOwners7d: number; activeOwners30d: number;
+}
 export interface AdminAnalytics {
   window: AdminAnalyticsWindow;
   orders: AdminAnalyticsOrders;
   stores: AdminAnalyticsStores;
+  people: AdminAnalyticsPeople;
   funnel: { steps: AdminAnalyticsFunnelStep[] };
   snapshot: { outOfStockProducts: number };
   timingsMs: Record<string, number>;

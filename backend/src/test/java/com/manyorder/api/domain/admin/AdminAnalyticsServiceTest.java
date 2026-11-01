@@ -16,6 +16,11 @@ import org.springframework.transaction.annotation.Transactional;
 import com.manyorder.api.domain.admin.AdminAnalyticsResponse.CurrencyValue;
 import com.manyorder.api.domain.admin.AdminAnalyticsResponse.DayCount;
 import com.manyorder.api.domain.admin.AdminAnalyticsResponse.FunnelStep;
+import com.manyorder.api.domain.admin.AdminAnalyticsResponse.People;
+import com.manyorder.api.domain.authevent.AuthEvent;
+import com.manyorder.api.domain.authevent.AuthEventRepository;
+import com.manyorder.api.domain.authevent.AuthEventType;
+import com.manyorder.api.domain.authevent.AuthMethod;
 import com.manyorder.api.domain.merchant.Merchant;
 import com.manyorder.api.domain.merchant.MerchantRepository;
 import com.manyorder.api.domain.order.Order;
@@ -48,6 +53,7 @@ class AdminAnalyticsServiceTest {
     @Autowired MerchantRepository merchantRepository;
     @Autowired OrderRepository orderRepository;
     @Autowired ProductRepository productRepository;
+    @Autowired AuthEventRepository authEventRepository;
 
     // Custom window: SGT 2026-03-01..2026-03-03 inclusive => UTC [02-28T16:00, 03-03T16:00).
     private static final LocalDate FROM = LocalDate.of(2026, 3, 1);
@@ -152,6 +158,43 @@ class AdminAnalyticsServiceTest {
 
         service.analytics(null, from, to, true);   // compare=true is a different key
         assertEquals(before + 2, service.computations(), "a different range/compare recomputes");
+    }
+
+    @Test
+    void peopleMetricsAreCountedFromAuthEventsInRange() {
+        // A window no other test method uses, so the cache and the roll-back stay clean.
+        LocalDateTime in = LocalDateTime.of(2026, 5, 2, 0, 0);   // inside the window
+        LocalDateTime out = LocalDateTime.of(2026, 4, 1, 0, 0);  // before the window
+        // Two distinct accounts sign in (one twice); a third sign-in is outside the range.
+        authEvent(in, AuthEventType.LOGIN, AuthMethod.PASSWORD, true, 900001L);
+        authEvent(in, AuthEventType.LOGIN, AuthMethod.PASSWORD, true, 900001L);
+        authEvent(in, AuthEventType.LOGIN, AuthMethod.GOOGLE, true, 900002L);
+        authEvent(out, AuthEventType.LOGIN, AuthMethod.PASSWORD, true, 900003L);
+        authEvent(in, AuthEventType.SIGNUP, AuthMethod.PASSWORD, true, 900001L);
+        authEvent(in, AuthEventType.SIGNUP, AuthMethod.GOOGLE, true, 900002L);
+        authEvent(in, AuthEventType.EMAIL_VERIFIED, null, true, 900001L);
+        authEvent(in, AuthEventType.LOGIN_FAILED, AuthMethod.PASSWORD, false, null);
+        authEvent(in, AuthEventType.LOGIN_FAILED, AuthMethod.PASSWORD, false, null);
+        authEvent(in, AuthEventType.LOGIN_FAILED, AuthMethod.PASSWORD, false, null);
+        authEvent(in, AuthEventType.ACCOUNT_LOCKED, null, true, 900001L);
+        authEvent(in, AuthEventType.PASSWORD_RESET_REQUESTED, null, true, 900002L);
+
+        // A window no other method caches, so these events are counted fresh.
+        People p = service.analytics(null, LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 3), false).people();
+
+        assertEquals(2, p.signIns());
+        assertEquals(2, p.signUps());
+        assertEquals(Long.valueOf(1), p.signUpsByMethod().get("PASSWORD"));
+        assertEquals(Long.valueOf(1), p.signUpsByMethod().get("GOOGLE"));
+        assertEquals(1, p.emailVerified());
+        assertEquals(3, p.failedSignIns());
+        assertEquals(1, p.accountsLocked());
+        assertEquals(1, p.passwordResetsRequested());
+        assertTrue(p.activeOwners7d() <= p.activeOwners30d(), "7-day active owners are a subset of 30-day");
+    }
+
+    private AuthEvent authEvent(LocalDateTime occurredAt, AuthEventType type, AuthMethod method, boolean success, Long userId) {
+        return authEventRepository.save(new AuthEvent(occurredAt, type, method, success, userId));
     }
 
     // --- seeding ---

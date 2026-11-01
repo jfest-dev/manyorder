@@ -18,6 +18,7 @@ public record AdminAnalyticsResponse(
         Window window,
         Orders orders,
         Stores stores,
+        People people,
         Funnel funnel,
         Snapshot snapshot,
         Map<String, Long> timingsMs) {
@@ -80,4 +81,17 @@ public record AdminAnalyticsResponse(
 
     /** Point-in-time figures that are not range-scoped, labelled as such for the client. */
     public record Snapshot(long outOfStockProducts) {}
+
+    /** People metrics from the auth_events tracking. Range-scoped except the two active-owner
+     *  figures, which are a point-in-time "distinct owners who signed in within the last N days". */
+    public record People(
+            long signIns,                      // distinct accounts with a successful sign-in in range
+            long signUps,
+            Map<String, Long> signUpsByMethod, // method name (PASSWORD/GOOGLE) -> count
+            long emailVerified,
+            long failedSignIns,
+            long accountsLocked,
+            long passwordResetsRequested,
+            long activeOwners7d,               // point-in-time, last 7 days
+            long activeOwners30d) {}           // point-in-time, last 30 days
 }
