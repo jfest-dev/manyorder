@@ -25,6 +25,8 @@ import com.manyorder.api.domain.user.UserRole;
 @Service
 public class AuthService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthService.class);
+
     private static final String GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo?id_token={token}";
 
     private final UserRepository userRepository;
@@ -153,11 +155,14 @@ public class AuthService {
             userRepository.save(user);
         }
         requireNotSuspended(user);
-        // Record the successful sign-in and stamp last_login_at for the "active in last
-        // N days" figure. The save is one update on the user row we already loaded.
-        user.setLastLoginAt(now);
-        userRepository.save(user);
-        authEventService.recordLoginSuccess(user.getId(), AuthMethod.PASSWORD);
+        // Record the successful sign-in (and stamp last_login_at) best-effort: the event
+        // write is isolated and the stamp is deferred to after this commits, so neither
+        // can break or roll back the sign-in. Guard the call too, as defence in depth.
+        try {
+            authEventService.recordLoginSuccess(user.getId(), AuthMethod.PASSWORD);
+        } catch (RuntimeException e) {
+            log.warn("Post-sign-in recording failed; sign-in unaffected");
+        }
         // Remember me extends the session to the longer lifetime, except a platform
         // admin (and the demo account) always get the standard (short) lifetime.
         boolean longLived = request.isRemember()
@@ -311,9 +316,11 @@ public class AuthService {
 
         User user = resolveGoogleUser(email, name);
         requireNotSuspended(user);
-        user.setLastLoginAt(LocalDateTime.now(clock));
-        userRepository.save(user);
-        authEventService.recordLoginSuccess(user.getId(), AuthMethod.GOOGLE);
+        try {
+            authEventService.recordLoginSuccess(user.getId(), AuthMethod.GOOGLE);
+        } catch (RuntimeException e) {
+            log.warn("Post-sign-in recording failed; sign-in unaffected");
+        }
         return toLoginResponse(user);
     }
 

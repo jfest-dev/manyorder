@@ -24,6 +24,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /** The platform admin, if one exists (there is at most one). */
     Optional<User> findFirstByRole(UserRole role);
 
+    /** Stamp the account's last successful sign-in without loading the row (a targeted
+     *  update, used by the best-effort post-sign-in recorder). */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE User u SET u.lastLoginAt = :at WHERE u.id = :id")
+    void updateLastLoginAt(@Param("id") Long id, @Param("at") LocalDateTime at);
+
     // --- Admin analytics funnel: the cohort of accounts that signed up within a
     //     half-open [from, to) range, and current-state counts for each later step. ---
 

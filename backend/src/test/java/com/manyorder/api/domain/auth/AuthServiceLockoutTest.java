@@ -64,6 +64,7 @@ class AuthServiceLockoutTest {
     private JwtUtil jwtUtil;
     private MutableClock clock;
     private AccountSecurityMailer mailer;
+    private com.manyorder.api.domain.authevent.AuthEventService authEventService;
     private AuthService authService;
 
     @BeforeEach
@@ -82,10 +83,11 @@ class AuthServiceLockoutTest {
 
         clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
         mailer = mock(AccountSecurityMailer.class);
+        authEventService = mock(com.manyorder.api.domain.authevent.AuthEventService.class);
         authService = new AuthService(userRepository, merchantRepository, passwordEncoder, jwtUtil,
                 emailVerificationService, "", "support@manyorder.app", clock, mailer,
                 new SignInAttemptTracker(), new com.manyorder.api.config.DemoAccount("", "manyorder.app@gmail.com"),
-                mock(com.manyorder.api.domain.authevent.AuthEventService.class));
+                authEventService);
     }
 
     private User existing(UserRole role) {
@@ -104,6 +106,20 @@ class AuthServiceLockoutTest {
 
     private ResponseStatusException attempt(String email, String password) {
         return assertThrows(ResponseStatusException.class, () -> authService.login(req(email, password)));
+    }
+
+    @Test
+    void signInSucceedsEvenWhenTheAuthEventRecordingThrows() {
+        existing(UserRole.MERCHANT);
+        // The best-effort recorder failing (e.g. the tracking DB is down) must not break sign-in.
+        org.mockito.Mockito.doThrow(new RuntimeException("tracking db down"))
+                .when(authEventService).recordLoginSuccess(nullable(Long.class),
+                        org.mockito.ArgumentMatchers.any());
+
+        LoginResponse response = authService.login(req("known@test.com", "correct"));
+
+        assertNotNull(response, "sign-in still succeeds");
+        assertEquals("token", response.getToken());
     }
 
     @Test
