@@ -10,6 +10,12 @@ vi.mock('../../lib/api', async (importOriginal) => {
   return { ...actual, adminApi: { ...actual.adminApi, analytics: (p: unknown) => analytics(p) } };
 });
 
+// Mock the calendar popover to a plain text input so a test can set a date directly.
+vi.mock('../DatePicker', () => ({
+  DatePicker: ({ value, onChange, ariaLabel }: { value: string; onChange: (v: string) => void; ariaLabel?: string }) =>
+    <input aria-label={ariaLabel} value={value} onChange={(e) => onChange(e.target.value)} />,
+}));
+
 import { AdminAnalytics } from './AdminAnalytics';
 
 const PAYLOAD = {
@@ -73,5 +79,22 @@ describe('AdminAnalytics', () => {
     await user.click(screen.getByRole('button', { name: 'Custom' }));
     expect(screen.getByLabelText('Custom range start date')).toBeTruthy();
     expect(screen.getByLabelText('Custom range end date')).toBeTruthy();
+  });
+
+  it('rejects an over-366-day custom range with a message and does not call the endpoint', async () => {
+    const user = userEvent.setup();
+    render(<AdminAnalytics onOpenStore={vi.fn()} />);
+    await waitFor(() => expect(analytics).toHaveBeenCalled());
+    analytics.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Custom' }));
+    // DatePicker is mocked (below) to a plain date input keyed by its aria-label.
+    await user.clear(screen.getByLabelText('Custom range start date'));
+    await user.type(screen.getByLabelText('Custom range start date'), '2026-01-01');
+    await user.clear(screen.getByLabelText('Custom range end date'));
+    await user.type(screen.getByLabelText('Custom range end date'), '2027-06-01');
+
+    expect(await screen.findByText(/max 366 days/i)).toBeTruthy();
+    expect(analytics).not.toHaveBeenCalledWith({ range: 'custom', from: '2026-01-01', to: '2027-06-01', compare: false });
   });
 });

@@ -3,9 +3,12 @@ package com.manyorder.api.domain.admin;
 import java.time.LocalDate;
 
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Starter metrics for the admin dashboard. PLATFORM_ADMIN-only via SecurityConfig. */
@@ -46,5 +49,13 @@ public class AdminMetricsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false, defaultValue = "false") boolean compare) {
         return adminAnalyticsService.analytics(range, from, to, compare);
+    }
+
+    /** A bad range (reversed, over the 366-day cap, missing dates, or an unknown token)
+     *  comes back as a clear 400, not a 500. */
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public String badRange(IllegalArgumentException e) {
+        return e.getMessage();
     }
 }

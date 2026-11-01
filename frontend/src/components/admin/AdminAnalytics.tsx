@@ -20,7 +20,18 @@ const RANGE_OPTIONS: { key: AdminAnalyticsRange; label: string }[] = [
   { key: 'custom', label: 'Custom' },
 ];
 
+// Matches the server cap (AdminMetricsRange.MAX_CUSTOM_DAYS): the custom range is
+// validated here and on the server, so an over-long range never reaches the endpoint.
+const MAX_CUSTOM_DAYS = 366;
 const STATUS_ORDER = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'COMPLETED', 'CANCELLED'];
+
+/** Inclusive day count between two 'YYYY-MM-DD' dates (start and end both counted). */
+function inclusiveDays(start: string, end: string): number {
+  const s = Date.parse(start + 'T00:00:00Z');
+  const e = Date.parse(end + 'T00:00:00Z');
+  if (Number.isNaN(s) || Number.isNaN(e)) return 0;
+  return Math.floor((e - s) / 86400000) + 1;
+}
 const FUNNEL_LABELS: Record<string, string> = {
   signed_up: 'Signed up', verified: 'Verified', created_store: 'Created a store',
   added_product: 'Added a product', first_order: 'First order',
@@ -38,8 +49,13 @@ export function AdminAnalytics({ onOpenStore }: Props) {
   const [loading, setLoading] = useState(false);
 
   const isCustom = range === 'custom';
-  const customValid = !isCustom || (!!customStart && !!customEnd && customStart <= customEnd);
-  const customInvalid = isCustom && !!customStart && !!customEnd && customStart > customEnd;
+  const customDays = isCustom && customStart && customEnd ? inclusiveDays(customStart, customEnd) : 0;
+  const customReversed = isCustom && !!customStart && !!customEnd && customStart > customEnd;
+  const customTooLong = customDays > MAX_CUSTOM_DAYS;
+  const customValid = !isCustom || (!!customStart && !!customEnd && !customReversed && !customTooLong);
+  const customMessage = customReversed
+    ? 'Start date must be on or before the end date.'
+    : customTooLong ? `The range is too long (max ${MAX_CUSTOM_DAYS} days).` : '';
 
   useEffect(() => {
     if (!customValid) return;
@@ -58,7 +74,7 @@ export function AdminAnalytics({ onOpenStore }: Props) {
       <Controls
         range={range} setRange={setRange} compare={compare} setCompare={setCompare}
         customStart={customStart} setCustomStart={setCustomStart}
-        customEnd={customEnd} setCustomEnd={setCustomEnd} customInvalid={customInvalid}
+        customEnd={customEnd} setCustomEnd={setCustomEnd} customMessage={customMessage}
       />
       {data && <WindowCaption data={data} />}
 
@@ -91,12 +107,12 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 }
 
 function Controls({
-  range, setRange, compare, setCompare, customStart, setCustomStart, customEnd, setCustomEnd, customInvalid,
+  range, setRange, compare, setCompare, customStart, setCustomStart, customEnd, setCustomEnd, customMessage,
 }: {
   range: AdminAnalyticsRange; setRange: (r: AdminAnalyticsRange) => void;
   compare: boolean; setCompare: (c: boolean) => void;
   customStart: string; setCustomStart: (s: string) => void;
-  customEnd: string; setCustomEnd: (s: string) => void; customInvalid: boolean;
+  customEnd: string; setCustomEnd: (s: string) => void; customMessage: string;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -134,8 +150,8 @@ function Controls({
               <DatePicker value={customEnd} onChange={setCustomEnd} min={customStart || undefined} placeholder="End date" ariaLabel="Custom range end date" />
             </div>
           </div>
-          {customInvalid && (
-            <p className="text-small" style={{ color: 'var(--error-color)', margin: '8px 0 0' }}>Start date must be on or before the end date.</p>
+          {customMessage && (
+            <p className="text-small" style={{ color: 'var(--error-color)', margin: '8px 0 0' }}>{customMessage}</p>
           )}
         </div>
       )}

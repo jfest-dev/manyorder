@@ -40,6 +40,19 @@ class AdminAnalyticsIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void analytics_rejectsAnOverLongCustomRangeWithAClear400() throws Exception {
+        String admin = loginAndGetToken("admin@manyorder.app", SEED_DEMO_PASSWORD);
+        // More than the 366-day cap.
+        getWithToken("/admin/metrics/analytics?from=2026-01-01&to=2027-06-01", admin, 400);
+    }
+
+    @Test
+    void analytics_rejectsAReversedCustomRangeWithAClear400() throws Exception {
+        String admin = loginAndGetToken("admin@manyorder.app", SEED_DEMO_PASSWORD);
+        getWithToken("/admin/metrics/analytics?from=2026-03-03&to=2026-03-01", admin, 400);
+    }
+
+    @Test
     void analytics_isForbiddenForNonAdminAndUnauthenticated() throws Exception {
         String merchant = registerAndGetToken("an-nonadmin@test.com", "MERCHANT", null);
         getWithToken("/admin/metrics/analytics?range=30d", merchant, 403);
