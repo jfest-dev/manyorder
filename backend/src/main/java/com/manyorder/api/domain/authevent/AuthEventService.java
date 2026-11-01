@@ -2,6 +2,9 @@ package com.manyorder.api.domain.authevent;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,6 +12,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 
 /**
  * Records {@link AuthEvent} rows from the normal auth flows and sweeps old ones. Every
@@ -24,9 +30,21 @@ public class AuthEventService {
     private static final Logger log = LoggerFactory.getLogger(AuthEventService.class);
     /** Rows older than this are deleted by the daily sweep, so no long-term history is kept. */
     static final int RETENTION_DAYS = 90;
+    /** At most this many failed-sign-in rows are written per clock hour, platform-wide. A
+     *  flood of wrong passwords (unauthenticated, one row each) is the only unbounded write;
+     *  past the cap the rows are dropped, so the table cannot grow without limit. The
+     *  failed-sign-ins metric therefore saturates at this cap per hour, which still shows a
+     *  spike. Other event types are bounded by real actions or existing rate limits. */
+    static final int MAX_FAILED_WRITES_PER_HOUR = 2000;
+    /** Rows deleted per committed batch in the sweep, so each statement is short. */
+    static final int SWEEP_BATCH_SIZE = 5000;
 
     private final AuthEventWriter writer;
     private final Clock clock;
+
+    /** Failed-sign-in write counters per clock hour, to enforce {@link #MAX_FAILED_WRITES_PER_HOUR}. */
+    private final Cache<Long, AtomicLong> failedWritesThisHour =
+            Caffeine.newBuilder().expireAfterWrite(2, TimeUnit.HOURS).maximumSize(8).build();
 
     public AuthEventService(AuthEventWriter writer, Clock clock) {
         this.writer = writer;
@@ -54,9 +72,20 @@ public class AuthEventService {
         }
     }
 
-    /** A failed sign-in. No user id and no email are stored, even for a known address. */
+    /** A failed sign-in. No user id and no email are stored, even for a known address.
+     *  Capped per hour so a flood of wrong passwords cannot grow the table without limit. */
     public void recordLoginFailed(AuthMethod method) {
+        if (!underFailedWriteCap()) {
+            return;
+        }
         write(AuthEventType.LOGIN_FAILED, method, false, null);
+    }
+
+    /** True if another failed-sign-in row may be written this clock hour (and counts it). */
+    private boolean underFailedWriteCap() {
+        long hour = clock.instant().truncatedTo(ChronoUnit.HOURS).getEpochSecond();
+        long count = failedWritesThisHour.get(hour, h -> new AtomicLong()).incrementAndGet();
+        return count <= MAX_FAILED_WRITES_PER_HOUR;
     }
 
     public void recordSignup(Long userId, AuthMethod method) {
@@ -87,13 +116,20 @@ public class AuthEventService {
         }
     }
 
-    /** Daily retention sweep: delete rows older than {@link #RETENTION_DAYS} days. */
+    /** Daily retention sweep: delete rows older than {@link #RETENTION_DAYS} days, in
+     *  committed batches so it never holds a long lock on the table. */
     @Scheduled(cron = "0 15 3 * * *")
     public int sweepOldEvents() {
-        int removed = writer.deleteOlderThan(LocalDateTime.now(clock).minusDays(RETENTION_DAYS));
-        if (removed > 0) {
-            log.info("auth_events retention sweep removed {} rows older than {} days", removed, RETENTION_DAYS);
+        LocalDateTime cutoff = LocalDateTime.now(clock).minusDays(RETENTION_DAYS);
+        int total = 0;
+        int batch;
+        do {
+            batch = writer.deleteOlderThanBatch(cutoff, SWEEP_BATCH_SIZE);
+            total += batch;
+        } while (batch == SWEEP_BATCH_SIZE);
+        if (total > 0) {
+            log.info("auth_events retention sweep removed {} rows older than {} days", total, RETENTION_DAYS);
         }
-        return removed;
+        return total;
     }
 }

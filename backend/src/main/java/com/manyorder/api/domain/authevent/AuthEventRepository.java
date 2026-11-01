@@ -41,6 +41,17 @@ public interface AuthEventRepository extends JpaRepository<AuthEvent, Long> {
     @Query("DELETE FROM AuthEvent e WHERE e.occurredAt < :cutoff")
     int deleteOlderThan(@Param("cutoff") LocalDateTime cutoff);
 
+    /** One batch of the retention sweep: delete up to {@code limit} of the oldest rows past
+     *  the cutoff. Deleting by a bounded id set keeps each statement short so the sweep never
+     *  holds a long lock on the table. Native so the LIMIT subquery works on Postgres and H2. */
+    @Modifying
+    @Query(value = """
+            DELETE FROM auth_events WHERE id IN (
+                SELECT id FROM auth_events WHERE occurred_at < :cutoff ORDER BY id LIMIT :limit
+            )
+            """, nativeQuery = true)
+    int deleteOlderThanBatch(@Param("cutoff") LocalDateTime cutoff, @Param("limit") int limit);
+
     /** Projection for {@link #countByMethod}. A null method groups as its own row. */
     interface MethodCount {
         AuthMethod getMethod();

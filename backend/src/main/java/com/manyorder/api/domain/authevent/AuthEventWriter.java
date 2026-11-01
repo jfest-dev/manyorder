@@ -41,9 +41,16 @@ public class AuthEventWriter {
         userRepository.updateLastLoginAt(userId, at);
     }
 
-    /** Delete rows older than the cutoff (the retention sweep). */
+    /** Delete rows older than the cutoff (used by tests and as a fallback). */
     @Transactional
     public int deleteOlderThan(LocalDateTime cutoff) {
         return repository.deleteOlderThan(cutoff);
+    }
+
+    /** One committed batch of the retention sweep. Each batch is its own transaction so
+     *  locks are released between batches and the sweep never holds a long lock. */
+    @Transactional
+    public int deleteOlderThanBatch(LocalDateTime cutoff, int limit) {
+        return repository.deleteOlderThanBatch(cutoff, limit);
     }
 }

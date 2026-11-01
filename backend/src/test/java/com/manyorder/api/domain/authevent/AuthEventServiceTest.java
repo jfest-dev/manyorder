@@ -40,16 +40,34 @@ class AuthEventServiceTest {
     }
 
     @Test
-    void sweepDelegatesToTheWriterWithA90DayCutoff() {
+    void sweepDeletesInCommittedBatchesUntilAShortBatch() {
         AuthEventService service = new AuthEventService(writer, Clock.systemUTC());
-        when(writer.deleteOlderThan(ArgumentMatchers.any(LocalDateTime.class))).thenReturn(4);
+        // A full batch then a short batch: the loop runs twice and stops.
+        when(writer.deleteOlderThanBatch(ArgumentMatchers.any(LocalDateTime.class),
+                ArgumentMatchers.eq(AuthEventService.SWEEP_BATCH_SIZE)))
+                .thenReturn(AuthEventService.SWEEP_BATCH_SIZE, 3);
 
-        assertEquals(4, service.sweepOldEvents());
+        assertEquals(AuthEventService.SWEEP_BATCH_SIZE + 3, service.sweepOldEvents());
 
         org.mockito.ArgumentCaptor<LocalDateTime> cutoff = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
-        Mockito.verify(writer).deleteOlderThan(cutoff.capture());
+        Mockito.verify(writer, Mockito.times(2)).deleteOlderThanBatch(cutoff.capture(), ArgumentMatchers.anyInt());
         LocalDateTime expected = LocalDateTime.now(Clock.systemUTC()).minusDays(90);
-        long diffMinutes = java.time.Duration.between(cutoff.getValue(), expected).abs().toMinutes();
+        long diffMinutes = java.time.Duration.between(cutoff.getAllValues().get(0), expected).abs().toMinutes();
         org.junit.jupiter.api.Assertions.assertTrue(diffMinutes < 5, "cutoff is about 90 days ago");
+    }
+
+    @Test
+    void failedSignInWritesAreCappedPerHour() {
+        AuthEventService service = new AuthEventService(writer, Clock.systemUTC());
+
+        int cap = AuthEventService.MAX_FAILED_WRITES_PER_HOUR;
+        for (int i = 0; i < cap + 50; i++) {
+            service.recordLoginFailed(AuthMethod.PASSWORD);
+        }
+
+        // Only up to the cap reach the writer; the rest are dropped so the table can't flood.
+        Mockito.verify(writer, Mockito.times(cap)).insert(
+                ArgumentMatchers.eq(AuthEventType.LOGIN_FAILED), ArgumentMatchers.any(),
+                ArgumentMatchers.eq(false), ArgumentMatchers.isNull(), ArgumentMatchers.any());
     }
 }
