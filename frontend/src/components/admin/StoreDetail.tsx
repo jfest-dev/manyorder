@@ -4,6 +4,7 @@ import { adminApi, AdminStoreDetail, AdminAuditLogEntry, ProductResponse, ApiErr
 import { formatMoney } from '../../lib/currency';
 import { formatDate, formatDateTime } from '../../lib/adminDatetime';
 import { ADMIN_FONT } from './adminTokens';
+import { readableAction } from './adminActions';
 import { VerifiedBadge } from '../VerifiedBadge';
 import { Checkbox } from '../Checkbox';
 import { Button } from '../Button';
@@ -243,7 +244,7 @@ export function StoreDetail({ merchantId, onChanged }: { merchantId: number; onC
           actions.map((a) => (
             <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '8px 0', borderTop: '1px solid var(--border-subtle)' }}>
               <div style={{ minWidth: 0 }}>
-                <div className="text-small" style={{ fontWeight: 600 }}>{a.action}</div>
+                <div className="text-small" style={{ fontWeight: 600 }}>{readableAction(a.action)}</div>
                 <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   {a.targetType ? `${a.targetType}${a.targetId != null ? ` #${a.targetId}` : ''}` : EMPTY}
                   {a.detail ? ` · ${a.detail}` : ''}

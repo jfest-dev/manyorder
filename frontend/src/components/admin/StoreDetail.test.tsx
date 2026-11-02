@@ -84,7 +84,8 @@ describe('StoreDetail', () => {
     // Renamed admin-activity section
     expect(screen.getByText('Admin activity on this store')).toBeTruthy();
     expect(screen.getByText('Changes platform admins made to this store.')).toBeTruthy();
-    expect(screen.getByText('DEACTIVATE_PRODUCT')).toBeTruthy();
+    expect(screen.getByText('Hid product')).toBeTruthy(); // readable label, not the raw code
+    expect(screen.queryByText('DEACTIVATE_PRODUCT')).toBeNull();
     // The admin's display name is shown, not their email (the owner email above stays).
     expect(screen.getByText('Dana Admin')).toBeTruthy();
     expect(screen.queryByText('admin@manyorder.app')).toBeNull();

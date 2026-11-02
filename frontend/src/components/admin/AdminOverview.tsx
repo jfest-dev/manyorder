@@ -40,26 +40,36 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 }
 
 function RecentActions({ actions }: { actions: AdminOverviewData['recentActions'] }) {
+  // Show a store id only when two different stores share a name in this list.
+  const idsByName = new Map<string, Set<number>>();
+  for (const a of actions) {
+    const name = storeNameOf(a);
+    if (name && a.merchantId != null) {
+      if (!idsByName.has(name)) idsByName.set(name, new Set());
+      idsByName.get(name)!.add(a.merchantId);
+    }
+  }
   return (
     <Panel title="Recent admin actions">
       {actions.length === 0 ? (
         <div style={{ fontSize: ADMIN_FONT.small, color: 'var(--text-muted)' }}>No admin activity yet.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {actions.map((a) => {
-            const storeName = a.storeName && a.storeName.trim() !== '' ? a.storeName : 'Store';
+            const name = storeNameOf(a);
+            const ambiguous = !!name && (idsByName.get(name)?.size ?? 0) > 1;
+            const storePart = name ? `${name}${ambiguous && a.merchantId != null ? ` #${a.merchantId}` : ''}` : null;
             return (
-              <div key={a.id} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: ADMIN_FONT.body }}>
-                    {readableAction(a.action)}
-                    {a.targetLabel ? <span style={{ color: 'var(--text-secondary)' }}> · {a.targetLabel}</span> : null}
-                  </div>
-                  <div style={{ fontSize: ADMIN_FONT.caption, color: 'var(--text-muted)' }}>
-                    {(a.actorName || 'Platform admin')}{a.merchantId != null ? ` · ${storeName} #${a.merchantId}` : ''}
-                  </div>
+              <div key={a.id} style={{ minWidth: 0 }}>
+                {/* Line 1: plain-words action and the store it was done to. */}
+                <div style={{ fontSize: ADMIN_FONT.body }}>
+                  {readableAction(a.action)}
+                  {storePart ? <span style={{ color: 'var(--text-secondary)' }}> · {storePart}</span> : null}
                 </div>
-                <span style={{ fontSize: ADMIN_FONT.caption, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{formatDateTime(a.createdAt)}</span>
+                {/* Line 2: who did it and when. */}
+                <div style={{ fontSize: ADMIN_FONT.caption, color: 'var(--text-muted)' }}>
+                  {(a.actorName || 'Platform Admin')} · {formatDateTime(a.createdAt)}
+                </div>
               </div>
             );
           })}
@@ -67,4 +77,9 @@ function RecentActions({ actions }: { actions: AdminOverviewData['recentActions'
       )}
     </Panel>
   );
+}
+
+function storeNameOf(a: AdminOverviewData['recentActions'][number]): string | null {
+  const n = (a.storeName && a.storeName.trim()) || (a.targetLabel && a.targetLabel.trim()) || '';
+  return n || null;
 }
