@@ -35,6 +35,55 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long> {
     long countByArchivedAtIsNullAndSuspendedAtIsNull();   // active
     long countBySuspendedAtIsNotNull();                   // suspended
     long countByArchivedAtIsNotNull();                    // archived
+    long countByProtectedFromDeletionTrue();              // protected from deletion
+
+    // --- Admin dashboard: named lists for the "needs action" rows and drop-off drill-down. ---
+
+    /** Active stores created before the cutoff that still have no products. */
+    @Query("""
+            SELECT m.id AS id, m.name AS name FROM Merchant m
+            WHERE m.archivedAt IS NULL AND m.suspendedAt IS NULL AND m.createdAt < :cutoff
+              AND NOT EXISTS (SELECT 1 FROM Product p WHERE p.merchant = m)
+            ORDER BY m.createdAt
+            """)
+    List<com.manyorder.api.domain.admin.NamedRef> findActiveStoresWithoutProductsBefore(
+            @Param("cutoff") LocalDateTime cutoff, Pageable pageable);
+
+    /** Active stores that have products but no order since the cutoff (gone quiet). */
+    @Query("""
+            SELECT m.id AS id, m.name AS name FROM Merchant m
+            WHERE m.archivedAt IS NULL AND m.suspendedAt IS NULL
+              AND EXISTS (SELECT 1 FROM Product p WHERE p.merchant = m)
+              AND NOT EXISTS (SELECT 1 FROM Order o WHERE o.merchant = m AND o.createdAt >= :since)
+            ORDER BY m.createdAt
+            """)
+    List<com.manyorder.api.domain.admin.NamedRef> findActiveStoresWithProductsButNoOrderSince(
+            @Param("since") LocalDateTime since, Pageable pageable);
+
+    /** Currently suspended stores, most recently suspended first. */
+    @Query("SELECT m.id AS id, m.name AS name FROM Merchant m WHERE m.suspendedAt IS NOT NULL ORDER BY m.suspendedAt DESC")
+    List<com.manyorder.api.domain.admin.NamedRef> findSuspendedStores(Pageable pageable);
+
+    /** Owners who created a store in the range but whose store has no product (drop-off). */
+    @Query("""
+            SELECT m.id AS id, m.name AS name FROM Merchant m
+            WHERE m.createdAt >= :from AND m.createdAt < :to
+              AND NOT EXISTS (SELECT 1 FROM Product p WHERE p.merchant = m)
+            ORDER BY m.createdAt
+            """)
+    List<com.manyorder.api.domain.admin.NamedRef> findStoresInRangeWithoutProducts(
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to, Pageable pageable);
+
+    /** Owners who created a store in the range whose store has products but no order (drop-off). */
+    @Query("""
+            SELECT m.id AS id, m.name AS name FROM Merchant m
+            WHERE m.createdAt >= :from AND m.createdAt < :to
+              AND EXISTS (SELECT 1 FROM Product p WHERE p.merchant = m)
+              AND NOT EXISTS (SELECT 1 FROM Order o WHERE o.merchant = m)
+            ORDER BY m.createdAt
+            """)
+    List<com.manyorder.api.domain.admin.NamedRef> findStoresInRangeWithProductsButNoOrder(
+            @Param("from") LocalDateTime from, @Param("to") LocalDateTime to, Pageable pageable);
     long countByCreatedAtAfter(java.time.LocalDateTime cutoff);
 
     // --- Range-scoped admin analytics (half-open [from, to)). ---

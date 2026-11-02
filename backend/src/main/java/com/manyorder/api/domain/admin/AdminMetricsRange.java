@@ -22,7 +22,7 @@ public final class AdminMetricsRange {
     /** Cap a custom span so a query can't scan an unbounded range. */
     public static final int MAX_CUSTOM_DAYS = 366;
 
-    public enum Named { TODAY, YESTERDAY, D7, D30, ALL }
+    public enum Named { TODAY, YESTERDAY, D7, D30, THIS_MONTH, ALL }
 
     /** Half-open [from, to) in UTC (as LocalDateTime), plus the equal-length window
      *  immediately before it (null for ALL, which has no comparison). */
@@ -53,6 +53,8 @@ public final class AdminMetricsRange {
             case YESTERDAY -> withPrevious(startUtc(today.minusDays(1)), startToday);
             case D7 -> withPrevious(startUtc(today.minusDays(6)), startTomorrow);
             case D30 -> withPrevious(startUtc(today.minusDays(29)), startTomorrow);
+            // THIS_MONTH: the first SGT day of the current month to the end of today.
+            case THIS_MONTH -> withPrevious(startUtc(today.withDayOfMonth(1)), startTomorrow);
             // ALL: from the epoch to the end of today SGT; no meaningful previous period.
             case ALL -> new Window(startUtc(LocalDate.of(1970, 1, 1)), startTomorrow, null, null);
         };
@@ -83,6 +85,7 @@ public final class AdminMetricsRange {
             case "yesterday" -> Named.YESTERDAY;
             case "7d" -> Named.D7;
             case "30d" -> Named.D30;
+            case "month", "this_month" -> Named.THIS_MONTH;
             case "all" -> Named.ALL;
             default -> throw new IllegalArgumentException("Unknown range: " + token);
         };

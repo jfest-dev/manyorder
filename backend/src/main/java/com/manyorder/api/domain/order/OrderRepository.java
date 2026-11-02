@@ -118,7 +118,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     /** Per-order facts for orders created in the half-open range, for the range analytics. */
     @Query("""
-            SELECT o.createdAt AS createdAt, o.status AS status, o.orderType AS orderType,
+            SELECT o.id AS id, o.createdAt AS createdAt, o.status AS status, o.orderType AS orderType,
                    o.source AS source, o.merchant.currency AS currency, o.totalAmount AS totalAmount,
                    o.discountCode AS discountCode, o.merchant.id AS merchantId,
                    o.merchant.name AS merchantName, o.merchant.slug AS merchantSlug
@@ -126,4 +126,22 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             WHERE o.createdAt >= :from AND o.createdAt < :to
             """)
     List<OrderFactRow> findOrderFactsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Orders still waiting for the merchant (PENDING) since before the cutoff, oldest
+     *  first, for the admin "needs action" list. */
+    @Query("""
+            SELECT o.id AS id, o.merchant.id AS merchantId, o.merchant.name AS merchantName, o.createdAt AS createdAt
+            FROM Order o
+            WHERE o.status = com.manyorder.api.domain.order.OrderStatus.PENDING AND o.createdAt < :cutoff
+            ORDER BY o.createdAt ASC
+            """)
+    List<WaitingOrderRow> findOrdersWaitingSince(@Param("cutoff") LocalDateTime cutoff, Pageable pageable);
+
+    /** Projection for a long-waiting order. */
+    interface WaitingOrderRow {
+        Long getId();
+        Long getMerchantId();
+        String getMerchantName();
+        LocalDateTime getCreatedAt();
+    }
 }

@@ -36,6 +36,12 @@ vi.mock('../../lib/api', async (importOriginal) => {
         people: { signIns: 0, signUps: 0, signUpsByMethod: {}, emailVerified: 0, failedSignIns: 0, accountsLocked: 0, passwordResetsRequested: 0, activeOwners7d: 0, activeOwners30d: 0 },
         funnel: { steps: [] }, snapshot: { outOfStockProducts: 0 }, timingsMs: { total: 0 },
       }),
+      dashboard: () => Promise.resolve({
+        window: { range: 'today', fromDate: '2026-11-02', toDate: '2026-11-02', fromUtc: '2026-11-01T16:00:00Z', toUtc: '2026-11-02T16:00:00Z', previousFromUtc: null, previousToUtc: null },
+        happened: { orders: { current: 0, previous: null }, sales: [], signUps: { current: 0, previous: null }, signIns: { current: 0, previous: null }, stores: [], latestOrders: [] },
+        needsAction: [], dropOff: [{ step: 'signed_up', count: 0, stuck: [] }],
+        rightNow: { activeStores: 0, suspendedStores: 0, protectedStores: 0, ownersActive7Days: 0, ownersActive30Days: 0 }, timingsMs: { total: 0 },
+      }),
     },
   };
 });

@@ -64,4 +64,38 @@ public interface UserRepository extends JpaRepository<User, Long> {
                           AND EXISTS (SELECT 1 FROM Order o WHERE o.merchant = m))
             """)
     long countCohortWithOrder(@Param("role") UserRole role, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    // --- Admin dashboard: named lists for the "needs action" rows and the drop-off drill-down. ---
+
+    /** Merchant accounts created before the cutoff that still have no store (the person
+     *  signed up but never opened a shop). */
+    @Query("""
+            SELECT u.id AS id, u.fullName AS name FROM User u
+            WHERE u.role = :role AND u.createdAt < :cutoff
+              AND NOT EXISTS (SELECT 1 FROM Merchant m WHERE m.owner = u)
+            ORDER BY u.createdAt
+            """)
+    java.util.List<com.manyorder.api.domain.admin.NamedRef> findMerchantsWithNoStoreBefore(
+            @Param("role") UserRole role, @Param("cutoff") LocalDateTime cutoff, org.springframework.data.domain.Pageable pageable);
+
+    /** Cohort members (signed up in range) who have not verified their email yet. */
+    @Query("""
+            SELECT u.id AS id, u.fullName AS name FROM User u
+            WHERE u.role = :role AND u.verified = false AND u.createdAt >= :from AND u.createdAt < :to
+            ORDER BY u.createdAt
+            """)
+    java.util.List<com.manyorder.api.domain.admin.NamedRef> findCohortNotVerified(
+            @Param("role") UserRole role, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+            org.springframework.data.domain.Pageable pageable);
+
+    /** Cohort members (signed up in range) who verified but have not created a store. */
+    @Query("""
+            SELECT u.id AS id, u.fullName AS name FROM User u
+            WHERE u.role = :role AND u.createdAt >= :from AND u.createdAt < :to
+              AND NOT EXISTS (SELECT 1 FROM Merchant m WHERE m.owner = u)
+            ORDER BY u.createdAt
+            """)
+    java.util.List<com.manyorder.api.domain.admin.NamedRef> findCohortWithoutStore(
+            @Param("role") UserRole role, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+            org.springframework.data.domain.Pageable pageable);
 }

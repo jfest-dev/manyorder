@@ -1339,9 +1339,40 @@ export interface AdminAnalyticsParams {
   compare?: boolean;
 }
 
+export type AdminDashboardRange = 'today' | 'yesterday' | '7d' | '30d' | 'month' | 'custom';
+export interface AdminDashboardTrend { current: number; previous: number | null; }
+export interface AdminDashboardCurrencySales { currency: string; value: number; previousValue: number | null; }
+export interface AdminDashboardStoreRow { id: number; name: string; slug: string; currency: string; orders: number; sales: number; lastOrderAt: string | null; }
+export interface AdminDashboardOrderRow { id: number; storeId: number; storeName: string; at: string; amount: number; currency: string; status: string; }
+export interface AdminDashboardActionItem { kind: string; name: string; storeId: number | null; userId: number | null; }
+export interface AdminDashboardEntity { kind: string; id: number; name: string; }
+export interface AdminDashboardDropStep { step: string; count: number; stuck: AdminDashboardEntity[]; }
+export interface AdminDashboard {
+  window: { range: string; fromDate: string; toDate: string; fromUtc: string; toUtc: string; previousFromUtc: string | null; previousToUtc: string | null; };
+  happened: {
+    orders: AdminDashboardTrend;
+    sales: AdminDashboardCurrencySales[];
+    signUps: AdminDashboardTrend;
+    signIns: AdminDashboardTrend;
+    stores: AdminDashboardStoreRow[];
+    latestOrders: AdminDashboardOrderRow[];
+  };
+  needsAction: AdminDashboardActionItem[];
+  dropOff: AdminDashboardDropStep[];
+  rightNow: { activeStores: number; suspendedStores: number; protectedStores: number; ownersActive7Days: number; ownersActive30Days: number; };
+  timingsMs: Record<string, number>;
+}
+
 export const adminApi = {
   metrics: () => request<AdminMetrics>('/admin/metrics'),
   overview: () => request<AdminOverview>('/admin/metrics/overview'),
+  dashboard: (params: { range?: AdminDashboardRange; from?: string; to?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.range && params.range !== 'custom') qs.set('range', params.range);
+    if (params.range === 'custom') { if (params.from) qs.set('from', params.from); if (params.to) qs.set('to', params.to); }
+    const q = qs.toString();
+    return request<AdminDashboard>(`/admin/metrics/dashboard${q ? `?${q}` : ''}`);
+  },
   analytics: (params: AdminAnalyticsParams = {}) => {
     const qs = new URLSearchParams();
     if (params.range && params.range !== 'custom') qs.set('range', params.range);

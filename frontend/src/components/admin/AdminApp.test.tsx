@@ -16,6 +16,7 @@ vi.mock('../../lib/api', async (importOriginal) => {
       metrics: () => metricsMock(),
       overview: () => Promise.resolve(OVERVIEW),
       analytics: () => Promise.resolve(ANALYTICS_MIN),
+      dashboard: () => Promise.resolve(DASHBOARD_MIN),
       listMerchants: () => Promise.resolve([]),
       businessTypes: () => Promise.resolve([]),
       searchMerchants: () => searchMock(),
@@ -52,6 +53,16 @@ const OVERVIEW = {
     noOrders30Days: { count: 0, items: [] }, suspended: { count: 0, items: [] },
   },
   newestStores: [], recentActions: [],
+};
+
+// Minimal dashboard payload for the <AdminDashboard> that the Overview now shows.
+const DASHBOARD_MIN = {
+  window: { range: 'today', fromDate: '2026-11-02', toDate: '2026-11-02', fromUtc: '2026-11-01T16:00:00Z', toUtc: '2026-11-02T16:00:00Z', previousFromUtc: null, previousToUtc: null },
+  happened: { orders: { current: 0, previous: null }, sales: [], signUps: { current: 0, previous: null }, signIns: { current: 0, previous: null }, stores: [], latestOrders: [] },
+  needsAction: [],
+  dropOff: [{ step: 'signed_up', count: 0, stuck: [] }],
+  rightNow: { activeStores: 0, suspendedStores: 0, protectedStores: 0, ownersActive7Days: 0, ownersActive30Days: 0 },
+  timingsMs: { total: 1 },
 };
 
 // Minimal range-analytics payload for the embedded <AdminAnalytics> in the Overview.

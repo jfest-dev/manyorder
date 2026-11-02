@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
  * (per currency, per SGT day, by status/type/source) happens in one pass in memory.
  */
 public interface OrderFactRow {
+    Long getId();
     LocalDateTime getCreatedAt();
     OrderStatus getStatus();
     OrderType getOrderType();

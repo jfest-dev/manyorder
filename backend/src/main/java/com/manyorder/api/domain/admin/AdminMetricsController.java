@@ -18,11 +18,14 @@ public class AdminMetricsController {
 
     private final AdminMerchantService adminMerchantService;
     private final AdminAnalyticsService adminAnalyticsService;
+    private final AdminDashboardService adminDashboardService;
 
     public AdminMetricsController(AdminMerchantService adminMerchantService,
-                                  AdminAnalyticsService adminAnalyticsService) {
+                                  AdminAnalyticsService adminAnalyticsService,
+                                  AdminDashboardService adminDashboardService) {
         this.adminMerchantService = adminMerchantService;
         this.adminAnalyticsService = adminAnalyticsService;
+        this.adminDashboardService = adminDashboardService;
     }
 
     @GetMapping
@@ -49,6 +52,18 @@ public class AdminMetricsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false, defaultValue = "false") boolean compare) {
         return adminAnalyticsService.analytics(range, from, to, compare);
+    }
+
+    /**
+     * The redesigned admin dashboard (what happened, needs action, drop-off, right now).
+     * Defaults to Today when no range is given. Read-only, PLATFORM_ADMIN only.
+     */
+    @GetMapping("/dashboard")
+    public AdminDashboardResponse dashboard(
+            @RequestParam(required = false) String range,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return adminDashboardService.dashboard(range, from, to);
     }
 
     /** A bad range (reversed, over the 366-day cap, missing dates, or an unknown token)
