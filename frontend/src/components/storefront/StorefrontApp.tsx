@@ -11,6 +11,7 @@ import { CartView } from './CartView';
 import { CheckoutView } from './CheckoutView';
 import { OrderConfirmationView } from './OrderConfirmationView';
 import { OrderLookupView } from './OrderLookupView';
+import { storefrontTheme } from './storefrontTheme';
 import { StorefrontErrorBoundary } from './StorefrontErrorBoundary';
 import { purgeRecentOrderRecall } from '../../lib/legacyCleanup';
 import {
@@ -208,7 +209,7 @@ export function StorefrontApp() {
   }
 
   return (
-    <Frame>
+    <Frame rootStyle={storefrontTheme(store.themeColor) as React.CSSProperties}>
       <StorefrontErrorBoundary onBackToShop={goShop}>
         <Routes>
           <Route index element={
@@ -350,10 +351,10 @@ function PdpRoute({ products, store, cart, onAddToCart, onUpdateLine, onBack }: 
 }
 
 /** Centered, mobile-width frame the whole storefront lives in. */
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ children, rootStyle }: { children: React.ReactNode; rootStyle?: React.CSSProperties }) {
   return (
     <div style={{ minHeight: '100vh', background: '#E5E7EB', display: 'flex', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: '480px', minHeight: '100vh', background: 'white', boxShadow: '0 0 40px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: '100%', maxWidth: '480px', minHeight: '100vh', background: 'white', boxShadow: '0 0 40px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', ...rootStyle }}>
         {children}
       </div>
     </div>

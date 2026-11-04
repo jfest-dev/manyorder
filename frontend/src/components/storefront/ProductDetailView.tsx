@@ -275,7 +275,7 @@ export function ProductDetailView({
                 onClick={submit}
                 style={{
                   flex: 1, height: '46px', borderRadius: '12px', border: 'none',
-                  background: canSubmit ? BRAND : '#E5E7EB', color: canSubmit ? 'white' : '#9CA3AF',
+                  background: canSubmit ? 'var(--sf-accent, var(--primary-solid))' : '#E5E7EB', color: canSubmit ? 'white' : '#9CA3AF',
                   fontSize: '14px', fontWeight: 600, cursor: canSubmit ? 'pointer' : 'not-allowed',
                 }}
               >

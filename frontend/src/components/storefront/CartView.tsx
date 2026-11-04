@@ -121,7 +121,7 @@ export function CartView({ items, currency, onQtyChange, onRemove, onEditLine, o
           </div>
           <button
             onClick={onCheckout}
-            style={{ width: '100%', height: '48px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: BRAND, color: 'white', fontSize: '15px', fontWeight: 700 }}
+            style={{ width: '100%', height: '48px', borderRadius: '12px', border: 'none', cursor: 'pointer', background: 'var(--primary-solid)', color: 'white', fontSize: '15px', fontWeight: 700 }}
           >
             Checkout
           </button>

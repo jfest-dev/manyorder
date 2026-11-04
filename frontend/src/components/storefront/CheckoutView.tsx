@@ -443,7 +443,7 @@ export function CheckoutView({ store, items, onBack, onPlaced, offers = [] }: Ch
 
       <div style={{ position: 'sticky', bottom: 0, padding: '16px', background: 'white', borderTop: '1px solid var(--border-subtle)' }}>
         <button onClick={submit} disabled={submitting}
-          style={{ width: '100%', height: '48px', borderRadius: '12px', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', background: accent, color: 'white', fontSize: '15px', fontWeight: 700, opacity: submitting ? 0.7 : 1 }}>
+          style={{ width: '100%', height: '48px', borderRadius: '12px', border: 'none', cursor: submitting ? 'not-allowed' : 'pointer', background: 'var(--primary-solid)', color: 'white', fontSize: '15px', fontWeight: 700, opacity: submitting ? 0.7 : 1 }}>
           {submitting ? 'Placing order…' : `Place order · ${formatMoney(total, currency)}${deliveryPending ? ' (est.)' : ''}`}
         </button>
       </div>

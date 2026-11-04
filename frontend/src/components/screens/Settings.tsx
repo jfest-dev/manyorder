@@ -623,6 +623,9 @@ export function Settings({ storeId, onSaved, onArchived }: SettingsProps) {
                   </span>
                 )}
               </div>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>
+                Buttons use this colour with white text.
+              </p>
             </div>
             <div>
               <p className="text-small" style={{ fontWeight: 500, marginBottom: '6px' }}>Store Description</p>

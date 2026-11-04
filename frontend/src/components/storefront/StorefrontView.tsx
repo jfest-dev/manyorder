@@ -36,11 +36,15 @@ interface StorefrontViewProps {
 const ALL = '__all__';
 // Buttons/selection controls use a fixed brand colour, never the store theme.
 const BRAND = 'var(--primary-solid)';
+// Store accent for the primary actions and the selected category bubble. Gated on
+// the storefront root (see storefrontTheme): it is the saved colour when white text
+// is readable on it, otherwise var(--primary-solid), i.e. the no-theme look.
+const ACCENT = 'var(--sf-accent, var(--primary-solid))';
 
 /** The round brand "+" on a product row (add, or open the PDP to choose options). */
 const plusButtonStyle = (enabled: boolean): React.CSSProperties => ({
   width: '36px', height: '36px', borderRadius: '10px', border: 'none',
-  background: enabled ? BRAND : '#E5E7EB', color: 'white',
+  background: enabled ? ACCENT : '#E5E7EB', color: 'white',
   cursor: enabled ? 'pointer' : 'not-allowed',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
 });
@@ -51,7 +55,7 @@ const plusButtonStyle = (enabled: boolean): React.CSSProperties => ({
 const floatBtnStyle = (enabled: boolean, pill: boolean): React.CSSProperties => ({
   height: '34px', minWidth: '34px', width: pill ? undefined : '34px',
   padding: pill ? '0 10px' : '0', borderRadius: pill ? '999px' : '50%', border: 'none',
-  background: enabled ? BRAND : '#9CA3AF', color: 'white',
+  background: enabled ? ACCENT : '#9CA3AF', color: 'white',
   cursor: enabled ? 'pointer' : 'not-allowed',
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   boxShadow: '0 1px 4px rgba(0,0,0,0.25)', fontSize: '14px', fontWeight: 700, lineHeight: 1,
@@ -61,7 +65,11 @@ const floatBtnStyle = (enabled: boolean, pill: boolean): React.CSSProperties => 
  * The public shop view - store header, category filter, product list. Purely
  * presentational and width-fluid, so it renders identically full-page and inside
  * a phone-frame preview. Interactions are no-ops unless handlers are provided.
- * Only the header uses the store's theme colour; all buttons are brand-black.
+ * The header uses the store's theme colour directly. Per the button colour rule
+ * (see storefrontTheme.ts), only the Add to cart buttons and the selected category
+ * bubble use --sf-accent: the exact saved colour with white text, or the brand-black
+ * default when the store has no valid saved colour. Checkout, Place order and the
+ * View cart bar stay black.
  */
 export function StorefrontView({
   store,
@@ -299,8 +307,8 @@ export function StorefrontView({
                       style={{
                         flexShrink: 0, padding: '6px 14px', borderRadius: '999px', cursor: 'pointer',
                         fontSize: '12.5px', fontWeight: on ? 600 : 500,
-                        border: on ? `1px solid ${BRAND}` : '1px solid var(--border-subtle)',
-                        background: on ? BRAND : 'white', color: on ? 'white' : 'var(--text-secondary)',
+                        border: on ? `1px solid ${ACCENT}` : '1px solid var(--border-subtle)',
+                        background: on ? ACCENT : 'white', color: on ? 'white' : 'var(--text-secondary)',
                       }}
                     >
                       {chip.label}
