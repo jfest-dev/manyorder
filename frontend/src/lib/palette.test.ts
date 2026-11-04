@@ -1,51 +1,56 @@
 import { describe, it, expect } from 'vitest';
-import { PALETTE, THEME_SOLIDS, TAG_COLOR_KEYS, tagColor, isKnownThemeColor } from './palette';
+import { PALETTE, THEME_SOLIDS, TAG_SOFT, TAG_COLOR_KEYS, tagColor, isKnownThemeColor } from './palette';
 
-// WCAG relative-luminance contrast ratio between two hex colours.
-function luminance(hex: string): number {
-  const h = hex.replace('#', '');
-  const rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
-    .map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
-  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
-}
-function contrast(a: string, b: string): number {
-  const la = luminance(a), lb = luminance(b);
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-}
-
-describe('shared palette', () => {
-  it('theme solids and tag keys are the same single list', () => {
-    expect(THEME_SOLIDS).toEqual(PALETTE.map((c) => c.solid));
+describe('shared palette (tags and theme picker are one list)', () => {
+  it('both pickers render the same keys, names and order, side by side', () => {
+    const KEYS = ['gray', 'blue', 'purple', 'pink', 'green', 'orange'];
+    const NAMES = ['Slate', 'Blue', 'Purple', 'Pink', 'Green', 'Orange'];
+    expect(PALETTE.map((c) => c.key)).toEqual(KEYS);
+    expect(PALETTE.map((c) => c.name)).toEqual(NAMES);
+    // The theme swatches and the tag keys come from the same list in the same order.
     expect(TAG_COLOR_KEYS).toEqual(PALETTE.map((c) => c.key));
-    expect(THEME_SOLIDS.length).toBe(TAG_COLOR_KEYS.length);
+    expect(THEME_SOLIDS).toEqual(PALETTE.map((c) => c.solid));
+    expect(Object.keys(TAG_SOFT)).toEqual(PALETTE.map((c) => c.key));
   });
 
-  it('every tag tint has readable text (WCAG AA, >= 4.5:1 text on bg)', () => {
-    for (const c of PALETTE) {
-      const ratio = contrast(c.soft.text, c.soft.bg);
-      expect(ratio, `${c.key} text on bg = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(4.5);
-    }
+  // Pins every theme swatch (Settings picker). Unchanged from origin/main.
+  it('pins every theme picker swatch exactly', () => {
+    const SOLIDS: Record<string, string> = {
+      gray: '#000000', blue: '#3B82F6', purple: '#8B5CF6',
+      pink: '#EC4899', green: '#10B981', orange: '#F97316',
+    };
+    for (const c of PALETTE) expect(c.solid, `swatch ${c.key}`).toBe(SOLIDS[c.key]);
+  });
+
+  // Pins every derived tag chip value (fill / text / border / dot).
+  it('pins every tag chip colour exactly', () => {
+    const LOCK: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+      gray:   { bg: '#E0E0E0', text: '#636363', border: '#000000', dot: '#000000' },
+      blue:   { bg: '#E7F0FE', text: '#0B62EF', border: '#3B82F6', dot: '#3B82F6' },
+      purple: { bg: '#F1EBFE', text: '#530DF2', border: '#8B5CF6', dot: '#8B5CF6' },
+      pink:   { bg: '#FDE9F3', text: '#CB156F', border: '#EC4899', dot: '#EC4899' },
+      green:  { bg: '#E2F7F0', text: '#0B7A55', border: '#10B981', dot: '#10B981' },
+      orange: { bg: '#FEEEE3', text: '#B34C05', border: '#F97316', dot: '#F97316' },
+    };
+    for (const c of PALETTE) expect(tagColor(c.key), `tag ${c.key}`).toEqual(LOCK[c.key]);
   });
 
   it('preserves the existing saved tag keys', () => {
-    for (const key of ['gray', 'orange', 'blue', 'pink', 'purple']) {
+    for (const key of ['gray', 'orange', 'blue', 'pink', 'purple', 'green']) {
       expect(TAG_COLOR_KEYS).toContain(key);
       expect(tagColor(key)).toBeTruthy();
     }
   });
 
-  it('preserves the existing saved theme solids', () => {
+  it('a saved key not in the palette maps to the default swatch without renaming it', () => {
+    expect(tagColor('brown')).toEqual(tagColor('gray'));
+  });
+
+  it('known theme solids are known; an off-palette hex is Custom', () => {
     for (const hex of ['#000000', '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F97316']) {
       expect(isKnownThemeColor(hex)).toBe(true);
     }
-  });
-
-  it('treats an unknown saved theme colour as Custom', () => {
     expect(isKnownThemeColor('#123456')).toBe(false);
     expect(isKnownThemeColor(null)).toBe(false);
-  });
-
-  it('falls back to the default tag colour for an unknown key', () => {
-    expect(tagColor('chartreuse')).toEqual(tagColor('gray'));
   });
 });
