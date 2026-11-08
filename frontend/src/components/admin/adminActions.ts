@@ -30,6 +30,7 @@ export const ACTION_LABEL: Record<string, string> = {
   REORDER_DISCOUNTS: 'Reordered discounts',
   UPDATE_ORDER_STATUS: 'Changed order status',
   UPDATE_ORDER_PAYMENT_STATUS: 'Changed payment status',
+  REMIND_OWNER: 'Reminded owner',
 };
 
 /** Every audit action code the backend records. Mirrors AdminAuditActions on the Java
@@ -39,7 +40,7 @@ export const AUDIT_ACTIONS: string[] = [
   'CREATE_PRODUCT', 'UPDATE_PRODUCT', 'DELETE_PRODUCT', 'ACTIVATE_PRODUCT', 'DEACTIVATE_PRODUCT', 'REORDER_PRODUCTS',
   'CREATE_CUSTOMER', 'UPDATE_CUSTOMER', 'DELETE_CUSTOMER',
   'CREATE_DISCOUNT', 'UPDATE_DISCOUNT', 'DELETE_DISCOUNT', 'ACTIVATE_DISCOUNT', 'DEACTIVATE_DISCOUNT', 'REORDER_DISCOUNTS',
-  'UPDATE_ORDER_STATUS', 'UPDATE_ORDER_PAYMENT_STATUS',
+  'UPDATE_ORDER_STATUS', 'UPDATE_ORDER_PAYMENT_STATUS', 'REMIND_OWNER',
 ];
 
 export const readableAction = (code: string): string => ACTION_LABEL[code] ?? code;

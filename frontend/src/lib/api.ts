@@ -1344,7 +1344,7 @@ export interface AdminDashboardTrend { current: number; previous: number | null;
 export interface AdminDashboardCurrencySales { currency: string; value: number; previousValue: number | null; }
 export interface AdminDashboardStoreRow { id: number; name: string; slug: string; currency: string; orders: number; sales: number; lastOrderAt: string | null; }
 export interface AdminDashboardOrderRow { id: number; storeId: number; storeName: string; at: string; amount: number; currency: string; status: string; }
-export interface AdminDashboardActionItem { kind: string; name: string; storeId: number | null; userId: number | null; }
+export interface AdminDashboardActionItem { kind: string; name: string; storeId: number | null; userId: number | null; ownerEmail: string | null; ownerPhone: string | null; lastRemindedAt: string | null; }
 export interface AdminDashboardEntity { kind: string; id: number; name: string; }
 export interface AdminDashboardDropStep { step: string; count: number; stuck: AdminDashboardEntity[]; }
 export interface AdminDashboard {
@@ -1412,6 +1412,11 @@ export const adminApi = {
     request<void>(`/admin/merchants/${merchantId}/unprotect`, { method: 'POST' }),
   restore: (merchantId: number, reason: string, emailOwner: boolean) =>
     request<void>(`/admin/merchants/${merchantId}/restore`, { method: 'POST', body: { reason, emailOwner } }),
+
+  /** Send the store owner a one-off reminder email (rate-limited server-side to once
+   *  per 3 days per store). Returns whether an email was dispatched and when. */
+  remindOwner: (merchantId: number) =>
+    request<{ emailSent: boolean; remindedAt: string }>(`/admin/merchants/${merchantId}/remind-owner`, { method: 'POST' }),
 
   /** Customer management scoped to one merchant — same shape as customersApi (minus storeId),
    *  so an admin can drive the shared Customers screen against /admin endpoints. */

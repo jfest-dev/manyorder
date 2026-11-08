@@ -58,13 +58,16 @@ public class AdminDashboardService {
     private final MerchantRepository merchantRepository;
     private final UserRepository userRepository;
     private final AuthEventRepository authEventRepository;
+    private final AdminAuditLogRepository adminAuditLogRepository;
 
     public AdminDashboardService(OrderRepository orderRepository, MerchantRepository merchantRepository,
-                                 UserRepository userRepository, AuthEventRepository authEventRepository) {
+                                 UserRepository userRepository, AuthEventRepository authEventRepository,
+                                 AdminAuditLogRepository adminAuditLogRepository) {
         this.orderRepository = orderRepository;
         this.merchantRepository = merchantRepository;
         this.userRepository = userRepository;
         this.authEventRepository = authEventRepository;
+        this.adminAuditLogRepository = adminAuditLogRepository;
     }
 
     public AdminDashboardResponse dashboard(String range, LocalDate from, LocalDate to) {
@@ -189,6 +192,31 @@ public class AdminDashboardService {
         merchantRepository.findSuspendedStores(limit)
                 .forEach(m -> out.add(new ActionItem("store_suspended", m.getName(), m.getId(), null)));
         // "failed emails" would go here, but the data is not recorded yet (needs new tracking).
+        return enrichWithOwner(out);
+    }
+
+    /** Add the owner's email/phone and the last owner-reminder time (from the audit log)
+     *  to every row that has a store, so the dashboard can show the reminder buttons and
+     *  "Reminded N ago". Rows with no store are returned unchanged. */
+    private List<ActionItem> enrichWithOwner(List<ActionItem> rows) {
+        List<Long> storeIds = rows.stream().map(ActionItem::storeId).filter(java.util.Objects::nonNull).distinct().toList();
+        if (storeIds.isEmpty()) return rows;
+        Map<Long, com.manyorder.api.domain.merchant.Merchant> byId = new java.util.HashMap<>();
+        merchantRepository.findAllById(storeIds).forEach(m -> byId.put(m.getId(), m));
+        Map<Long, LocalDateTime> reminded = new java.util.HashMap<>();
+        for (Object[] r : adminAuditLogRepository.latestByMerchantIdInAndAction(storeIds, "REMIND_OWNER")) {
+            reminded.put((Long) r[0], (LocalDateTime) r[1]);
+        }
+        List<ActionItem> out = new ArrayList<>();
+        for (ActionItem a : rows) {
+            if (a.storeId() == null) { out.add(a); continue; }
+            var m = byId.get(a.storeId());
+            String email = (m != null && m.getOwner() != null) ? m.getOwner().getEmail() : null;
+            String phone = (m != null && m.getOwner() != null) ? m.getOwner().getPhone() : null;
+            LocalDateTime when = reminded.get(a.storeId());
+            out.add(new ActionItem(a.kind(), a.name(), a.storeId(), a.userId(), email, phone,
+                    when == null ? null : when.toString()));
+        }
         return out;
     }
 

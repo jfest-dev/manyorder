@@ -87,4 +87,36 @@ public class ResendMerchantActionMailer implements MerchantActionMailer {
             return false;
         }
     }
+
+    @Override
+    public boolean sendReminder(Merchant merchant) {
+        String to = merchant.getOwner() == null ? null : merchant.getOwner().getEmail();
+        if (to == null || to.isBlank() || apiKey.isEmpty()) {
+            log.info("Skipping reminder to store {} (no owner email or no API key)", merchant.getId());
+            return false;
+        }
+        String heading = "A quick nudge about your store";
+        String intro = "Your store on ManyOrder is ready when you are. Open it to add your first "
+                + "product and start taking orders.";
+        List<EmailLayout.Row> rows = new ArrayList<>();
+        rows.add(new EmailLayout.Row("Store", merchant.getName()));
+        rows.add(new EmailLayout.Row("Date and time", LocalDateTime.now().format(WHEN)));
+        Map<String, Object> payload = ResendEmail.payload(
+                FROM, to, supportEmail,
+                "Your store " + merchant.getName() + " is ready to set up",
+                EmailLayout.render(heading, intro, rows, dashboardUrl, supportEmail));
+        try {
+            restClient.post()
+                    .uri(ResendEmail.RESEND_EMAILS_URL)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(payload)
+                    .retrieve()
+                    .toBodilessEntity();
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to send reminder to store {}: {}", merchant.getId(), e.getMessage());
+            return false;
+        }
+    }
 }

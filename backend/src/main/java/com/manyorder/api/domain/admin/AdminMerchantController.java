@@ -34,18 +34,51 @@ public class AdminMerchantController {
     private final AdminAuditService adminAuditService;
     private final AdminMerchantService adminMerchantService;
     private final MerchantActionMailer merchantActionMailer;
+    private final AdminAuditLogRepository adminAuditLogRepository;
 
     public AdminMerchantController(MerchantRepository merchantRepository,
                                    CurrentUserService currentUserService,
                                    AdminAuditService adminAuditService,
                                    AdminMerchantService adminMerchantService,
-                                   MerchantActionMailer merchantActionMailer) {
+                                   MerchantActionMailer merchantActionMailer,
+                                   AdminAuditLogRepository adminAuditLogRepository) {
         this.merchantRepository = merchantRepository;
         this.currentUserService = currentUserService;
         this.adminAuditService = adminAuditService;
         this.adminMerchantService = adminMerchantService;
         this.merchantActionMailer = merchantActionMailer;
+        this.adminAuditLogRepository = adminAuditLogRepository;
     }
+
+    /** How often a single store's owner can be reminded. */
+    private static final int REMIND_COOLDOWN_DAYS = 3;
+
+    /**
+     * Send the store owner a one-off reminder email (owner only, from the shared mailer),
+     * at most once per {@value #REMIND_COOLDOWN_DAYS} days per store. The limit and the
+     * "Reminded N ago" shown on the dashboard both come from the admin audit log, so no
+     * new table or column is needed. The reminder is recorded as its own audit action.
+     */
+    @PostMapping("/{merchantId}/remind-owner")
+    @Transactional
+    public RemindResponse remindOwner(@PathVariable Long merchantId, Authentication authentication) {
+        User admin = currentUserService.require(authentication);
+        Merchant merchant = requireMerchant(merchantId);
+        if (merchant.getOwner() == null || merchant.getOwner().getEmail() == null
+                || merchant.getOwner().getEmail().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This store has no owner email.");
+        }
+        adminAuditLogRepository.findTop1ByMerchantIdAndActionOrderByCreatedAtDesc(merchantId, "REMIND_OWNER")
+                .filter(last -> last.getCreatedAt().isAfter(LocalDateTime.now().minusDays(REMIND_COOLDOWN_DAYS)))
+                .ifPresent(last -> { throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "This owner was already reminded in the last " + REMIND_COOLDOWN_DAYS + " days."); });
+        boolean sent = merchantActionMailer.sendReminder(merchant);
+        var entry = adminAuditService.record(admin, "REMIND_OWNER", "MERCHANT", merchant.getId(), merchant.getId(),
+                null, sent, merchant.getName(), merchant.getName());
+        return new RemindResponse(sent, entry.getCreatedAt().toString());
+    }
+
+    public record RemindResponse(boolean emailSent, String remindedAt) {}
 
     /** All merchants (including suspended/archived), newest first, with per-store counts. */
     @GetMapping

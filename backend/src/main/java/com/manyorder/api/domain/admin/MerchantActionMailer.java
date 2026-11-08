@@ -49,4 +49,9 @@ public interface MerchantActionMailer {
 
     /** Send the notice. Returns true if an email was actually dispatched. */
     boolean notifyOwner(Merchant merchant, Action action, String reason);
+
+    /** A one-off nudge to the store owner (add a first product / open the store), on the
+     *  shared layout. Returns true if an email was actually dispatched. Default no-op so
+     *  test doubles need not implement it. */
+    default boolean sendReminder(Merchant merchant) { return false; }
 }

@@ -9,6 +9,7 @@ import { formatDateTime } from '../../lib/adminDatetime';
 import { ADMIN_FONT } from './adminTokens';
 import { ADMIN_STRINGS as S } from './adminStrings';
 import { DatePicker } from '../DatePicker';
+import { waLink } from '../../lib/whatsapp';
 import { AdminAnalytics } from './AdminAnalytics';
 
 interface Props { onOpenStore: (id: number) => void; }
@@ -213,7 +214,34 @@ function WhatHappened({ data, onOpenStore }: { data: DashboardData; onOpenStore:
   );
 }
 
-function NeedsAction({ items, onOpenStore }: { items: AdminDashboardActionItem[]; onOpenStore: (id: number) => void }) {
+/** "Reminded N days ago" from an ISO timestamp (server local time). */
+function remindedAgo(iso: string): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return '';
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return 'Reminded today';
+  return days === 1 ? 'Reminded 1 day ago' : `Reminded ${days} days ago`;
+}
+
+export function NeedsAction({ items, onOpenStore }: { items: AdminDashboardActionItem[]; onOpenStore: (id: number) => void }) {
+  // Per-store reminder state (set by the Email reminder button). The admin is otherwise
+  // read-only: these two buttons are the only writes, and WhatsApp makes no server call.
+  const [remind, setRemind] = useState<Record<number, { at?: string; busy?: boolean; msg?: string }>>({});
+
+  const sendEmailReminder = async (storeId: number) => {
+    setRemind((p) => ({ ...p, [storeId]: { ...p[storeId], busy: true, msg: undefined } }));
+    try {
+      const res = await adminApi.remindOwner(storeId);
+      setRemind((p) => ({ ...p, [storeId]: { at: res.remindedAt, busy: false, msg: res.emailSent ? 'Reminder emailed.' : 'Recorded (email not configured here).' } }));
+    } catch (e) {
+      setRemind((p) => ({ ...p, [storeId]: { ...p[storeId], busy: false, msg: e instanceof ApiError ? e.message : 'Could not send the reminder.' } }));
+    }
+  };
+  const openWhatsappReminder = (name: string, phone: string) => {
+    const url = waLink(phone, `Hi! A quick reminder from ManyOrder about your store ${name}: open it to add your first product and start taking orders.`);
+    if (url) window.open(url, '_blank', 'noopener');
+  };
+
   return (
     <Panel title={S.needsAction.title} help={S.needsAction.help}>
       {items.length === 0 ? <div className="text-small" style={{ color: 'var(--text-secondary)' }}>{S.needsAction.none}</div> : (
@@ -221,12 +249,24 @@ function NeedsAction({ items, onOpenStore }: { items: AdminDashboardActionItem[]
           {items.map((a, i) => {
             const rule = S.needsAction.rules[a.kind];
             const problem = (rule?.problem ?? '{name}').replace('{name}', a.name);
+            const local = a.storeId != null ? remind[a.storeId] : undefined;
+            const remindedAt = local?.at ?? a.lastRemindedAt;
             return (
               <div key={`${a.kind}-${a.storeId ?? a.userId}-${i}`} style={{ borderTop: i === 0 ? 'none' : '1px solid var(--border-subtle)', paddingTop: i === 0 ? 0 : 8 }}>
                 <div style={{ fontSize: ADMIN_FONT.body }}>{problem}</div>
-                <div className="text-xs" style={{ color: 'var(--text-secondary)', display: 'flex', gap: 10, alignItems: 'baseline' }}>
+                <div className="text-xs" style={{ color: 'var(--text-secondary)', display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
                   {rule && <span>{rule.action}</span>}
                   {a.storeId != null && <button type="button" onClick={() => onOpenStore(a.storeId!)} style={{ ...linkBtn, fontSize: ADMIN_FONT.caption }}>Open store</button>}
+                  {a.storeId != null && a.ownerEmail && (
+                    <button type="button" disabled={local?.busy} onClick={() => sendEmailReminder(a.storeId!)} style={{ ...linkBtn, fontSize: ADMIN_FONT.caption }}>
+                      {local?.busy ? 'Sending…' : 'Email reminder'}
+                    </button>
+                  )}
+                  {a.ownerPhone && (
+                    <button type="button" onClick={() => openWhatsappReminder(a.name, a.ownerPhone!)} style={{ ...linkBtn, fontSize: ADMIN_FONT.caption }}>WhatsApp reminder</button>
+                  )}
+                  {remindedAt && <span style={{ color: 'var(--text-muted)' }}>{remindedAgo(remindedAt)}</span>}
+                  {local?.msg && <span style={{ color: 'var(--text-muted)' }}>{local.msg}</span>}
                 </div>
               </div>
             );

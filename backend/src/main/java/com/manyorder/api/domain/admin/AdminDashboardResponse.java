@@ -49,7 +49,15 @@ public record AdminDashboardResponse(
 
     /** One row in "needs your action": the rule {@code kind} (whose plain-words problem and
      *  action live in the frontend strings file) and the store or person it names. */
-    public record ActionItem(String kind, String name, Long storeId, Long userId) {}
+    /** ownerEmail/ownerPhone are the store owner's contact for the reminder buttons
+     *  (null for a row with no store); lastRemindedAt is the ISO time of the last
+     *  owner reminder for this store, from the audit log (null if never). */
+    public record ActionItem(String kind, String name, Long storeId, Long userId,
+                             String ownerEmail, String ownerPhone, String lastRemindedAt) {
+        public ActionItem(String kind, String name, Long storeId, Long userId) {
+            this(kind, name, storeId, userId, null, null, null);
+        }
+    }
 
     /** One funnel step: how many reached it, and (where it is not the last step) the stores or
      *  people who got this far but no further. */
