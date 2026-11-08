@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -77,7 +78,7 @@ const ANALYTICS_MIN = {
 };
 
 function renderAdmin() {
-  return render(<ConfirmProvider><AdminApp /></ConfirmProvider>);
+  return render(<MemoryRouter><ConfirmProvider><AdminApp /></ConfirmProvider></MemoryRouter>);
 }
 
 beforeEach(() => {

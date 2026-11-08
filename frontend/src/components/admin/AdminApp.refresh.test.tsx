@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
@@ -66,7 +67,7 @@ beforeEach(() => {
 
 describe('AdminApp background refresh', () => {
   it('refetches metrics when the window regains focus', async () => {
-    render(<ConfirmProvider><AdminApp /></ConfirmProvider>);
+    render(<MemoryRouter><ConfirmProvider><AdminApp /></ConfirmProvider></MemoryRouter>);
 
     // Initial load finished.
     await waitFor(() => expect(metrics).toHaveBeenCalledTimes(1));
@@ -77,7 +78,7 @@ describe('AdminApp background refresh', () => {
   });
 
   it('keeps the last good data when a focus refresh fails', async () => {
-    render(<ConfirmProvider><AdminApp /></ConfirmProvider>);
+    render(<MemoryRouter><ConfirmProvider><AdminApp /></ConfirmProvider></MemoryRouter>);
     await waitFor(() => expect(metrics).toHaveBeenCalledTimes(1));
 
     // Next refresh rejects; the screen must not show an error or go blank.

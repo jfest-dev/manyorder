@@ -13,7 +13,7 @@ export const ADMIN_STRINGS = {
     to: 'To',
     tooLong: 'Please pick 366 days or fewer.',
     startAfterEnd: 'The start date must be on or before the end date.',
-    singaporeTime: 'All times are Singapore time.',
+    sgt: 'SGT',
   },
 
   happened: {

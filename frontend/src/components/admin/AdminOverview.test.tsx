@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 
@@ -36,7 +37,7 @@ beforeEach(() => {
 
 describe('AdminOverview', () => {
   it('shows the plain-words dashboard sections and the recent actions', async () => {
-    render(<AdminOverview onOpenStore={vi.fn()} />);
+    render(<MemoryRouter><AdminOverview onOpenStore={vi.fn()} /></MemoryRouter>);
 
     expect(await screen.findByText('What happened')).toBeTruthy();
     expect(screen.getByText('Needs your action')).toBeTruthy();

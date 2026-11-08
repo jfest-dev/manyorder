@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { adminApi, AdminMetrics, AdminMerchantSummary, ApiError } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -69,9 +70,23 @@ export function AdminApp() {
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [section, setSection] = useState<Section>('overview');
+  // Address-routed: the section, the opened store and its tab live in the URL query
+  // string, so the browser Back button returns to the previous admin screen (instead of
+  // leaving the app) and any screen can be linked to or copied. The dashboard date range
+  // lives in the URL too (handled inside AdminDashboard).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const section: Section = (['overview', 'merchants', 'activity'] as const)
+    .includes(searchParams.get('section') as Section) ? (searchParams.get('section') as Section) : 'overview';
+  const storeId = searchParams.get('store') ? Number(searchParams.get('store')) : null;
+  const TABS = ['overview', 'dashboard', 'customers', 'products', 'orders', 'marketing'] as const;
+  type Tab = typeof TABS[number];
+  const tab: Tab = TABS.includes(searchParams.get('tab') as Tab) ? (searchParams.get('tab') as Tab) : 'overview';
+
+  // The opened store's summary, fetched from the store id in the URL.
   const [selected, setSelected] = useState<AdminMerchantSummary | null>(null);
-  const [tab, setTab] = useState<'overview' | 'dashboard' | 'customers' | 'products' | 'orders' | 'marketing'>('overview');
+
+  const update = (mut: (p: URLSearchParams) => void) =>
+    setSearchParams((prev) => { const p = new URLSearchParams(prev); mut(p); return p; }, { replace: false });
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [merchantsReload, setMerchantsReload] = useState(0);
@@ -116,14 +131,25 @@ export function AdminApp() {
   }, [tab, selected]);
 
   const showNotice = (msg: string) => { setNotice(msg); window.setTimeout(() => setNotice(null), 2400); };
-  const goSection = (s: Section) => { setSelected(null); setSection(s); };
+  const goSection = (s: Section) => update((p) => { p.set('section', s); p.delete('store'); p.delete('tab'); });
+  // Open a store drill-down by id (from any Overview link): just set the URL; the effect
+  // below loads the summary from it, so Back/forward and copied links all work.
+  const openStore = (id: number) => update((p) => { p.set('store', String(id)); p.set('tab', 'overview'); });
+  const closeStore = () => update((p) => { p.delete('store'); p.delete('tab'); });
+  const goTab = (t: Tab) => update((p) => { p.set('tab', t); });
 
-  // Open a store drill-down by id (from any Overview link); fetches its summary first.
-  const openStore = (id: number) => {
-    adminApi.getMerchant(id)
-      .then((m) => { setSelected(m); setTab('overview'); setSection('merchants'); })
-      .catch((e) => showNotice(e instanceof ApiError ? e.message : 'Could not open store'));
-  };
+  // Load the opened store's summary whenever the store id in the URL changes (including
+  // via Back/forward). Skipped when the summary is already the one we hold.
+  useEffect(() => {
+    if (storeId == null) { setSelected(null); return; }
+    if (selected?.id === storeId) return;
+    let cancelled = false;
+    adminApi.getMerchant(storeId)
+      .then((m) => { if (!cancelled) setSelected(m); })
+      .catch((e) => { if (!cancelled) showNotice(e instanceof ApiError ? e.message : 'Could not open store'); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
 
   const toggleSuspend = async (m: AdminMerchantSummary) => {
     const suspend = m.status !== 'SUSPENDED';
@@ -194,7 +220,7 @@ export function AdminApp() {
 
           {!loading && !error && selected && (
             <div>
-              <button type="button" onClick={() => setSelected(null)}
+              <button type="button" onClick={closeStore}
                 style={{ ...adminText.body, background: 'none', border: 'none', color: 'var(--primary-solid)', cursor: 'pointer', fontWeight: 600, padding: 0, marginBottom: 10 }}>
                 ← All merchants
               </button>
@@ -209,7 +235,7 @@ export function AdminApp() {
               <div ref={tabStripRef} style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--border-subtle)', marginBottom: 20,
                 overflowX: 'auto', flexWrap: 'nowrap', WebkitOverflowScrolling: 'touch' }}>
                 {(['overview', 'dashboard', 'customers', 'products', 'orders', 'marketing'] as const).map((t) => (
-                  <button key={t} type="button" onClick={() => setTab(t)}
+                  <button key={t} type="button" onClick={() => goTab(t)}
                     ref={tab === t ? activeTabRef : undefined}
                     style={{ padding: '10px 14px', minHeight: ADMIN_SIZE.tapTarget, flexShrink: 0, whiteSpace: 'nowrap', background: 'none', border: 'none',
                       cursor: 'pointer', fontSize: ADMIN_FONT.body, fontWeight: 600, textTransform: 'capitalize',
@@ -233,7 +259,7 @@ export function AdminApp() {
               {tab === 'dashboard' && (
                 <Dashboard
                   store={{ id: String(selected.id), name: selected.name, slug: selected.slug, color: '#000000', currency: selected.currency }}
-                  onNavigate={() => setTab('orders')}
+                  onNavigate={() => goTab('orders')}
                   adminMerchantId={selected.id}
                 />
               )}
@@ -268,7 +294,7 @@ export function AdminApp() {
 
           {!loading && !error && !selected && section === 'merchants' && (
             <MerchantsList
-              onView={(m) => { setSelected(m); setTab('overview'); }}
+              onView={(m) => { setSelected(m); openStore(m.id); }}
               onToggleSuspend={toggleSuspend}
               busyId={busyId}
               reloadToken={merchantsReload}

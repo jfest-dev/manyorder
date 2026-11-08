@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   adminApi, ApiError, AdminDashboard as DashboardData, AdminDashboardRange,
   AdminDashboardTrend, AdminDashboardActionItem, AdminDashboardDropStep,
@@ -25,9 +26,21 @@ const MAX_DAYS = 366;
 /** The redesigned admin dashboard: what happened, what needs action, where people drop
  *  off, the right-now box, and the full details collapsed. Opens on Today. */
 export function AdminDashboard({ onOpenStore }: Props) {
-  const [range, setRange] = useState<AdminDashboardRange>('today');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  // The date range lives in the URL query string (?range=.., &from=.., &to=..) so Back
+  // returns to the same dashboard with the same dates and the screen can be linked.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const RANGES: AdminDashboardRange[] = ['today', 'yesterday', '7d', '30d', 'month', 'custom'];
+  const range: AdminDashboardRange = RANGES.includes(searchParams.get('range') as AdminDashboardRange)
+    ? (searchParams.get('range') as AdminDashboardRange) : 'today';
+  const from = searchParams.get('from') || '';
+  const to = searchParams.get('to') || '';
+  const setRange = (r: AdminDashboardRange) => setSearchParams((prev) => {
+    const p = new URLSearchParams(prev); p.set('range', r);
+    if (r !== 'custom') { p.delete('from'); p.delete('to'); }
+    return p;
+  }, { replace: false });
+  const setFrom = (v: string) => setSearchParams((prev) => { const p = new URLSearchParams(prev); p.set('from', v); return p; }, { replace: true });
+  const setTo = (v: string) => setSearchParams((prev) => { const p = new URLSearchParams(prev); p.set('to', v); return p; }, { replace: true });
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -82,6 +95,7 @@ function Dates({ range, setRange, from, setFrom, to, setTo, customMsg }: {
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <div role="group" aria-label="Dates" style={{ display: 'inline-flex', flexWrap: 'wrap', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-field)', overflow: 'hidden', background: 'var(--bg-card)', alignSelf: 'flex-start' }}>
         {RANGE_CHIPS.map((c, i) => {
           const on = c.key === range;
@@ -94,6 +108,8 @@ function Dates({ range, setRange, from, setFrom, to, setTo, customMsg }: {
             </button>
           );
         })}
+      </div>
+      <span className="text-xs" title="Singapore time" style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{S.dates.sgt}</span>
       </div>
       {range === 'custom' && (
         <div>
@@ -110,7 +126,6 @@ function Dates({ range, setRange, from, setFrom, to, setTo, customMsg }: {
           {customMsg && <p className="text-small" style={{ color: 'var(--error-color)', margin: '8px 0 0' }}>{customMsg}</p>}
         </div>
       )}
-      <p className="text-xs" style={{ color: 'var(--text-muted)', margin: 0 }}>{S.dates.singaporeTime}</p>
     </div>
   );
 }
