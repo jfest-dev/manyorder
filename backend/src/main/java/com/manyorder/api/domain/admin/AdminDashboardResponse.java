@@ -66,6 +66,10 @@ public record AdminDashboardResponse(
     public record Entity(String kind, Long id, String name) {}
 
     /** The right-now snapshot (ignores the dates). */
+    /** Each count carries the names behind it (capped) so a tile can open a list. */
     public record RightNow(long activeStores, long suspendedStores, long protectedStores,
-                           long ownersActive7Days, long ownersActive30Days) {}
+                           long ownersActive7Days, long ownersActive30Days,
+                           List<Entity> activeStoreList, List<Entity> suspendedStoreList,
+                           List<Entity> protectedStoreList, List<Entity> ownersActive7List,
+                           List<Entity> ownersActive30List) {}
 }

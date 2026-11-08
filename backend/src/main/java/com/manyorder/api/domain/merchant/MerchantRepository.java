@@ -64,6 +64,12 @@ public interface MerchantRepository extends JpaRepository<Merchant, Long> {
     @Query("SELECT m.id AS id, m.name AS name FROM Merchant m WHERE m.suspendedAt IS NOT NULL ORDER BY m.suspendedAt DESC")
     List<com.manyorder.api.domain.admin.NamedRef> findSuspendedStores(Pageable pageable);
 
+    @Query("SELECT m.id AS id, m.name AS name FROM Merchant m WHERE m.archivedAt IS NULL AND m.suspendedAt IS NULL ORDER BY m.name")
+    List<com.manyorder.api.domain.admin.NamedRef> findActiveStores(Pageable pageable);
+
+    @Query("SELECT m.id AS id, m.name AS name FROM Merchant m WHERE m.protectedFromDeletion = true ORDER BY m.name")
+    List<com.manyorder.api.domain.admin.NamedRef> findProtectedStores(Pageable pageable);
+
     /** Owners who created a store in the range but whose store has no product (drop-off). */
     @Query("""
             SELECT m.id AS id, m.name AS name FROM Merchant m

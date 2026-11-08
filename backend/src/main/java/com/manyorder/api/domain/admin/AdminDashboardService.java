@@ -253,12 +253,30 @@ public class AdminDashboardService {
 
     private RightNow buildRightNow() {
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        var limit = PageRequest.of(0, LIST_LIMIT);
+        List<Entity> active = merchantRepository.findActiveStores(limit).stream()
+                .map(r -> new Entity("store", r.getId(), r.getName())).toList();
+        List<Entity> suspended = merchantRepository.findSuspendedStores(limit).stream()
+                .map(r -> new Entity("store", r.getId(), r.getName())).toList();
+        List<Entity> protectedStores = merchantRepository.findProtectedStores(limit).stream()
+                .map(r -> new Entity("store", r.getId(), r.getName())).toList();
+        List<Entity> owners7 = ownerEntities(now.minusDays(7), now, limit);
+        List<Entity> owners30 = ownerEntities(now.minusDays(30), now, limit);
         return new RightNow(
                 merchantRepository.countByArchivedAtIsNullAndSuspendedAtIsNull(),
                 merchantRepository.countBySuspendedAtIsNotNull(),
                 merchantRepository.countByProtectedFromDeletionTrue(),
                 authEventRepository.countDistinctUsers(AuthEventType.LOGIN, now.minusDays(7), now),
-                authEventRepository.countDistinctUsers(AuthEventType.LOGIN, now.minusDays(30), now));
+                authEventRepository.countDistinctUsers(AuthEventType.LOGIN, now.minusDays(30), now),
+                active, suspended, protectedStores, owners7, owners30);
+    }
+
+    /** Names (capped) of owners who signed in within the range. */
+    private List<Entity> ownerEntities(LocalDateTime from, LocalDateTime to, org.springframework.data.domain.Pageable limit) {
+        List<Long> ids = authEventRepository.findDistinctUserIds(AuthEventType.LOGIN, from, to, limit);
+        if (ids.isEmpty()) return List.of();
+        return userRepository.findAllById(ids).stream()
+                .map(u -> new Entity("user", u.getId(), u.getFullName())).toList();
     }
 
     // --- helpers ---

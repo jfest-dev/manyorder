@@ -26,6 +26,16 @@ public interface AuthEventRepository extends JpaRepository<AuthEvent, Long> {
     long countDistinctUsers(@Param("type") AuthEventType type,
                             @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
+    /** Distinct user ids with a successful login in the range, for naming the owners. */
+    @Query("""
+            SELECT DISTINCT e.userId FROM AuthEvent e
+            WHERE e.eventType = :type AND e.success = true AND e.userId IS NOT NULL
+              AND e.occurredAt >= :from AND e.occurredAt < :to
+            """)
+    List<Long> findDistinctUserIds(@Param("type") AuthEventType type,
+                                   @Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                                   org.springframework.data.domain.Pageable pageable);
+
     /** Successful events of a type grouped by method in the range (e.g. sign-ups by method). */
     @Query("""
             SELECT e.method AS method, COUNT(e) AS count FROM AuthEvent e

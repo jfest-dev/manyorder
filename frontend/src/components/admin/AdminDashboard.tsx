@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   adminApi, ApiError, AdminDashboard as DashboardData, AdminDashboardRange,
-  AdminDashboardTrend, AdminDashboardActionItem, AdminDashboardDropStep,
+  AdminDashboardTrend, AdminDashboardActionItem, AdminDashboardDropStep, AdminDashboardEntity,
 } from '../../lib/api';
 import { formatMoney } from '../../lib/currency';
 import { formatDateTime } from '../../lib/adminDatetime';
@@ -45,6 +45,7 @@ export function AdminDashboard({ onOpenStore }: Props) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const isCustom = range === 'custom';
   const days = isCustom && from && to ? Math.floor((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 86400000) + 1 : 0;
@@ -63,6 +64,8 @@ export function AdminDashboard({ onOpenStore }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 20 }}>
+      {/* Date-independent live counts, at the top, with More details at the top right. */}
+      {data && <RightNow r={data.rightNow} onOpenStore={onOpenStore} detailsOpen={detailsOpen} onToggleDetails={() => setDetailsOpen((v) => !v)} />}
       <Dates range={range} setRange={setRange} from={from} setFrom={setFrom} to={to} setTo={setTo} customMsg={customMsg} />
       {error ? <p className="text-small" style={{ color: 'var(--error-color)' }}>{error}</p>
         : !data ? <p className="text-small" style={{ color: 'var(--text-secondary)' }}>{S.loading}</p>
@@ -71,8 +74,12 @@ export function AdminDashboard({ onOpenStore }: Props) {
             <WhatHappened data={data} onOpenStore={onOpenStore} />
             <NeedsAction items={data.needsAction} onOpenStore={onOpenStore} />
             <DropOff steps={data.dropOff} onOpenStore={onOpenStore} />
-            <RightNow r={data.rightNow} />
-            <MoreDetails onOpenStore={onOpenStore} />
+            {detailsOpen && (
+              <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)', background: 'var(--bg-card)', padding: 16 }}>
+                <div style={{ fontSize: ADMIN_FONT.heading, fontWeight: 700, marginBottom: 12 }}>{S.moreDetails.title}</div>
+                <AdminAnalytics onOpenStore={onOpenStore} />
+              </section>
+            )}
           </div>
         )}
     </div>
@@ -315,41 +322,60 @@ function DropOff({ steps, onOpenStore }: { steps: AdminDashboardDropStep[]; onOp
   );
 }
 
-function RightNow({ r }: { r: DashboardData['rightNow'] }) {
-  const rows: [string, number][] = [
-    [S.rightNow.activeStores, r.activeStores],
-    [S.rightNow.suspendedStores, r.suspendedStores],
-    [S.rightNow.protectedStores, r.protectedStores],
-    [S.rightNow.ownersActive7, r.ownersActive7Days],
-    [S.rightNow.ownersActive30, r.ownersActive30Days],
+/** Date-independent live counts as a row of tiles at the top of the dashboard. Each
+ *  tile opens the list of names behind its number; "More details" sits at the top right. */
+function RightNow({ r, onOpenStore, detailsOpen, onToggleDetails }: {
+  r: DashboardData['rightNow']; onOpenStore: (id: number) => void; detailsOpen: boolean; onToggleDetails: () => void;
+}) {
+  const [open, setOpen] = useState<string | null>(null);
+  const tiles: { key: string; label: string; n: number; list: AdminDashboardEntity[] }[] = [
+    { key: 'active', label: S.rightNow.activeStores, n: r.activeStores, list: r.activeStoreList },
+    { key: 'suspended', label: S.rightNow.suspendedStores, n: r.suspendedStores, list: r.suspendedStoreList },
+    { key: 'protected', label: S.rightNow.protectedStores, n: r.protectedStores, list: r.protectedStoreList },
+    { key: 'o7', label: S.rightNow.ownersActive7, n: r.ownersActive7Days, list: r.ownersActive7List },
+    { key: 'o30', label: S.rightNow.ownersActive30, n: r.ownersActive30Days, list: r.ownersActive30List },
   ];
+  const current = tiles.find((t) => t.key === open);
   return (
     <section style={{ border: '2px solid var(--border-strong)', borderRadius: 'var(--radius-medium)', background: 'var(--bg-card-subtle, #fafafa)', padding: 16 }}>
-      <h3 style={{ fontSize: ADMIN_FONT.heading, fontWeight: 700, margin: 0 }}>{S.rightNow.title}</h3>
-      <p className="text-xs" style={{ color: 'var(--text-secondary)', margin: '4px 0 12px' }}>{S.rightNow.help}</p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
-        {rows.map(([label, n]) => (
-          <div key={label} style={{ flex: '1 1 150px', minWidth: 140 }}>
-            <div style={{ fontSize: ADMIN_FONT.metric, fontWeight: 800 }}>{n}</div>
-            <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{label}</div>
-          </div>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+        <h3 style={{ fontSize: ADMIN_FONT.heading, fontWeight: 700, margin: 0 }}>{S.rightNow.title}</h3>
+        <button type="button" onClick={onToggleDetails} aria-expanded={detailsOpen} style={{ ...linkBtn, fontSize: ADMIN_FONT.body, whiteSpace: 'nowrap' }}>
+          {S.moreDetails.title} <span aria-hidden>{detailsOpen ? '▴' : '▾'}</span>
+        </button>
       </div>
-    </section>
-  );
-}
-
-function MoreDetails({ onOpenStore }: { onOpenStore: (id: number) => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <section style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-medium)', background: 'var(--bg-card)', padding: 16 }}>
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}
-        style={{ width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-        <span><span style={{ fontSize: ADMIN_FONT.heading, fontWeight: 700 }}>{S.moreDetails.title}</span>
-          <span className="text-xs" style={{ color: 'var(--text-secondary)', marginLeft: 8 }}>{S.moreDetails.help}</span></span>
-        <span aria-hidden>{open ? '▴' : '▾'}</span>
-      </button>
-      {open && <div style={{ marginTop: 12 }}><AdminAnalytics onOpenStore={onOpenStore} /></div>}
+      <p className="text-xs" style={{ color: 'var(--text-secondary)', margin: '4px 0 12px' }}>{S.rightNow.help}</p>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+        {tiles.map((t) => {
+          const on = open === t.key;
+          return (
+            <button key={t.key} type="button" aria-expanded={on} aria-label={`${t.label}: ${t.n}`} onClick={() => setOpen(on ? null : t.key)}
+              style={{ flex: '1 1 150px', minWidth: 140, textAlign: 'left', cursor: 'pointer',
+                background: on ? 'var(--bg-card)' : 'transparent',
+                border: on ? '1px solid var(--primary-solid)' : '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-field)', padding: 12 }}>
+              <div style={{ fontSize: ADMIN_FONT.metric, fontWeight: 800 }}>{t.n}</div>
+              <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>{t.label}</div>
+            </button>
+          );
+        })}
+      </div>
+      {current && (
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--border-subtle)', paddingTop: 10 }}>
+          {current.list.length === 0 ? (
+            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>No names to show.</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'baseline' }}>
+              {current.list.map((e) => e.kind === 'store'
+                ? <button key={`s-${e.id}`} type="button" onClick={() => onOpenStore(e.id)} style={{ ...linkBtn, fontSize: ADMIN_FONT.caption }}>{e.name}</button>
+                : <span key={`u-${e.id}`} className="text-xs" style={{ color: 'var(--text-secondary)' }}>{e.name}</span>)}
+            </div>
+          )}
+          {current.n > current.list.length && (
+            <div className="text-xs" style={{ color: 'var(--text-muted)', marginTop: 6 }}>+{current.n - current.list.length} more</div>
+          )}
+        </div>
+      )}
     </section>
   );
 }

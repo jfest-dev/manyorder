@@ -1359,7 +1359,11 @@ export interface AdminDashboard {
   };
   needsAction: AdminDashboardActionItem[];
   dropOff: AdminDashboardDropStep[];
-  rightNow: { activeStores: number; suspendedStores: number; protectedStores: number; ownersActive7Days: number; ownersActive30Days: number; };
+  rightNow: {
+    activeStores: number; suspendedStores: number; protectedStores: number; ownersActive7Days: number; ownersActive30Days: number;
+    activeStoreList: AdminDashboardEntity[]; suspendedStoreList: AdminDashboardEntity[]; protectedStoreList: AdminDashboardEntity[];
+    ownersActive7List: AdminDashboardEntity[]; ownersActive30List: AdminDashboardEntity[];
+  };
   timingsMs: Record<string, number>;
 }
 

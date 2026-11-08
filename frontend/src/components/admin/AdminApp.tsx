@@ -280,9 +280,8 @@ export function AdminApp() {
           {!loading && !error && !selected && section === 'overview' && metrics && (
             <>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                {/* Active and Suspended counts moved to the dashboard's "Right now" tiles. */}
                 <Tile label="Merchants" value={metrics.totalMerchants} />
-                <Tile label="Active" value={metrics.activeMerchants} />
-                <Tile label="Suspended" value={metrics.suspendedMerchants} />
                 <Tile label="Deleted by owner" value={metrics.archivedMerchants} />
                 <Tile label="Orders" value={metrics.totalOrders} />
                 <Tile label="Customers" value={metrics.totalCustomers} />
